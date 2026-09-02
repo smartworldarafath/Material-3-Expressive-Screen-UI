@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { COLOR_TOKENS, ColorToken, Palette, R_INNER } from "@/lib/tokens";
+import { COLOR_TOKENS, ColorToken, Palette, R_INNER, clamp } from "@/lib/tokens";
 import { t, useLang } from "@/lib/i18n";
 import { Icon } from "./M3Node";
 
@@ -214,6 +214,8 @@ export function Field({
   );
 }
 
+/** Slider with a typed-in number beside it. The slider moves in `step`s; the
+ *  field accepts any whole number and is clamped to min..max when it commits. */
 export function Slider({
   icon,
   value,
@@ -223,6 +225,7 @@ export function Slider({
   onChange,
   p,
   unit = "",
+  title,
 }: {
   icon: string;
   value: number;
@@ -232,15 +235,28 @@ export function Slider({
   onChange: (v: number) => void;
   p: Palette;
   unit?: string;
+  title?: string;
 }) {
+  const [text, setText] = useState(String(value));
+  const [editing, setEditing] = useState(false);
+  useEffect(() => {
+    if (!editing) setText(String(value));
+  }, [value, editing]);
+  const commit = () => {
+    const n = Math.round(Number(text));
+    if (Number.isFinite(n) && text.trim() !== "") onChange(clamp(n, min, max));
+    setEditing(false);
+    setText(String(value));
+  };
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-      <span style={{ color: p.onSurfaceVariant, lineHeight: 1, flex: "0 0 auto" }}>
+      <span title={title} style={{ color: p.onSurfaceVariant, lineHeight: 1, flex: "0 0 auto" }}>
         <Icon name={icon} size={20} />
       </span>
       <input
         type="range"
         className="m3-range"
+        aria-label={title}
         min={min}
         max={max}
         step={step}
@@ -248,20 +264,125 @@ export function Slider({
         onChange={(e) => onChange(Number(e.target.value))}
         style={{ "--track": p.secondaryContainer, "--thumb": p.primary } as React.CSSProperties}
       />
-      <span
-        style={{
-          fontSize: 12,
-          fontWeight: 600,
-          color: p.onSurface,
-          minWidth: 36,
-          textAlign: "right",
-          fontVariantNumeric: "tabular-nums",
-          flex: "0 0 auto",
-        }}
-      >
-        {value}
-        {unit}
+      <span style={{ position: "relative", flex: "0 0 auto", display: "inline-flex", alignItems: "center" }}>
+        <input
+          type="number"
+          inputMode="numeric"
+          aria-label={title}
+          min={min}
+          max={max}
+          value={editing ? text : String(value)}
+          onFocus={(e) => {
+            setEditing(true);
+            setText(String(value));
+            e.currentTarget.select();
+          }}
+          onChange={(e) => {
+            setText(e.target.value);
+            // apply as you type once the number is already in range, so the canvas follows
+            const n = Math.round(Number(e.target.value));
+            if (e.target.value.trim() !== "" && Number.isFinite(n) && n >= min && n <= max) onChange(n);
+          }}
+          onBlur={commit}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") e.currentTarget.blur();
+            if (e.key === "Escape") {
+              setText(String(value));
+              e.currentTarget.blur();
+            }
+          }}
+          className="m3-number"
+          style={{
+            width: unit ? 56 : 52,
+            height: 30,
+            padding: unit ? "0 18px 0 6px" : "0 6px",
+            borderRadius: 8,
+            border: "none",
+            background: p.surfaceContainerHigh,
+            color: p.onSurface,
+            fontSize: 12,
+            fontWeight: 600,
+            textAlign: "right",
+            fontVariantNumeric: "tabular-nums",
+            fontFamily: "inherit",
+            outline: editing ? `2px solid ${p.primary}` : "none",
+            outlineOffset: -1,
+            boxSizing: "border-box",
+          }}
+        />
+        {unit && (
+          <span
+            style={{
+              position: "absolute",
+              right: 6,
+              fontSize: 11,
+              color: p.onSurfaceVariant,
+              pointerEvents: "none",
+            }}
+          >
+            {unit}
+          </span>
+        )}
       </span>
+    </div>
+  );
+}
+
+/** Quick picks for a size: the values the frame is built from (screen width,
+ *  content width, half a row) or a component's standard sizes. */
+export function SizePresets({
+  values,
+  value,
+  min,
+  max,
+  onChange,
+  p,
+  labelOf,
+}: {
+  values: number[];
+  value: number;
+  min: number;
+  max: number;
+  onChange: (v: number) => void;
+  p: Palette;
+  /** optional hover text for a value, e.g. "Screen width" for 412 */
+  labelOf?: (v: number) => string | undefined;
+}) {
+  const shown = values.filter((v) => v >= min && v <= max);
+  if (shown.length === 0) return null;
+  return (
+    <div style={{ display: "flex", flexWrap: "wrap", gap: 6, paddingLeft: 30 }}>
+      {shown.map((v) => {
+        const on = v === value;
+        const label = labelOf?.(v);
+        return (
+          <button
+            key={v}
+            onClick={() => onChange(v)}
+            title={label}
+            aria-label={label ? `${label}: ${v}` : String(v)}
+            aria-pressed={on}
+            className="m3-press"
+            style={{
+              height: 28,
+              padding: "0 10px",
+              borderRadius: 14,
+              border: on ? "1px solid transparent" : `1px solid ${p.outlineVariant}`,
+              background: on ? p.secondaryContainer : "transparent",
+              color: on ? p.onSecondaryContainer : p.onSurfaceVariant,
+              fontSize: 12,
+              fontWeight: 600,
+              fontVariantNumeric: "tabular-nums",
+              cursor: "pointer",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 4,
+            }}
+          >
+            {v}
+          </button>
+        );
+      })}
     </div>
   );
 }

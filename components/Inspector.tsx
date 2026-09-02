@@ -2,9 +2,13 @@
 
 import { useEffect, useRef, useState } from "react";
 import {
+  CONTENT_W,
   Frame,
+  HALF_W,
   Item,
   KIND_SPEC,
+  PHONE_H,
+  PHONE_W,
   Kind,
   NavTab,
   Palette,
@@ -20,7 +24,7 @@ import {
 } from "@/lib/tokens";
 import { IconPicker } from "./IconPicker";
 import { Icon } from "./M3Node";
-import { Field, IconBtn, Section, Segmented, Slider, Toggle, TokenChips } from "./ui";
+import { Field, IconBtn, Section, Segmented, SizePresets, Slider, Toggle, TokenChips } from "./ui";
 import { t, useLang } from "@/lib/i18n";
 
 export function variantsOf(kind: Kind): { key: Variant; label: string }[] {
@@ -99,6 +103,13 @@ export function VariantSwatch({
 }
 
 const MAX_IMAGE_PX = 1200;
+
+/** hover text for a width preset that comes from the phone frame */
+export const widthPresetLabel = (v: number): string | undefined =>
+  v === PHONE_W ? t("screenWidth") : v === CONTENT_W ? t("contentWidth") : v === HALF_W ? t("halfWidth") : undefined;
+
+const heightPresetLabel = (v: number): string | undefined =>
+  v === PHONE_H ? t("screenHeight") : v === PHONE_H / 2 ? t("halfHeight") : undefined;
 
 /** Downscale a picked file so the document stays small enough for localStorage. */
 function readImage(file: File): Promise<string> {
@@ -655,19 +666,66 @@ export function Inspector({
         <Section id="size" icon="straighten" title={t("size", lang)} p={p}>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {spec.size && (
-              <Slider
-                icon={spec.size.icon}
-                value={item.size ?? spec.defSize ?? spec.w}
-                min={spec.size.min}
-                max={spec.size.max}
-                step={spec.size.step}
-                onChange={(size) => onChange({ size })}
-                p={p}
-              />
+              <>
+                <Slider
+                  icon={spec.size.icon}
+                  title={
+                    item.kind === "text"
+                      ? t("fontSize", lang)
+                      : spec.size.icon === "width"
+                        ? t("width", lang)
+                        : t("size", lang)
+                  }
+                  value={item.size ?? spec.defSize ?? spec.w}
+                  min={spec.size.min}
+                  max={spec.size.max}
+                  step={spec.size.step}
+                  onChange={(size) => onChange({ size })}
+                  p={p}
+                  unit={item.kind === "text" ? "sp" : ""}
+                />
+                {spec.size.presets && (
+                  <SizePresets
+                    values={spec.size.presets}
+                    value={item.size ?? spec.defSize ?? spec.w}
+                    min={spec.size.min}
+                    max={spec.size.max}
+                    onChange={(size) => onChange({ size })}
+                    p={p}
+                    labelOf={item.kind === "text" ? undefined : widthPresetLabel}
+                  />
+                )}
+              </>
+            )}
+            {spec.size2 && (
+              <>
+                <Slider
+                  icon={spec.size2.icon}
+                  title={t("height", lang)}
+                  value={item.size2 ?? spec.h}
+                  min={spec.size2.min}
+                  max={spec.size2.max}
+                  step={spec.size2.step}
+                  onChange={(size2) => onChange({ size2 })}
+                  p={p}
+                />
+                {spec.size2.presets && (
+                  <SizePresets
+                    values={spec.size2.presets}
+                    value={item.size2 ?? spec.h}
+                    min={spec.size2.min}
+                    max={spec.size2.max}
+                    onChange={(size2) => onChange({ size2 })}
+                    p={p}
+                    labelOf={heightPresetLabel}
+                  />
+                )}
+              </>
             )}
             {hasRadius && (item.kind === "card" || item.kind === "image") && (
               <Slider
                 icon="rounded_corner"
+                title={t("cornerRadius", lang)}
                 value={item.radiusTop ?? spec.radius}
                 min={0}
                 max={48}
@@ -676,21 +734,11 @@ export function Inspector({
                 p={p}
               />
             )}
-            {spec.size2 && (
-              <Slider
-                icon={spec.size2.icon}
-                value={item.size2 ?? spec.h}
-                min={spec.size2.min}
-                max={spec.size2.max}
-                step={spec.size2.step}
-                onChange={(size2) => onChange({ size2 })}
-                p={p}
-              />
-            )}
             {hasRadius && (item.kind === "bottomNav" || item.kind === "topAppBar" || item.kind === "box") && (
               <>
                 <Slider
                   icon="vertical_align_top"
+                  title={t("cornerTop", lang)}
                   value={item.radiusTop ?? 0}
                   min={0}
                   max={40}
@@ -700,6 +748,7 @@ export function Inspector({
                 />
                 <Slider
                   icon="vertical_align_bottom"
+                  title={t("cornerBottom", lang)}
                   value={item.radiusBottom ?? 0}
                   min={0}
                   max={40}

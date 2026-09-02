@@ -84,7 +84,7 @@ function itemJa(it: Item): string {
     case "divider":
       return "区切り線";
     case "box":
-      return `${it.size ?? 360}×${it.size2 ?? 220}dp のボックス（背景 ${it.fill ?? "surfaceContainerLow"}、角丸は上 ${it.radiusTop ?? 28}dp・下 ${it.radiusBottom ?? 0}dp${it.checked ? "、上部にドラッグハンドル" : ""}）`;
+      return `${it.size ?? PHONE_W}×${it.size2 ?? 220}dp のボックス（背景 ${it.fill ?? "surfaceContainerLow"}、角丸は上 ${it.radiusTop ?? 28}dp・下 ${it.radiusBottom ?? 0}dp${it.checked ? "、上部にドラッグハンドル" : ""}）`;
     case "loadingIndicator":
       return `M3 Expressive の形が変化するローディングインジケータ${it.contained ? "（コンテナ付き）" : ""}`;
     case "linearProgress":
@@ -179,7 +179,7 @@ function itemEn(it: Item): string {
     case "divider":
       return "a divider";
     case "box":
-      return `a ${it.size ?? 360}×${it.size2 ?? 220}dp box (background ${it.fill ?? "surfaceContainerLow"}, corner radius ${it.radiusTop ?? 28}dp top / ${it.radiusBottom ?? 0}dp bottom${it.checked ? ", with a drag handle at the top" : ""})`;
+      return `a ${it.size ?? PHONE_W}×${it.size2 ?? 220}dp box (background ${it.fill ?? "surfaceContainerLow"}, corner radius ${it.radiusTop ?? 28}dp top / ${it.radiusBottom ?? 0}dp bottom${it.checked ? ", with a drag handle at the top" : ""})`;
     case "loadingIndicator":
       return `the M3 Expressive shape-morphing loading indicator${it.contained ? " (contained)" : ""}`;
     case "linearProgress":
@@ -320,9 +320,9 @@ const STYLE_NOTES: Record<Lang, Partial<Record<Kind, string>>> = {
     extendedFab: "拡張 FAB: 高さ 56dp、角丸 16dp、左にアイコン・右にラベル。",
     chip: "チップ: 高さ 32dp、角丸 8dp。選択状態は secondaryContainer で塗り、先頭にチェックアイコンを出す。横並びのチップグループは 8dp 間隔で、はみ出す場合は横スクロール。",
     topAppBar:
-      "トップアプリバー: 高さ 64dp、背景は surface。タイトルは titleLarge、左右のアイコンボタンは 48dp。スクロール時に surfaceContainer へ色が変わる標準の挙動でよい。",
+      "トップアプリバー: 高さ 64dp、背景は surface。背景はステータスバーの後ろまで伸ばし、その分（システムインセット）だけ上に余白を取る。タイトルは titleLarge、左右のアイコンボタンは 48dp。スクロール時に surfaceContainer へ色が変わる標準の挙動でよい。",
     bottomNav:
-      "ナビゲーションバー: 高さ 80dp、背景は surfaceContainer。選択中の項目は secondaryContainer のピル型インジケータ（幅 64dp・高さ 32dp）で示し、アイコンは塗りつぶし、ラベルは labelMedium。",
+      "ナビゲーションバー: 高さ 80dp、背景は surfaceContainer。背景は画面下端のジェスチャーナビゲーション領域まで伸ばし、その分（システムインセット）だけ下に余白を取る。選択中の項目は secondaryContainer のピル型インジケータ（幅 64dp・高さ 32dp）で示し、アイコンは塗りつぶし、ラベルは labelMedium。",
     searchBar: "検索バー: 高さ 56dp、角は完全な丸、背景は surfaceContainerHigh。先頭に検索アイコン、末尾に指定のアイコン。",
     card: "カード: 角丸 20dp、上部に画像領域。塗りつぶしは surfaceContainerHighest、エレベーテッドは surfaceContainerLow に Level 1 の影、アウトラインは outlineVariant の 1dp 枠。見出しは titleMedium、本文は bodyMedium、内側の余白は 16dp。",
     listItem:
@@ -352,9 +352,9 @@ const STYLE_NOTES: Record<Lang, Partial<Record<Kind, string>>> = {
     extendedFab: "Extended FAB: 56dp tall, 16dp corners, icon on the left and label on the right.",
     chip: "Chips: 32dp tall, 8dp corners. The selected state fills with secondaryContainer and shows a leading check icon. A chip group is a row with 8dp gaps that scrolls horizontally when it overflows.",
     topAppBar:
-      "Top app bar: 64dp tall on surface. Title in titleLarge, 48dp icon buttons on each side. The standard tint to surfaceContainer on scroll is fine.",
+      "Top app bar: 64dp tall on surface, with its background extended behind the status bar (pad the top by the system inset). Title in titleLarge, 48dp icon buttons on each side. The standard tint to surfaceContainer on scroll is fine.",
     bottomNav:
-      "Navigation bar: 80dp tall on surfaceContainer. The active destination shows a secondaryContainer pill indicator (64×32dp), a filled icon and a labelMedium label.",
+      "Navigation bar: 80dp tall on surfaceContainer, with its background extended down through the gesture navigation area (pad the bottom by the system inset). The active destination shows a secondaryContainer pill indicator (64×32dp), a filled icon and a labelMedium label.",
     searchBar: "Search bar: 56dp tall, fully rounded, on surfaceContainerHigh, with a leading search icon and the specified trailing icon.",
     card: "Cards: 20dp corners with an image area on top. Filled uses surfaceContainerHighest, elevated uses surfaceContainerLow with a level 1 shadow, outlined has a 1dp outlineVariant border. Headline in titleMedium, body in bodyMedium, 16dp inner padding.",
     listItem:

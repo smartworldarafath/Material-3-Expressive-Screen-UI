@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { Item } from "@/lib/tokens";
 import { AnimatePresence, motion } from "motion/react";
 import {
   BEZEL,
@@ -12,6 +13,7 @@ import {
   PHONE_R,
   PHONE_W,
   Palette,
+  TAPPABLE,
   Transition,
   baseRadii,
   connectSpecOf,
@@ -57,18 +59,76 @@ function variantsFor(t: Transition, back: boolean) {
   }
 }
 
+/** kinds whose on/off state flips when tapped in the preview */
+const TOGGLES = ["switch", "checkbox", "chip"] as const;
+const toggles = (it: Item) => (TOGGLES as readonly string[]).includes(it.kind);
+
+/** A part in the preview: presses down and shows a state layer while the
+ *  pointer is on it, then fires its action on release, like a real widget. */
+function Tappable({
+  item,
+  p,
+  radii,
+  widths,
+  onTap,
+}: {
+  item: Item;
+  p: Palette;
+  radii: ReturnType<typeof baseRadii>;
+  widths: Record<string, number>;
+  onTap?: () => void;
+}) {
+  const [pressed, setPressed] = useState(false);
+  const live = !!onTap || TAPPABLE.includes(item.kind);
+  return (
+    <div
+      onPointerDown={() => live && setPressed(true)}
+      onPointerUp={() => setPressed(false)}
+      onPointerCancel={() => setPressed(false)}
+      onPointerLeave={() => setPressed(false)}
+      onClick={onTap}
+      style={{ cursor: live ? "pointer" : "default", display: "flex", position: "relative" }}
+    >
+      <M3Node item={item} palette={p} widths={widths} radii={radii} interactive={false} pressed={pressed} />
+      {live && (
+        <motion.div
+          aria-hidden
+          initial={false}
+          animate={{ opacity: pressed ? 1 : 0, scale: pressed ? 0.97 : 1 }}
+          transition={{ duration: pressed ? 0.08 : 0.24, ease: EASE }}
+          style={{
+            position: "absolute",
+            inset: 0,
+            pointerEvents: "none",
+            background: `color-mix(in srgb, ${p.onSurface} 12%, transparent)`,
+            borderTopLeftRadius: radii.tl,
+            borderTopRightRadius: radii.tr,
+            borderBottomLeftRadius: radii.bl,
+            borderBottomRightRadius: radii.br,
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
 function Screen({
   frame,
   groups,
   widths,
   p,
   onTap,
+  flipped,
+  onFlip,
 }: {
   frame: Frame;
   groups: Group[];
   widths: Record<string, number>;
   p: Palette;
   onTap: (to: string, t: Transition) => void;
+  /** ids of toggles the visitor has flipped since the preview opened */
+  flipped: Set<string>;
+  onFlip: (id: string) => void;
 }) {
   return (
     <div style={{ position: "absolute", inset: 0, background: p[frame.bg ?? "surface"], overflow: "hidden" }}>
@@ -107,15 +167,13 @@ function Screen({
                   ? uniformRadii(conn.outer)
                   : baseRadii(it);
             const act = it.action;
-            return (
-              <div
-                key={it.id}
-                onClick={() => act && onTap(act.to, act.transition)}
-                style={{ cursor: act ? "pointer" : "default", display: "flex" }}
-              >
-                <M3Node item={it} palette={p} widths={widths} radii={radii} interactive={false} />
-              </div>
-            );
+            const shown = flipped.has(it.id) ? { ...it, checked: !it.checked } : it;
+            const tap = act
+              ? () => onTap(act.to, act.transition)
+              : toggles(it)
+                ? () => onFlip(it.id)
+                : undefined;
+            return <Tappable key={it.id} item={shown} p={p} radii={radii} widths={widths} onTap={tap} />;
           })}
         </div>
       ))}
@@ -142,6 +200,14 @@ export function Preview({
   const [anim, setAnim] = useState<{ t: Transition; back: boolean }>({ t: "none", back: false });
   const [scale, setScale] = useState(1);
   const pressed = useRef(false);
+  const [flipped, setFlipped] = useState<Set<string>>(() => new Set());
+  const flip = (id: string) =>
+    setFlipped((s) => {
+      const n = new Set(s);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
 
   const current = frames.find((f) => f.id === stack[stack.length - 1]) ?? frames[0];
 
@@ -242,7 +308,7 @@ export function Preview({
                 transition={v.transition}
                 style={{ position: "absolute", inset: 0 }}
               >
-                <Screen frame={current} groups={groups} widths={widths} p={p} onTap={go} />
+                <Screen frame={current} groups={groups} widths={widths} p={p} onTap={go} flipped={flipped} onFlip={flip} />
               </motion.div>
             </AnimatePresence>
           </div>

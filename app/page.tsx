@@ -13,40 +13,43 @@ import { toPng } from "html-to-image";
 import { buildPrompt } from "@/lib/prompt";
 import {
   Axis,
+  baseRadii,
   BEZEL,
+  canJoin,
+  clamp,
+  connectSpecOf,
   Doc,
+  Frame,
   FRAME_GAP,
   FRAME_LABEL_H,
-  Frame,
   FrameMode,
+  frameOfGroup,
+  frameRect,
   GAP,
   Group,
+  groupBounds,
   Item,
-  KIND_ORDER,
   Kind,
+  KIND_ORDER,
+  KIND_SPEC,
+  lerp,
+  makeItem,
   MEASURED,
+  NAV_BAR_H,
+  paletteOf,
   PALETTES,
   PHONE_H,
+  PHONE_MARGIN,
   PHONE_R,
   PHONE_W,
   PULL_EXP,
   Radii,
   SETTLE_MS,
+  sizeOf,
   SNAP_CROSS,
   SNAP_MAIN,
-  TRANSITIONS,
   Transition,
-  baseRadii,
-  canJoin,
-  clamp,
-  connectSpecOf,
-  frameOfGroup,
-  frameRect,
-  groupBounds,
-  lerp,
-  makeItem,
-  paletteOf,
-  sizeOf,
+  TRANSITIONS,
   uid,
 } from "@/lib/tokens";
 import { Icon, M3Node, MeasuredContent } from "@/components/M3Node";
@@ -88,7 +91,7 @@ type Snap = { groupId: string; index: number; pull: number };
 /** alignment guide: the snapped position plus the line to draw */
 type Guide = { x?: number; y?: number; gx?: number; gy?: number };
 const GUIDE_PX = 7;
-const FRAME_MARGIN = 16;
+const FRAME_MARGIN = PHONE_MARGIN;
 
 type DragState = {
   item: Item;
@@ -131,6 +134,17 @@ type Snapshot = { groups: Group[]; frames: Frame[] };
 
 const SEED_FRAMES: Frame[] = [{ id: "seedF1", name: "Home", x: 0, y: 0 }];
 
+/** Documents saved before the bars grew their system insets have the navigation
+ *  bar flush with the old 80dp bottom; keep it on the bottom edge. */
+function migrateGroups(groups: Group[], frames: Frame[]): Group[] {
+  const oldNavH = KIND_SPEC.bottomNav.h - NAV_BAR_H;
+  return groups.map((g) => {
+    if (g.items.length !== 1 || g.items[0].kind !== "bottomNav") return g;
+    const f = frames.find((fr) => g.x >= fr.x - 1 && g.x <= fr.x + PHONE_W && g.y === fr.y + PHONE_H - oldNavH);
+    return f ? { ...g, y: f.y + PHONE_H - KIND_SPEC.bottomNav.h } : g;
+  });
+}
+
 /** Seed ids are deterministic so server and client render the same markup. */
 const seed = (): Group[] => {
   let n = 0;
@@ -155,16 +169,16 @@ const seed = (): Group[] => {
   const fab = mk("fab");
   return [
     { id: sid(), x: 0, y: 0, axis: "x", items: [bar] },
-    { id: sid(), x: 36, y: 96, axis: "x", items: [a, b] },
-    { id: sid(), x: 36, y: 184, axis: "y", items: rows },
+    { id: sid(), x: PHONE_MARGIN, y: 96, axis: "x", items: [a, b] },
+    { id: sid(), x: PHONE_MARGIN, y: 184, axis: "y", items: rows },
     {
       id: sid(),
-      x: PHONE_W - 56 - 24,
-      y: PHONE_H - 80 - 56 - 24,
+      x: PHONE_W - 56 - PHONE_MARGIN,
+      y: PHONE_H - KIND_SPEC.bottomNav.h - 56 - PHONE_MARGIN,
       axis: "x",
       items: [fab],
     },
-    { id: sid(), x: 0, y: PHONE_H - 80, axis: "x", items: [nav] },
+    { id: sid(), x: 0, y: PHONE_H - KIND_SPEC.bottomNav.h, axis: "x", items: [nav] },
   ];
 };
 
@@ -182,8 +196,8 @@ const mobileSeed = (): Group[] => {
   c.label = "はじめる";
   c.icon = "arrow_forward";
   return [
-    { id: uid(), x: 36, y: 120, axis: "x", items: [a, b] },
-    { id: uid(), x: 36, y: 200, axis: "x", items: [c] },
+    { id: uid(), x: PHONE_MARGIN, y: 120, axis: "x", items: [a, b] },
+    { id: uid(), x: PHONE_MARGIN, y: 200, axis: "x", items: [c] },
   ];
 };
 
@@ -330,7 +344,8 @@ export default function Page() {
       if (d) {
         hadDocRef.current = true;
         const doc = JSON.parse(d) as Partial<Doc>;
-        if (Array.isArray(doc.groups)) setGroups(doc.groups);
+        const frames = Array.isArray(doc.frames) ? doc.frames : framesRef.current;
+        if (Array.isArray(doc.groups)) setGroups(migrateGroups(doc.groups, frames));
         if (Array.isArray(doc.frames)) setFrames(doc.frames);
         if (doc.paletteKey) setPaletteKey(doc.paletteKey);
         // frame mode is decided by the device (media-query effect), not restored
@@ -731,14 +746,18 @@ export default function Page() {
       if (frameRef.current === "phone") {
         for (const f of framesRef.current) {
           xs.push(
+            f.x,
             f.x + FRAME_MARGIN,
             f.x + PHONE_W / 2,
             f.x + PHONE_W - FRAME_MARGIN,
+            f.x + PHONE_W,
           );
           ys.push(
+            f.y,
             f.y + FRAME_MARGIN,
             f.y + PHONE_H / 2,
             f.y + PHONE_H - FRAME_MARGIN,
+            f.y + PHONE_H,
           );
         }
       }
@@ -1255,15 +1274,49 @@ export default function Page() {
     if (!selected && sheet === "edit") setSheet(null);
   }, [selected, sheet]);
 
+  /** Resizing a lone part keeps whatever it was lined up with on the frame:
+   *  its centre on the centre line, or its far edge on the margin or screen edge.
+   *  Otherwise the near (left / top) edge stays put, as the sliders always did. */
+  const resizeShift = (g: Group, before: Item, after: Item) => {
+    const none = { dx: 0, dy: 0 };
+    if (g.items.length !== 1 || frameRef.current !== "phone") return none;
+    const f = frameOfGroup(g, framesRef.current, widthsRef.current);
+    if (!f) return none;
+    const a = sizeOf(before, widthsRef.current);
+    const b = sizeOf(after, widthsRef.current);
+    const shift = (pos: number, len: number, next: number, f0: number, fLen: number) => {
+      const d = next - len;
+      if (d === 0) return 0;
+      const near = (v: number, target: number) => Math.abs(v - target) <= 1;
+      if (near(pos + len / 2, f0 + fLen / 2)) return -Math.round(d / 2);
+      if (near(pos + len, f0 + fLen - FRAME_MARGIN) || near(pos + len, f0 + fLen)) return -d;
+      return 0;
+    };
+    return {
+      dx: shift(g.x, a.w, b.w, f.x, PHONE_W),
+      dy: shift(g.y, a.h, b.h, f.y, PHONE_H),
+    };
+  };
+
   const patchSelected = (patch: Partial<Item>) => {
     if (!primaryId) return;
     const id = primaryId;
     snapshotFor(id + ":" + Object.keys(patch).join(","));
+    const resizes = "size" in patch || "size2" in patch;
     setGroups((prev) =>
-      prev.map((g) => ({
-        ...g,
-        items: g.items.map((it) => (it.id === id ? { ...it, ...patch } : it)),
-      })),
+      prev.map((g) => {
+        const idx = g.items.findIndex((it) => it.id === id);
+        if (idx < 0) return g;
+        const next = { ...g.items[idx], ...patch };
+        const { dx, dy } = resizes ? resizeShift(g, g.items[idx], next) : { dx: 0, dy: 0 };
+        if (dx || dy) instantRef.current.add(g.id);
+        return {
+          ...g,
+          x: g.x + dx,
+          y: g.y + dy,
+          items: g.items.map((it, i) => (i === idx ? next : it)),
+        };
+      }),
     );
     if (dragRef.current?.item.id === id) {
       dragRef.current.item = { ...dragRef.current.item, ...patch };
@@ -1413,8 +1466,10 @@ export default function Page() {
     let x = ((r?.width ?? 0) / 2 - v.x) / v.z - sz.w / 2;
     let y = ((r?.height ?? 0) / 2 - v.y) / v.z - sz.h / 2;
     if (f) {
-      x = clamp(x, f.x + FRAME_MARGIN, f.x + PHONE_W - FRAME_MARGIN - sz.w);
-      y = clamp(y, f.y + FRAME_MARGIN, f.y + PHONE_H - FRAME_MARGIN - sz.h);
+      const lx = f.x + Math.min(FRAME_MARGIN, (PHONE_W - sz.w) / 2);
+      const ly = f.y + Math.min(FRAME_MARGIN, (PHONE_H - sz.h) / 2);
+      x = clamp(x, lx, Math.max(lx, f.x + PHONE_W - FRAME_MARGIN - sz.w));
+      y = clamp(y, ly, Math.max(ly, f.y + PHONE_H - FRAME_MARGIN - sz.h));
       const taken = (yy: number) =>
         itemRects().some((o) => o.l < x + sz.w && o.r > x && o.t < yy + sz.h && o.b > yy);
       let tries = 0;

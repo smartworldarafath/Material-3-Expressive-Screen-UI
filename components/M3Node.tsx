@@ -6,8 +6,10 @@ import {
   Item,
   Kind,
   MEASURED,
+  NAV_BAR_H,
   Palette,
   Radii,
+  STATUS_BAR_H,
   baseRadii,
   onToken,
   sizeOf,
@@ -224,6 +226,58 @@ function TextContent({ item, p }: { item: Item; p: Palette }) {
   );
 }
 
+/** The Android status bar drawn in a top app bar's inset: clock left, status icons right. */
+function StatusBar({ p }: { p: Palette }) {
+  return (
+    <div
+      aria-hidden
+      style={{
+        position: "absolute",
+        left: 0,
+        right: 0,
+        top: 0,
+        height: STATUS_BAR_H,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        padding: "0 24px",
+        fontSize: 13,
+        fontWeight: 500,
+        color: p.onSurface,
+        pointerEvents: "none",
+      }}
+    >
+      <span style={{ fontVariantNumeric: "tabular-nums" }}>9:30</span>
+      <span style={{ display: "inline-flex", gap: 2 }}>
+        <Icon name="signal_wifi_4_bar" size={14} fill />
+        <Icon name="signal_cellular_4_bar" size={14} fill />
+        <Icon name="battery_full" size={14} fill />
+      </span>
+    </div>
+  );
+}
+
+/** The gesture navigation handle drawn in a navigation bar's inset. */
+function GestureHandle({ p }: { p: Palette }) {
+  return (
+    <div
+      aria-hidden
+      style={{
+        position: "absolute",
+        left: "50%",
+        bottom: Math.round((NAV_BAR_H - 4) / 2),
+        width: 108,
+        height: 4,
+        marginLeft: -54,
+        borderRadius: 2,
+        background: p.onSurface,
+        opacity: 0.35,
+        pointerEvents: "none",
+      }}
+    />
+  );
+}
+
 /** Content for kinds that size to their text; rendered again offscreen to measure. */
 export function MeasuredContent({ item, p }: { item: Item; p: Palette }) {
   switch (item.kind) {
@@ -287,7 +341,18 @@ function Body({ item, p }: { item: Item; p: Palette }) {
 
     case "topAppBar":
       return (
-        <div style={{ display: "flex", alignItems: "center", gap: 4, padding: "0 4px", height: "100%" }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 4,
+            padding: `${STATUS_BAR_H}px 4px 0`,
+            height: "100%",
+            boxSizing: "border-box",
+            position: "relative",
+          }}
+        >
+          <StatusBar p={p} />
           <div style={{ width: 48, height: 48, display: "grid", placeItems: "center", flex: "0 0 auto" }}>
             {item.icon && <Icon name={item.icon} size={24} color={p.onSurface} />}
           </div>
@@ -604,9 +669,12 @@ function Body({ item, p }: { item: Item; p: Palette }) {
             alignItems: "center",
             justifyContent: "space-around",
             height: "100%",
-            padding: "0 4px",
+            padding: `0 4px ${NAV_BAR_H}px`,
+            boxSizing: "border-box",
+            position: "relative",
           }}
         >
+          <GestureHandle p={p} />
           {tabs.map((t, i) => {
             const on = i === 0;
             const withLabel = t.label.trim().length > 0;

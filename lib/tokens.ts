@@ -20,6 +20,20 @@ export const SETTLE_MS = 340;
 export const PHONE_W = 412;
 export const PHONE_H = 892;
 export const PHONE_R = 40;
+/** system insets: the status bar above a top app bar and the gesture area below a navigation bar.
+ *  Both bars carry their inset as extra height so their background reaches the rounded screen edge. */
+export const STATUS_BAR_H = 24;
+export const NAV_BAR_H = 24;
+/** M3 layout margin: parts that are not edge-to-edge sit this far from the screen edge */
+export const PHONE_MARGIN = 16;
+/** width of a part that spans the screen with a margin on both sides */
+export const CONTENT_W = PHONE_W - PHONE_MARGIN * 2;
+/** width of one of two parts sharing a row, with a margin-sized gutter between them */
+export const HALF_W = (CONTENT_W - PHONE_MARGIN) / 2;
+/** width presets offered in the inspector: two columns, with margins, edge-to-edge */
+export const WIDTH_PRESETS = [HALF_W, CONTENT_W, PHONE_W];
+/** height presets for free-form boxes: half the screen, the whole screen */
+export const HEIGHT_PRESETS = [PHONE_H / 2, PHONE_H];
 /** bezel around the screen and the label above it */
 export const BEZEL = 10;
 export const FRAME_LABEL_H = 44;
@@ -312,7 +326,8 @@ export type Axis = "x" | "y";
 /** kinds that fuse into a run: buttons side by side, list items stacked */
 export type ConnectSpec = { axis: Axis; outer: number; inner: number; family: string };
 
-export type SizeSpec = { min: number; max: number; step: number; icon: string };
+/** `presets` are quick picks shown as chips; values outside min..max are hidden */
+export type SizeSpec = { min: number; max: number; step: number; icon: string; presets?: number[] };
 
 export type Category = "actions" | "navigation" | "containment" | "inputs" | "content" | "progress";
 
@@ -362,7 +377,7 @@ export const KIND_SPEC: Record<Kind, KindSpec> = {
     noun: "ボックス",
     category: "containment",
     paletteIcon: "check_box_outline_blank",
-    w: 360,
+    w: PHONE_W,
     h: 220,
     radius: 28,
     hasVariant: false,
@@ -371,11 +386,11 @@ export const KIND_SPEC: Record<Kind, KindSpec> = {
     hasIcon: false,
     hasChecked: true,
     hasFill: true,
-    size: { min: 40, max: 412, step: 4, icon: "width" },
-    size2: { min: 24, max: 924, step: 4, icon: "height" },
+    size: { min: 40, max: PHONE_W, step: 4, icon: "width", presets: WIDTH_PRESETS },
+    size2: { min: 24, max: PHONE_H, step: 4, icon: "height", presets: HEIGHT_PRESETS },
     defLabel: "",
     defIcon: null,
-    defSize: 360,
+    defSize: PHONE_W,
   },
   button: {
     label: "Button",
@@ -406,7 +421,7 @@ export const KIND_SPEC: Record<Kind, KindSpec> = {
     hasSupporting: false,
     hasIcon: true,
     connect: { axis: "x", outer: 24, inner: R_INNER, family: "button" },
-    size: { min: 40, max: 96, step: 4, icon: "open_in_full" },
+    size: { min: 40, max: 96, step: 4, icon: "open_in_full", presets: [40, 48, 56, 96] },
     defLabel: "",
     defIcon: "favorite",
     defSize: 48,
@@ -424,7 +439,7 @@ export const KIND_SPEC: Record<Kind, KindSpec> = {
     hasLabel: false,
     hasSupporting: false,
     hasIcon: true,
-    size: { min: 40, max: 128, step: 4, icon: "open_in_full" },
+    size: { min: 40, max: 128, step: 4, icon: "open_in_full", presets: [40, 56, 96] },
     defLabel: "",
     defIcon: "edit",
     defSize: 56,
@@ -470,7 +485,7 @@ export const KIND_SPEC: Record<Kind, KindSpec> = {
     category: "navigation",
     paletteIcon: "toolbar",
     w: 412,
-    h: 64,
+    h: 64 + STATUS_BAR_H,
     radius: 0,
     hasVariant: false,
     hasLabel: true,
@@ -486,7 +501,7 @@ export const KIND_SPEC: Record<Kind, KindSpec> = {
     category: "navigation",
     paletteIcon: "bottom_navigation",
     w: 412,
-    h: 80,
+    h: 80 + NAV_BAR_H,
     radius: 0,
     hasVariant: false,
     hasLabel: false,
@@ -500,36 +515,36 @@ export const KIND_SPEC: Record<Kind, KindSpec> = {
     noun: "検索バー",
     category: "navigation",
     paletteIcon: "search",
-    w: 360,
+    w: CONTENT_W,
     h: 56,
     radius: 28,
     hasVariant: false,
     hasLabel: true,
     hasSupporting: false,
     hasIcon: true,
-    size: { min: 200, max: 412, step: 4, icon: "width" },
+    size: { min: 200, max: PHONE_W, step: 4, icon: "width", presets: WIDTH_PRESETS },
     defLabel: "検索",
     defIcon: "search",
     defIcon2: "mic",
-    defSize: 360,
+    defSize: CONTENT_W,
   },
   card: {
     label: "Card",
     noun: "カード",
     category: "containment",
     paletteIcon: "web_asset",
-    w: 320,
+    w: CONTENT_W,
     h: 188,
     radius: 20,
     hasVariant: true,
     hasLabel: true,
     hasSupporting: true,
     hasIcon: true,
-    size: { min: 160, max: 412, step: 4, icon: "width" },
+    size: { min: 160, max: PHONE_W, step: 4, icon: "width", presets: WIDTH_PRESETS },
     defLabel: "カードの見出し",
     defIcon: "image",
     defSupporting: "補足テキストがここに入ります。",
-    defSize: 320,
+    defSize: CONTENT_W,
     defVariant: "tonal",
   },
   listItem: {
@@ -537,7 +552,7 @@ export const KIND_SPEC: Record<Kind, KindSpec> = {
     noun: "リスト項目",
     category: "containment",
     paletteIcon: "list",
-    w: 340,
+    w: CONTENT_W,
     h: 72,
     radius: R_FULL,
     hasVariant: false,
@@ -545,12 +560,12 @@ export const KIND_SPEC: Record<Kind, KindSpec> = {
     hasSupporting: true,
     hasIcon: true,
     connect: { axis: "y", outer: R_FULL, inner: R_INNER, family: "list" },
-    size: { min: 200, max: 412, step: 4, icon: "width" },
+    size: { min: 200, max: PHONE_W, step: 4, icon: "width", presets: WIDTH_PRESETS },
     defLabel: "リスト項目",
     defIcon: "person",
     defSupporting: "サブテキスト",
     defIcon2: "chevron_right",
-    defSize: 340,
+    defSize: CONTENT_W,
   },
   dialog: {
     label: "Dialog",
@@ -589,18 +604,18 @@ export const KIND_SPEC: Record<Kind, KindSpec> = {
     noun: "テキスト入力",
     category: "inputs",
     paletteIcon: "text_fields",
-    w: 320,
+    w: CONTENT_W,
     h: 56,
     radius: 16,
     hasVariant: true,
     hasLabel: true,
     hasSupporting: true,
     hasIcon: true,
-    size: { min: 160, max: 412, step: 4, icon: "width" },
+    size: { min: 160, max: PHONE_W, step: 4, icon: "width", presets: WIDTH_PRESETS },
     defLabel: "ラベル",
     defIcon: "search",
     defSupporting: "",
-    defSize: 320,
+    defSize: CONTENT_W,
     defVariant: "outlined",
   },
   switch: {
@@ -640,7 +655,7 @@ export const KIND_SPEC: Record<Kind, KindSpec> = {
     noun: "スライダー",
     category: "inputs",
     paletteIcon: "sliders",
-    w: 280,
+    w: CONTENT_W,
     h: 44,
     radius: 22,
     hasVariant: false,
@@ -648,10 +663,10 @@ export const KIND_SPEC: Record<Kind, KindSpec> = {
     hasSupporting: false,
     hasIcon: false,
     hasValue: true,
-    size: { min: 120, max: 412, step: 4, icon: "width" },
+    size: { min: 120, max: PHONE_W, step: 4, icon: "width", presets: WIDTH_PRESETS },
     defLabel: "",
     defIcon: null,
-    defSize: 280,
+    defSize: CONTENT_W,
   },
   text: {
     label: "Text",
@@ -665,7 +680,7 @@ export const KIND_SPEC: Record<Kind, KindSpec> = {
     hasLabel: true,
     hasSupporting: false,
     hasIcon: false,
-    size: { min: 12, max: 57, step: 1, icon: "format_size" },
+    size: { min: 12, max: 57, step: 1, icon: "format_size", presets: [14, 16, 22, 28, 32, 45, 57] },
     defLabel: "見出し",
     defIcon: null,
     defSize: 28,
@@ -682,7 +697,7 @@ export const KIND_SPEC: Record<Kind, KindSpec> = {
     hasLabel: false,
     hasSupporting: false,
     hasIcon: true,
-    size: { min: 48, max: 412, step: 4, icon: "open_in_full" },
+    size: { min: 48, max: PHONE_W, step: 4, icon: "open_in_full", presets: [96, HALF_W, CONTENT_W, PHONE_W] },
     defLabel: "",
     defIcon: "image",
     defSize: 200,
@@ -692,17 +707,17 @@ export const KIND_SPEC: Record<Kind, KindSpec> = {
     noun: "区切り線",
     category: "content",
     paletteIcon: "horizontal_rule",
-    w: 320,
+    w: CONTENT_W,
     h: 16,
     radius: 0,
     hasVariant: false,
     hasLabel: false,
     hasSupporting: false,
     hasIcon: false,
-    size: { min: 40, max: 412, step: 4, icon: "width" },
+    size: { min: 40, max: PHONE_W, step: 4, icon: "width", presets: WIDTH_PRESETS },
     defLabel: "",
     defIcon: null,
-    defSize: 320,
+    defSize: CONTENT_W,
   },
   loadingIndicator: {
     label: "Loading Indicator",
@@ -717,7 +732,7 @@ export const KIND_SPEC: Record<Kind, KindSpec> = {
     hasSupporting: false,
     hasIcon: false,
     hasContained: true,
-    size: { min: 32, max: 128, step: 4, icon: "open_in_full" },
+    size: { min: 32, max: 128, step: 4, icon: "open_in_full", presets: [32, 48, 64, 96] },
     defLabel: "",
     defIcon: null,
     defSize: 48,
@@ -727,7 +742,7 @@ export const KIND_SPEC: Record<Kind, KindSpec> = {
     noun: "リニアプログレス",
     category: "progress",
     paletteIcon: "linear_scale",
-    w: 320,
+    w: CONTENT_W,
     h: 24,
     radius: 12,
     hasVariant: false,
@@ -736,10 +751,10 @@ export const KIND_SPEC: Record<Kind, KindSpec> = {
     hasIcon: false,
     hasValue: true,
     hasWavy: true,
-    size: { min: 120, max: 412, step: 4, icon: "width" },
+    size: { min: 120, max: PHONE_W, step: 4, icon: "width", presets: WIDTH_PRESETS },
     defLabel: "",
     defIcon: null,
-    defSize: 320,
+    defSize: CONTENT_W,
   },
   circularProgress: {
     label: "Circular Progress",
@@ -755,7 +770,7 @@ export const KIND_SPEC: Record<Kind, KindSpec> = {
     hasIcon: false,
     hasValue: true,
     hasWavy: true,
-    size: { min: 24, max: 120, step: 4, icon: "open_in_full" },
+    size: { min: 24, max: 120, step: 4, icon: "open_in_full", presets: [24, 40, 48, 64] },
     defLabel: "",
     defIcon: null,
     defSize: 48,

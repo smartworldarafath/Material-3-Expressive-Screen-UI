@@ -118,6 +118,16 @@ input[type="range"].m3-range::-moz-range-thumb {
   border: none;
 }
 
+input.m3-number::-webkit-outer-spin-button,
+input.m3-number::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input.m3-number {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .m3-press,
   .m3-tile {
