@@ -2155,7 +2155,7 @@ export default function Page() {
                     top: visibleWorld.t,
                     width: 1.5 / view.z,
                     height: visibleWorld.h,
-                    background: "#E91E63",
+                    background: p.primary,
                     pointerEvents: "none",
                   }}
                 />
@@ -2168,7 +2168,7 @@ export default function Page() {
                     left: visibleWorld.l,
                     height: 1.5 / view.z,
                     width: visibleWorld.w,
-                    background: "#E91E63",
+                    background: p.primary,
                     pointerEvents: "none",
                   }}
                 />
