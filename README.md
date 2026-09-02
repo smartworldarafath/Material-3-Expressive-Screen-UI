@@ -34,7 +34,7 @@
 - **Prompt output** – the whole design (or a single screen) becomes a concise natural-language prompt in Japanese or English, including your own notes on what each part does.
 - **Export** – copy the prompt or save a screen as a PNG.
 - **Alignment guides**, undo/redo, keyboard shortcuts, seven color themes, a favorites row in the parts panel, and everything is saved in your browser (localStorage).
-- **Phone-friendly** – on a phone you get a lightweight blank canvas with tap-to-add; the full multi-screen editor is for desktop browsers.
+- **Phone-friendly** – on a phone you get one fixed screen and a buttons-only editor: tap the plus to add a button, tap a button to move it, and edit its text, icon and style in a bottom sheet. The full multi-screen editor is for desktop browsers.
 
 <table>
   <tr>
@@ -43,7 +43,7 @@
   </tr>
 </table>
 
-<p align="center"><img src="docs/mobile.png" width="240" alt="Phone version" /><br /><sub>Phone: a lightweight canvas with tap-to-add.</sub></p>
+<p align="center"><img src="docs/mobile.png" width="240" alt="Phone version" /><br /><sub>Phone: one screen, buttons only, edited in a bottom sheet.</sub></p>
 
 ## Keyboard
 
@@ -97,7 +97,7 @@ MIT © lnkiai
 - **プロンプト出力** – デザイン全体、または 1 画面だけを、日本語か英語の簡潔な文章にします。部品ごとの「振る舞い」メモもそのまま入ります。
 - **書き出し** – プロンプトのコピー、画面の PNG 保存。
 - **補助線スナップ**、Undo/Redo、キーボードショートカット、7 種のカラーテーマ、お気に入り部品。作業内容はブラウザ（localStorage）に自動保存されます。
-- **スマホでも** – スマホでは白紙キャンバスとタップ追加の軽量版が使えます。複数画面のフル機能は PC のブラウザ向けです。
+- **スマホでも** – スマホでは 1 画面固定のボタン専用エディタになります。プラスでボタンを追加し、タップして動かし、ボトムシートでテキスト・アイコン・スタイルを編集できます。複数画面のフル機能は PC のブラウザ向けです。
 
 ### 開発
 

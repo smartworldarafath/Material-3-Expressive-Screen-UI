@@ -3,6 +3,7 @@
 import { FrameMode, Palette } from "@/lib/tokens";
 import { Lang } from "@/lib/i18n";
 import { IconBtn, Segmented } from "./ui";
+import { Icon } from "./M3Node";
 import { t, useLang } from "@/lib/i18n";
 
 export type Mode = "select" | "hand";
@@ -46,6 +47,7 @@ export function Toolbar({
   onLang,
   mobile,
   onPrompt,
+  onSettings,
 }: {
   p: Palette;
   mode: Mode;
@@ -68,6 +70,7 @@ export function Toolbar({
   onLang: (l: Lang) => void;
   mobile?: boolean;
   onPrompt?: () => void;
+  onSettings?: () => void;
 }) {
   const lang = useLang();
   const REPO_URL = "https://github.com/lnkiai/m3e-canvas";
@@ -118,6 +121,7 @@ export function Toolbar({
     </button>
   );
   if (mobile) {
+    const S = 46;
     return (
       <div
         style={{
@@ -133,63 +137,33 @@ export function Toolbar({
         }}
       >
         <Pill p={p}>
-          <Segmented<Mode>
-            options={[
-              {
-                key: "select",
-                icon: "arrow_selector_tool",
-                title: t("select", lang),
-              },
-              { key: "hand", icon: "pan_tool", title: t("hand", lang) },
-            ]}
-            value={mode}
-            onChange={onMode}
-            p={p}
-            height={40}
-            grow={false}
-          />
-          <IconBtn
-            icon="undo"
-            p={p}
-            onClick={onUndo}
-            disabled={!canUndo}
-            title={t("undo", lang)}
-            size={40}
-          />
-          <IconBtn
-            icon="redo"
-            p={p}
-            onClick={onRedo}
-            disabled={!canRedo}
-            title={t("redo", lang)}
-            size={40}
-          />
-          <IconBtn
-            icon="fit_screen"
-            p={p}
-            onClick={onFit}
-            title={t("fit", lang)}
-            size={40}
-          />
-          {frame === "phone" && (
-            <IconBtn
-              icon="play_arrow"
-              p={p}
-              onClick={onPreview}
-              title={t("preview", lang)}
-              size={40}
-              fill
-            />
-          )}
-          <IconBtn
-            icon="auto_awesome"
-            p={p}
+          <IconBtn icon="undo" p={p} onClick={onUndo} disabled={!canUndo} title={t("undo", lang)} size={S} />
+          <IconBtn icon="redo" p={p} onClick={onRedo} disabled={!canRedo} title={t("redo", lang)} size={S} />
+          <IconBtn icon="play_arrow" p={p} onClick={onPreview} title={t("preview", lang)} size={S} fill />
+          <IconBtn icon="palette" p={p} onClick={onSettings} title={t("settings", lang)} size={S} />
+          <button
             onClick={onPrompt}
-            title={t("prompt", lang)}
-            size={40}
-          />
-          {langBtn}
-          {githubBtn}
+            title={t("copyPrompt", lang)}
+            className="m3-press"
+            style={{
+              height: S,
+              padding: "0 16px 0 12px",
+              borderRadius: S / 2,
+              border: "none",
+              background: p.primary,
+              color: p.onPrimary,
+              fontSize: 14,
+              fontWeight: 700,
+              cursor: "pointer",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              whiteSpace: "nowrap",
+            }}
+          >
+            <Icon name="auto_awesome" size={22} />
+            {t("prompt", lang)}
+          </button>
         </Pill>
       </div>
     );
@@ -239,6 +213,7 @@ export function Toolbar({
             title={t("zoomIn", lang)}
             size={40}
           />
+          <IconBtn icon="fit_screen" p={p} onClick={onFit} title={t("fit", lang)} size={40} />
         </Pill>
       </div>
       <div

@@ -99,12 +99,11 @@ const UI = {
   screenN: { ja: "画面", en: "Screen" },
   copySuffix: { ja: " コピー", en: " copy" },
   // mobile
-  mobileNote: {
-    ja: "スマホ版は基本機能のみです。PC のブラウザで開くとフル機能が使えます。",
-    en: "The phone version is a lightweight editor. Open it on a desktop browser for the full feature set.",
-  },
-  add: { ja: "追加", en: "Add" },
-  tapToAdd: { ja: "タップで追加", en: "Tap to add" },
+  mobileNote: { ja: "フル機能は PC のブラウザで使えます", en: "Full features on a desktop browser" },
+  addButton: { ja: "ボタンを追加", en: "Add button" },
+  done: { ja: "完了", en: "Done" },
+  theme: { ja: "テーマ", en: "Theme" },
+  settings: { ja: "テーマと設定", en: "Theme and settings" },
 } as const;
 
 export type UIKey = keyof typeof UI;

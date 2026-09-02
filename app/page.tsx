@@ -8,7 +8,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { motion, useSpring } from "motion/react";
+import { AnimatePresence, motion, useSpring } from "motion/react";
 import { toPng } from "html-to-image";
 import { buildPrompt } from "@/lib/prompt";
 import {
@@ -23,7 +23,6 @@ import {
   Group,
   Item,
   KIND_ORDER,
-  KIND_SPEC,
   Kind,
   MEASURED,
   PALETTES,
@@ -53,9 +52,11 @@ import {
 import { Icon, M3Node, MeasuredContent } from "@/components/M3Node";
 import { FrameInspector, Inspector } from "@/components/Inspector";
 import { Preview } from "@/components/Preview";
+import { Logo } from "@/components/Logo";
 import { PartsPalette } from "@/components/PartsPalette";
 import { PromptPanel } from "@/components/PromptPanel";
 import { Mode, Toolbar } from "@/components/Toolbar";
+import { BottomSheet, MobileActionBar, MobileInspector, MobileSettings } from "@/components/Mobile";
 import { IconBtn, Segmented } from "@/components/ui";
 import { Lang, LangContext, setGlobalLang, t } from "@/lib/i18n";
 
@@ -128,9 +129,6 @@ type Gesture =
 
 type Snapshot = { groups: Group[]; frames: Frame[] };
 
-/** the phone version only offers the essentials */
-const MOBILE_KINDS: Kind[] = ["button", "text", "card", "listItem", "textField", "switch", "image", "fab"];
-
 const SEED_FRAMES: Frame[] = [{ id: "seedF1", name: "Home", x: 0, y: 0 }];
 
 /** Seed ids are deterministic so server and client render the same markup. */
@@ -170,6 +168,25 @@ const seed = (): Group[] => {
   ];
 };
 
+/** The phone version starts with buttons only: that is all it edits. */
+const mobileSeed = (): Group[] => {
+  const mk = (k: Kind) => makeItem(k);
+  const a = mk("button");
+  const b = mk("button");
+  const c = mk("button");
+  a.label = "お気に入り";
+  a.icon = "star";
+  b.label = "共有";
+  b.icon = "share";
+  b.variant = "tonal";
+  c.label = "はじめる";
+  c.icon = "arrow_forward";
+  return [
+    { id: uid(), x: 36, y: 120, axis: "x", items: [a, b] },
+    { id: uid(), x: 36, y: 200, axis: "x", items: [c] },
+  ];
+};
+
 export default function Page() {
   /* ---------- document ---------- */
   const [groups, setGroups] = useState<Group[]>(seed);
@@ -178,9 +195,8 @@ export default function Page() {
   const [frame, setFrame] = useState<FrameMode>("phone");
   const [lang, setLang] = useState<Lang>("ja");
   const [isMobile, setIsMobile] = useState(false);
-  const [sheet, setSheet] = useState<"parts" | null>(null);
+  const [sheet, setSheet] = useState<"edit" | "settings" | null>(null);
   const [toast, setToast] = useState<string | null>(null);
-  const [noteDismissed, setNoteDismissed] = useState(false);
   const [title, setTitle] = useState("");
   const [brief, setBrief] = useState("");
 
@@ -245,6 +261,8 @@ export default function Page() {
   /** groups that must reposition without animating on the next render */
   const instantRef = useRef<Set<string>>(new Set());
   const loadedRef = useRef(false);
+  /** whether a saved document existed, so the phone seed only applies to a fresh start */
+  const hadDocRef = useRef(false);
 
   /* ---------- history ---------- */
   const pastRef = useRef<Snapshot[]>([]);
@@ -305,9 +323,12 @@ export default function Page() {
 
   /* ---------- persistence ---------- */
   useEffect(() => {
+    // React's development double-run would otherwise read back its own first save
+    if (loadedRef.current) return;
     try {
       const d = localStorage.getItem(DOC_KEY);
       if (d) {
+        hadDocRef.current = true;
         const doc = JSON.parse(d) as Partial<Doc>;
         if (Array.isArray(doc.groups)) setGroups(doc.groups);
         if (Array.isArray(doc.frames)) setFrames(doc.frames);
@@ -327,7 +348,6 @@ export default function Page() {
         if (Array.isArray(ui.favorites)) setFavorites(ui.favorites);
         if (ui.mode) setMode(ui.mode);
         if (ui.lang === "ja" || ui.lang === "en") setLang(ui.lang);
-        if (ui.noteDismissed) setNoteDismissed(true);
       } else {
         if (
           navigator.language &&
@@ -345,7 +365,7 @@ export default function Page() {
     document.documentElement.lang = lang;
   }, [lang]);
 
-  /* phones get the lightweight blank canvas; desktops always work on screens */
+  /* everyone works on phone screens; a phone gets one fixed screen and the select tool only */
   useEffect(() => {
     const mq = window.matchMedia(
       "(max-width: 840px), (pointer: coarse) and (max-width: 1024px)",
@@ -353,13 +373,22 @@ export default function Page() {
     const apply = () => {
       const m = mq.matches;
       setIsMobile(m);
-      const f: FrameMode = m ? "blank" : "phone";
-      if (frameRef.current !== f) {
-        setFrame(f);
-        frameRef.current = f;
-        if (!m) ensureFrameRef.current();
-        queueMicrotask(() => fitRef.current());
+      mobileRef.current = m;
+      if (m) {
+        setMode("select");
+        setSheet(null);
+        if (!hadDocRef.current) {
+          hadDocRef.current = true;
+          setGroups(mobileSeed());
+          setFrames([{ id: uid(), name: t("home"), x: 0, y: 0 }]);
+        }
       }
+      if (frameRef.current !== "phone") {
+        setFrame("phone");
+        frameRef.current = "phone";
+      }
+      ensureFrameRef.current();
+      queueMicrotask(() => fitRef.current());
     };
     apply();
     mq.addEventListener("change", apply);
@@ -390,7 +419,6 @@ export default function Page() {
           favorites,
           mode,
           lang,
-          noteDismissed,
         }),
       );
     } catch {}
@@ -403,7 +431,6 @@ export default function Page() {
     favorites,
     mode,
     lang,
-    noteDismissed,
   ]);
 
   /* ---------- measurement (text-sized kinds) ---------- */
@@ -505,12 +532,20 @@ export default function Page() {
         }
       }
     }
-    const pad = 40;
-    const top = 84; // keep the floating toolbar clear of the frame
+    const mobile = mobileRef.current;
+    const pad = mobile ? 14 : 40;
+    const top = mobile ? 96 : 84; // keep the floating toolbar clear of the frame
+    const bottom = mobile ? 96 : pad;
+    if (mobile) {
+      // a phone zooms to the screen's width and starts at its top; the rest scrolls
+      const z = clamp((r.width - pad * 2) / (x1 - x0), MIN_Z, MAX_Z);
+      setView({ x: (r.width - (x1 - x0) * z) / 2 - x0 * z, y: top - y0 * z, z });
+      return;
+    }
     const z = clamp(
       Math.min(
         (r.width - pad * 2) / (x1 - x0),
-        (r.height - top - pad) / (y1 - y0),
+        (r.height - top - bottom) / (y1 - y0),
         1,
       ),
       MIN_Z,
@@ -518,7 +553,7 @@ export default function Page() {
     );
     setView({
       x: (r.width - (x1 - x0) * z) / 2 - x0 * z,
-      y: top + (r.height - top - pad - (y1 - y0) * z) / 2 - y0 * z,
+      y: top + (r.height - top - bottom - (y1 - y0) * z) / 2 - y0 * z,
       z,
     });
   }, []);
@@ -1008,13 +1043,20 @@ export default function Page() {
     return out;
   }, []);
 
+  const clearSelection = () => {
+    setSelectedIds([]);
+    setSelectedFrameId(null);
+    setSelectedLinkId(null);
+  };
+
   const onCanvasPointerDown = (e: React.PointerEvent) => {
-    if (
-      e.button === 1 ||
-      modeRef.current === "hand" ||
-      spaceRef.current ||
-      (mobileRef.current && e.pointerType === "touch")
-    ) {
+    if (mobileRef.current && e.pointerType === "touch") {
+      e.preventDefault();
+      clearSelection();
+      startPan(e.clientX, e.clientY);
+      return;
+    }
+    if (e.button === 1 || modeRef.current === "hand" || spaceRef.current) {
       e.preventDefault();
       startPan(e.clientX, e.clientY);
       return;
@@ -1036,8 +1078,16 @@ export default function Page() {
     setSelectedLinkId(null);
   };
 
-  /** grab a phone frame by its bezel or label: it carries everything on it */
+  /** grab a phone frame by its bezel or label: it carries everything on it;
+   *  on a phone the screen stays put and a tap on it just clears the selection */
   const onFramePointerDown = (e: React.PointerEvent, f: Frame) => {
+    if (mobileRef.current) {
+      e.preventDefault();
+      e.stopPropagation();
+      clearSelection();
+      startPan(e.clientX, e.clientY);
+      return;
+    }
     if (e.button === 1 || modeRef.current === "hand" || spaceRef.current) {
       e.preventDefault();
       e.stopPropagation();
@@ -1173,6 +1223,10 @@ export default function Page() {
     }
     return drag?.item.id === primaryId ? (drag?.item ?? null) : null;
   }, [groups, primaryId, drag]);
+
+  useEffect(() => {
+    if (!selected && sheet === "edit") setSheet(null);
+  }, [selected, sheet]);
 
   const patchSelected = (patch: Partial<Item>) => {
     if (!primaryId) return;
@@ -1321,26 +1375,37 @@ export default function Page() {
   const ensureFrameRef = useRef(() => {});
   ensureFrameRef.current = ensureFrame;
 
-  /** phone UI: tap a tile to drop a new part in the middle of the view */
-  const addAtCenter = (kind: Kind) => {
+  /** phone UI: the plus button drops a new button where the view is looking,
+   *  kept inside the screen, and nudged down when that spot is already taken */
+  const addButton = () => {
     const r = canvasRect();
     const v = viewRef.current;
-    const item = makeItem(kind);
+    const item = makeItem("button");
     const sz = sizeOf(item, widthsRef.current);
-    const cx = ((r?.width ?? 0) / 2 - v.x) / v.z;
-    const cy = ((r?.height ?? 0) / 2 - v.y) / v.z;
+    const f = framesRef.current[0];
+    let x = ((r?.width ?? 0) / 2 - v.x) / v.z - sz.w / 2;
+    let y = ((r?.height ?? 0) / 2 - v.y) / v.z - sz.h / 2;
+    if (f) {
+      x = clamp(x, f.x + FRAME_MARGIN, f.x + PHONE_W - FRAME_MARGIN - sz.w);
+      y = clamp(y, f.y + FRAME_MARGIN, f.y + PHONE_H - FRAME_MARGIN - sz.h);
+      const taken = (yy: number) =>
+        itemRects().some((o) => o.l < x + sz.w && o.r > x && o.t < yy + sz.h && o.b > yy);
+      let tries = 0;
+      while (taken(y) && y + sz.h * 2 < f.y + PHONE_H && tries++ < 12) y += sz.h + 12;
+    }
     snapshot();
     setGroups((gs) => [
       ...gs,
       {
         id: uid(),
-        x: Math.round(cx - sz.w / 2),
-        y: Math.round(cy - sz.h / 2),
-        axis: connectSpecOf(item)?.axis ?? "x",
+        x: Math.round(x),
+        y: Math.round(y),
+        axis: "x",
         items: [item],
       },
     ]);
     setSelectedIds([item.id]);
+    setSelectedFrameId(null);
     setSheet(null);
   };
 
@@ -1738,7 +1803,7 @@ export default function Page() {
     );
   };
 
-  const handMode = mode === "hand" || spaceHeld;
+  const handMode = !isMobile && (mode === "hand" || spaceHeld);
   const panning = gesture?.kind === "pan";
   const marquee = gesture?.kind === "marquee" && gesture.moved ? gesture : null;
   const canvasBg = frame === "phone" ? p.surfaceContainerLow : "#ffffff";
@@ -1826,19 +1891,7 @@ export default function Page() {
                 padding: "10px 10px 0 14px",
               }}
             >
-              <div
-                style={{
-                  width: 30,
-                  height: 30,
-                  borderRadius: 10,
-                  background: p.primary,
-                  color: p.onPrimary,
-                  display: "grid",
-                  placeItems: "center",
-                }}
-              >
-                <Icon name="stacks" size={18} />
-              </div>
+              <Logo size={32} color={p.primary} glyph={p.onPrimary} />
               <span
                 style={{
                   fontWeight: 700,
@@ -1895,7 +1948,7 @@ export default function Page() {
             flex: 1,
             position: "relative",
             minWidth: 0,
-            padding: isMobile ? 0 : 8,
+            padding: isMobile ? 6 : 8,
           }}
         >
           <div
@@ -1904,7 +1957,7 @@ export default function Page() {
             onPointerDownCapture={onTouchCapture}
             style={{
               position: "absolute",
-              inset: isMobile ? 0 : 8,
+              inset: isMobile ? 6 : 8,
               overflow: "hidden",
               borderRadius: 24,
               background: canvasBg,
@@ -2216,6 +2269,7 @@ export default function Page() {
             lang={lang}
             onLang={setLang}
             mobile={isMobile}
+            onSettings={() => setSheet(sheet === "settings" ? null : "settings")}
             onPrompt={async () => {
               try {
                 await navigator.clipboard.writeText(buildPrompt(doc, widths, undefined, lang));
@@ -2225,50 +2279,38 @@ export default function Page() {
             }}
           />
 
-          {isMobile && !noteDismissed && (
+          {isMobile && (
             <div
               style={{
                 position: "absolute",
-                left: 12,
-                right: 12,
+                left: 0,
+                right: 0,
                 top: 66,
-                zIndex: 44,
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                padding: "8px 8px 8px 14px",
-                borderRadius: 18,
-                background: p.inverseSurface,
-                color: p.inverseOnSurface,
-                fontSize: 12,
-                lineHeight: 1.5,
+                textAlign: "center",
+                fontSize: 11,
+                lineHeight: 1.4,
+                color: p.onSurfaceVariant,
+                pointerEvents: "none",
+                zIndex: 40,
               }}
             >
-              <Icon name="computer" size={18} />
-              <span style={{ flex: 1 }}>{t("mobileNote", lang)}</span>
-              <IconBtn
-                icon="close"
-                p={{ ...p, onSurfaceVariant: p.inverseOnSurface }}
-                onClick={() => setNoteDismissed(true)}
-                title={t("close", lang)}
-                size={30}
-              />
+              {t("mobileNote", lang)}
             </div>
           )}
 
-          {isMobile && (
+          {isMobile && sheet === null && (
             <button
-              onClick={() => setSheet(sheet === "parts" ? null : "parts")}
-              title={t("add", lang)}
-              aria-label={t("add", lang)}
+              onClick={addButton}
+              title={t("addButton", lang)}
+              aria-label={t("addButton", lang)}
               className="m3-press"
               style={{
                 position: "absolute",
-                right: 18,
-                bottom: 18,
-                width: 60,
-                height: 60,
-                borderRadius: 18,
+                right: 16,
+                bottom: 16,
+                width: 64,
+                height: 64,
+                borderRadius: 20,
                 border: "none",
                 background: p.primary,
                 color: p.onPrimary,
@@ -2279,90 +2321,41 @@ export default function Page() {
                 boxShadow: "0 6px 18px rgba(0,0,0,0.18)",
               }}
             >
-              <Icon name={sheet === "parts" ? "close" : "add"} size={28} />
+              <Icon name="add" size={32} />
             </button>
           )}
 
-          {/* phone: a strip of the essential parts, tap to drop one in the middle of the view */}
-          {isMobile && sheet === "parts" && (
-            <div
-              className="no-scrollbar"
-              style={{
-                position: "absolute",
-                left: 12,
-                right: 90,
-                bottom: 22,
-                display: "flex",
-                gap: 6,
-                overflowX: "auto",
-                padding: 6,
-                borderRadius: 24,
-                background: p.surface,
-                boxShadow: "0 6px 18px rgba(0,0,0,0.14)",
-                zIndex: 46,
-              }}
-            >
-              {MOBILE_KINDS.map((k) => (
-                <button
-                  key={k}
-                  onClick={() => addAtCenter(k)}
-                  className="m3-press"
-                  style={{
-                    flex: "0 0 auto",
-                    height: 44,
-                    padding: "0 14px 0 10px",
-                    borderRadius: 22,
-                    border: "none",
-                    background: p.surfaceContainerHigh,
-                    color: p.onSurface,
-                    fontSize: 13,
-                    fontWeight: 600,
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 6,
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  <Icon name={KIND_SPEC[k].paletteIcon} size={20} color={p.primary} />
-                  {KIND_SPEC[k].label}
-                </button>
-              ))}
-            </div>
+          {isMobile && selected && sheet === null && (
+            <MobileActionBar
+              p={p}
+              onEdit={() => setSheet("edit")}
+              onDuplicate={duplicateSelected}
+              onDelete={deleteSelected}
+            />
           )}
 
-          {/* phone: the only edits are the label and delete */}
-          {isMobile && selected && sheet === null && (
-            <div
-              style={{
-                position: "absolute",
-                left: "50%",
-                bottom: 22,
-                transform: "translateX(-50%)",
-                display: "flex",
-                gap: 4,
-                padding: 6,
-                borderRadius: 26,
-                background: p.surface,
-                boxShadow: "0 6px 18px rgba(0,0,0,0.14)",
-                zIndex: 46,
-              }}
-            >
-              {KIND_SPEC[selected.kind].hasLabel && (
-                <IconBtn
-                  icon="edit"
-                  p={p}
-                  size={44}
-                  title={t("label", lang)}
-                  onClick={() => {
-                    const v = window.prompt(t("label", lang), selected.label);
-                    if (v !== null) patchSelected({ label: v });
+          <AnimatePresence>
+            {isMobile && sheet === "edit" && selected && (
+              <BottomSheet key="edit" p={p} onClose={() => setSheet(null)}>
+                <MobileInspector
+                  item={selected}
+                  palette={p}
+                  onChange={patchSelected}
+                  onDelete={() => {
+                    deleteSelected();
+                    setSheet(null);
                   }}
+                  onDuplicate={duplicateSelected}
+                  onClose={() => setSheet(null)}
                 />
-              )}
-              <IconBtn icon="content_copy" p={p} size={44} title={t("duplicate", lang)} onClick={duplicateSelected} />
-              <IconBtn icon="delete" p={p} size={44} danger title={t("delete", lang)} onClick={deleteSelected} />
-            </div>
-          )}
+              </BottomSheet>
+            )}
+            {isMobile && sheet === "settings" && (
+              <BottomSheet key="settings" p={p} onClose={() => setSheet(null)}>
+                <MobileSettings palette={p} paletteKey={paletteKey} onPalette={setPaletteKey} lang={lang} onLang={setLang} />
+              </BottomSheet>
+            )}
+          </AnimatePresence>
 
           {toast && (
             <div

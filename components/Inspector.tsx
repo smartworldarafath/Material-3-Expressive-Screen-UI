@@ -23,7 +23,7 @@ import { Icon } from "./M3Node";
 import { Field, IconBtn, Section, Segmented, Slider, Toggle, TokenChips } from "./ui";
 import { t, useLang } from "@/lib/i18n";
 
-function variantsOf(kind: Kind): { key: Variant; label: string }[] {
+export function variantsOf(kind: Kind): { key: Variant; label: string }[] {
   switch (kind) {
     case "card":
       return [
@@ -54,7 +54,7 @@ function variantsOf(kind: Kind): { key: Variant; label: string }[] {
   }
 }
 
-function VariantSwatch({
+export function VariantSwatch({
   v,
   label,
   p,
