@@ -361,7 +361,7 @@ export function MobileActionBar({
       style={{
         position: "absolute",
         left: 14,
-        bottom: 16,
+        bottom: "calc(16px + env(safe-area-inset-bottom))",
         display: "flex",
         gap: 4,
         padding: 6,

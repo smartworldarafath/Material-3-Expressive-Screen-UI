@@ -365,6 +365,23 @@ export default function Page() {
     document.documentElement.lang = lang;
   }, [lang]);
 
+  /* in-app browsers size the page behind their own toolbars and may ignore dvh,
+     so the measured inner height wins over the CSS height (innerHeight, not the
+     visual viewport, so pinch-zoom and the keyboard leave the layout alone) */
+  useEffect(() => {
+    const apply = () => {
+      const h = Math.round(window.innerHeight);
+      if (h > 0) document.documentElement.style.setProperty("--app-h", `${h}px`);
+    };
+    apply();
+    window.addEventListener("resize", apply);
+    window.addEventListener("orientationchange", apply);
+    return () => {
+      window.removeEventListener("resize", apply);
+      window.removeEventListener("orientationchange", apply);
+    };
+  }, []);
+
   /* everyone works on phone screens; a phone gets one fixed screen and the select tool only */
   useEffect(() => {
     const mq = window.matchMedia(
@@ -1833,9 +1850,9 @@ export default function Page() {
   return (
     <LangContext.Provider value={lang}>
       <div
+        className="app-root"
         style={{
           display: "flex",
-          height: "100dvh",
           overflow: "hidden",
           background: p.surfaceContainer,
           cursor: resizing ? "col-resize" : undefined,
@@ -2285,7 +2302,7 @@ export default function Page() {
                 position: "absolute",
                 left: 0,
                 right: 0,
-                top: 66,
+                top: 80,
                 textAlign: "center",
                 fontSize: 11,
                 lineHeight: 1.4,
@@ -2307,7 +2324,7 @@ export default function Page() {
               style={{
                 position: "absolute",
                 right: 16,
-                bottom: 16,
+                bottom: "calc(16px + env(safe-area-inset-bottom))",
                 width: 64,
                 height: 64,
                 borderRadius: 20,
