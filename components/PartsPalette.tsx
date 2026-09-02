@@ -1,0 +1,155 @@
+"use client";
+
+import { useMemo, useState } from "react";
+import { CATEGORIES, KIND_ORDER, KIND_SPEC, Kind, PALETTES, Palette } from "@/lib/tokens";
+import { Icon } from "./M3Node";
+import { t, useLang } from "@/lib/i18n";
+import { Field, Section, Tile } from "./ui";
+
+export function PartsPalette({
+  palette: p,
+  paletteKey,
+  onPalette,
+  favorites,
+  onToggleFavorite,
+  onPartPointerDown,
+  overBin,
+}: {
+  palette: Palette;
+  paletteKey: string;
+  onPalette: (key: string) => void;
+  favorites: Kind[];
+  onToggleFavorite: (k: Kind) => void;
+  onPartPointerDown: (e: React.PointerEvent, kind: Kind) => void;
+  overBin: boolean;
+}) {
+  const lang = useLang();
+  const [q, setQ] = useState("");
+
+  const filtered = useMemo(() => {
+    const s = q.trim().toLowerCase();
+    if (!s) return KIND_ORDER;
+    return KIND_ORDER.filter((k) => {
+      const sp = KIND_SPEC[k];
+      return sp.label.toLowerCase().includes(s) || sp.noun.includes(s) || k.toLowerCase().includes(s);
+    });
+  }, [q]);
+
+  const tile = (k: Kind) => {
+    const s = KIND_SPEC[k];
+    return (
+      <Tile
+        key={k}
+        icon={s.paletteIcon}
+        label={s.label}
+        p={p}
+        onPointerDown={(e) => onPartPointerDown(e, k)}
+        starred={favorites.includes(k)}
+        onStar={() => onToggleFavorite(k)}
+      />
+    );
+  };
+
+  const grid: React.CSSProperties = {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fill, minmax(84px, 1fr))",
+    gap: 6,
+  };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", height: "100%", position: "relative" }}>
+      <div style={{ padding: "12px 12px 8px" }}>
+        <Field value={q} onChange={setQ} placeholder={t("search", lang)} p={p} icon="search" height={40} />
+      </div>
+
+      <div className="no-scrollbar" style={{ flex: 1, overflowY: "auto", overflowX: "hidden", padding: "0 8px" }}>
+        {!q && favorites.length > 0 && (
+          <Section id="fav" icon="star" title={t("favorites", lang)} p={p}>
+            <div style={grid}>{favorites.filter((k) => KIND_SPEC[k]).map(tile)}</div>
+          </Section>
+        )}
+        {q ? (
+          <div style={{ ...grid, padding: "4px 4px 12px" }}>
+            {filtered.map(tile)}
+            {filtered.length === 0 && (
+              <div style={{ gridColumn: "1 / -1", color: p.outline, fontSize: 13, padding: 12, textAlign: "center" }}>
+                <Icon name="search_off" size={28} />
+              </div>
+            )}
+          </div>
+        ) : (
+          CATEGORIES.map((c) => (
+            <Section key={c.key} id={`cat:${c.key}`} icon={c.icon} title={c.label} p={p}>
+              <div style={grid}>{KIND_ORDER.filter((k) => KIND_SPEC[k].category === c.key).map(tile)}</div>
+            </Section>
+          ))
+        )}
+      </div>
+
+      <div
+        style={{
+          display: "flex",
+          gap: 6,
+          padding: "10px 12px 12px",
+          justifyContent: "center",
+          borderTop: `1px solid ${p.surfaceContainerHigh}`,
+        }}
+      >
+        {PALETTES.map((pal) => {
+          const on = pal.key === paletteKey;
+          return (
+            <button
+              key={pal.key}
+              onClick={() => onPalette(pal.key)}
+              title={pal.label}
+              aria-label={pal.label}
+              aria-pressed={on}
+              className="m3-press"
+              style={{
+                width: 26,
+                height: 26,
+                borderRadius: 13,
+                border: "none",
+                padding: 0,
+                cursor: "pointer",
+                background: `linear-gradient(135deg, ${pal.primary} 50%, ${pal.primaryContainer} 50%)`,
+                outline: on ? `2px solid ${p.primary}` : "2px solid transparent",
+                outlineOffset: 2,
+              }}
+            />
+          );
+        })}
+      </div>
+
+      {overBin && (
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            background: "rgba(179,38,30,0.10)",
+            display: "grid",
+            placeItems: "center",
+            pointerEvents: "none",
+            color: p.error,
+            borderRadius: "inherit",
+          }}
+        >
+          <div
+            style={{
+              width: 72,
+              height: 72,
+              borderRadius: 36,
+              background: p.errorContainer,
+              color: p.onErrorContainer,
+              display: "grid",
+              placeItems: "center",
+              boxShadow: "0 4px 14px rgba(0,0,0,0.14)",
+            }}
+          >
+            <Icon name="delete" size={34} />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

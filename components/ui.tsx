@@ -1,0 +1,533 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { COLOR_TOKENS, ColorToken, Palette, R_INNER } from "@/lib/tokens";
+import { t, useLang } from "@/lib/i18n";
+import { Icon } from "./M3Node";
+
+export function IconBtn({
+  icon,
+  on,
+  onClick,
+  title,
+  size = 36,
+  p,
+  danger,
+  disabled,
+  fill,
+}: {
+  icon: string;
+  on?: boolean;
+  onClick?: () => void;
+  title?: string;
+  size?: number;
+  p: Palette;
+  danger?: boolean;
+  disabled?: boolean;
+  fill?: boolean;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      title={title}
+      aria-label={title}
+      disabled={disabled}
+      className="m3-press"
+      style={{
+        width: size,
+        height: size,
+        borderRadius: size / 2,
+        border: "none",
+        background: on ? (danger ? p.errorContainer : p.secondaryContainer) : "transparent",
+        color: disabled
+          ? p.outlineVariant
+          : danger
+            ? p.error
+            : on
+              ? p.onSecondaryContainer
+              : p.onSurfaceVariant,
+        cursor: disabled ? "default" : "pointer",
+        display: "grid",
+        placeItems: "center",
+        flex: "0 0 auto",
+      }}
+    >
+      <Icon name={icon} size={Math.round(size * 0.58)} fill={fill ?? on} />
+    </button>
+  );
+}
+
+export type SegOption<K extends string> = { key: K; icon?: string; label?: string; title?: string };
+
+/** Connected-button group with the same fused corners as the canvas. */
+export function Segmented<K extends string>({
+  options,
+  value,
+  onChange,
+  p,
+  height = 40,
+  grow = true,
+}: {
+  options: SegOption<K>[];
+  value: K;
+  onChange: (k: K) => void;
+  p: Palette;
+  height?: number;
+  grow?: boolean;
+}) {
+  return (
+    <div style={{ display: "flex", gap: 3 }}>
+      {options.map((o, i) => {
+        const on = o.key === value;
+        const first = i === 0;
+        const last = i === options.length - 1;
+        const outer = height / 2;
+        return (
+          <button
+            key={o.key}
+            onClick={() => onChange(o.key)}
+            title={o.title ?? o.label}
+            aria-label={o.title ?? o.label}
+            className="m3-press"
+            style={{
+              flex: grow ? 1 : "0 0 auto",
+              minWidth: height,
+              height,
+              padding: o.label ? "0 14px" : 0,
+              border: "none",
+              cursor: "pointer",
+              borderTopLeftRadius: first ? outer : R_INNER,
+              borderBottomLeftRadius: first ? outer : R_INNER,
+              borderTopRightRadius: last ? outer : R_INNER,
+              borderBottomRightRadius: last ? outer : R_INNER,
+              background: on ? p.primary : p.surfaceContainerHigh,
+              color: on ? p.onPrimary : p.onSurfaceVariant,
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 6,
+              fontSize: 13,
+              fontWeight: on ? 600 : 500,
+              transition: "background 120ms, color 120ms, border-radius 160ms",
+            }}
+          >
+            {o.icon && <Icon name={o.icon} size={Math.round(height * 0.5)} fill={on} />}
+            {o.label && <span>{o.label}</span>}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+export function Field({
+  value,
+  onChange,
+  placeholder,
+  p,
+  icon,
+  multiline,
+  rows = 3,
+  height = 44,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  p: Palette;
+  icon?: string;
+  multiline?: boolean;
+  rows?: number;
+  height?: number;
+}) {
+  const lang = useLang();
+  const filled = value.length > 0;
+  const base: React.CSSProperties = {
+    width: "100%",
+    padding: multiline ? `12px ${filled ? 40 : 14}px 12px ${icon ? 42 : 14}px` : `0 ${filled ? 40 : 14}px 0 ${icon ? 42 : 14}px`,
+    borderRadius: multiline ? 18 : height / 2,
+    border: "none",
+    background: p.surfaceContainerHigh,
+    color: p.onSurface,
+    fontSize: 14,
+    lineHeight: multiline ? 1.55 : undefined,
+    outline: "none",
+    boxSizing: "border-box",
+    fontFamily: "inherit",
+    resize: "none",
+  };
+  return (
+    <div style={{ position: "relative", width: "100%" }}>
+      {icon && (
+        <span
+          style={{
+            position: "absolute",
+            left: 12,
+            top: multiline ? 12 : (height - 20) / 2,
+            color: p.onSurfaceVariant,
+            pointerEvents: "none",
+            lineHeight: 1,
+          }}
+        >
+          <Icon name={icon} size={20} />
+        </span>
+      )}
+      {multiline ? (
+        <textarea
+          value={value}
+          rows={rows}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          style={base}
+        />
+      ) : (
+        <input
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          style={{ ...base, height }}
+        />
+      )}
+      {filled && (
+        <button
+          onClick={() => onChange("")}
+          title={t("clear", lang)}
+          aria-label={t("clear", lang)}
+          style={{
+            position: "absolute",
+            right: 6,
+            top: multiline ? 8 : (height - 30) / 2,
+            width: 30,
+            height: 30,
+            borderRadius: 15,
+            border: "none",
+            background: "transparent",
+            color: p.onSurfaceVariant,
+            cursor: "pointer",
+            display: "grid",
+            placeItems: "center",
+          }}
+        >
+          <Icon name="close" size={16} />
+        </button>
+      )}
+    </div>
+  );
+}
+
+export function Slider({
+  icon,
+  value,
+  min,
+  max,
+  step,
+  onChange,
+  p,
+  unit = "",
+}: {
+  icon: string;
+  value: number;
+  min: number;
+  max: number;
+  step: number;
+  onChange: (v: number) => void;
+  p: Palette;
+  unit?: string;
+}) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+      <span style={{ color: p.onSurfaceVariant, lineHeight: 1, flex: "0 0 auto" }}>
+        <Icon name={icon} size={20} />
+      </span>
+      <input
+        type="range"
+        className="m3-range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        style={{ "--track": p.secondaryContainer, "--thumb": p.primary } as React.CSSProperties}
+      />
+      <span
+        style={{
+          fontSize: 12,
+          fontWeight: 600,
+          color: p.onSurface,
+          minWidth: 36,
+          textAlign: "right",
+          fontVariantNumeric: "tabular-nums",
+          flex: "0 0 auto",
+        }}
+      >
+        {value}
+        {unit}
+      </span>
+    </div>
+  );
+}
+
+export function Toggle({
+  on,
+  onChange,
+  p,
+  icon,
+  label,
+}: {
+  on: boolean;
+  onChange: (v: boolean) => void;
+  p: Palette;
+  icon?: string;
+  label?: string;
+}) {
+  return (
+    <button
+      onClick={() => onChange(!on)}
+      title={label}
+      aria-label={label}
+      aria-pressed={on}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 10,
+        border: "none",
+        background: "transparent",
+        cursor: "pointer",
+        padding: 0,
+        color: p.onSurfaceVariant,
+      }}
+    >
+      {icon && <Icon name={icon} size={20} />}
+      {label && <span style={{ fontSize: 13, color: p.onSurface }}>{label}</span>}
+      <span
+        style={{
+          position: "relative",
+          width: 44,
+          height: 26,
+          borderRadius: 13,
+          background: on ? p.primary : p.surfaceContainerHighest,
+          border: on ? "2px solid transparent" : `2px solid ${p.outline}`,
+          boxSizing: "border-box",
+          transition: "background 160ms",
+          flex: "0 0 auto",
+        }}
+      >
+        <span
+          style={{
+            position: "absolute",
+            top: "50%",
+            left: on ? 20 : 3,
+            width: on ? 18 : 12,
+            height: on ? 18 : 12,
+            marginTop: on ? -9 : -6,
+            borderRadius: 9,
+            background: on ? p.onPrimary : p.outline,
+            transition: "left 160ms, width 160ms, height 160ms, margin 160ms",
+          }}
+        />
+      </span>
+    </button>
+  );
+}
+
+/** Collapsible section; collapsed state is remembered per key. */
+export function Section({
+  id,
+  icon,
+  title,
+  p,
+  children,
+  right,
+  defaultOpen = true,
+}: {
+  id: string;
+  icon: string;
+  title: string;
+  p: Palette;
+  children: React.ReactNode;
+  right?: React.ReactNode;
+  defaultOpen?: boolean;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  useEffect(() => {
+    try {
+      const v = localStorage.getItem(`m3e:sec:${id}`);
+      if (v !== null) setOpen(v === "1");
+    } catch {}
+  }, [id]);
+  const toggle = () => {
+    setOpen((o) => {
+      try {
+        localStorage.setItem(`m3e:sec:${id}`, o ? "0" : "1");
+      } catch {}
+      return !o;
+    });
+  };
+  return (
+    <div style={{ marginBottom: 6 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 6, height: 36 }}>
+        <button
+          onClick={toggle}
+          aria-expanded={open}
+          style={{
+            flex: 1,
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            height: 36,
+            padding: "0 6px",
+            border: "none",
+            background: "transparent",
+            color: p.onSurfaceVariant,
+            cursor: "pointer",
+            borderRadius: 12,
+            fontSize: 12,
+            fontWeight: 700,
+            letterSpacing: 0.4,
+            textAlign: "left",
+          }}
+        >
+          <Icon name={icon} size={18} />
+          <span style={{ flex: 1 }}>{title}</span>
+          <Icon name={open ? "expand_less" : "expand_more"} size={18} />
+        </button>
+        {right}
+      </div>
+      {open && <div style={{ padding: "2px 4px 10px" }}>{children}</div>}
+    </div>
+  );
+}
+
+export function Tile({
+  icon,
+  label,
+  p,
+  onPointerDown,
+  onClick,
+  starred,
+  onStar,
+  active,
+  compact,
+}: {
+  icon: string;
+  label: string;
+  p: Palette;
+  onPointerDown?: (e: React.PointerEvent) => void;
+  onClick?: () => void;
+  starred?: boolean;
+  onStar?: () => void;
+  active?: boolean;
+  compact?: boolean;
+}) {
+  const lang = useLang();
+  return (
+    <div
+      className="m3-tile"
+      onPointerDown={onPointerDown}
+      onClick={onClick}
+      title={label}
+      style={{
+        position: "relative",
+        display: "flex",
+        flexDirection: compact ? "row" : "column",
+        alignItems: "center",
+        justifyContent: compact ? "flex-start" : "center",
+        gap: compact ? 10 : 6,
+        padding: compact ? "8px 12px" : "12px 6px 10px",
+        borderRadius: 16,
+        background: active ? p.secondaryContainer : p.surfaceContainerLow,
+        color: active ? p.onSecondaryContainer : p.onSurface,
+        cursor: onPointerDown ? "grab" : "pointer",
+        userSelect: "none",
+        touchAction: "none",
+        minHeight: compact ? 40 : 72,
+        boxSizing: "border-box",
+      }}
+    >
+      <Icon name={icon} size={compact ? 20 : 26} color={active ? p.onSecondaryContainer : p.primary} />
+      <span
+        style={{
+          fontSize: 11,
+          fontWeight: 500,
+          lineHeight: 1.2,
+          textAlign: "center",
+          color: active ? p.onSecondaryContainer : p.onSurfaceVariant,
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+          maxWidth: "100%",
+        }}
+      >
+        {label}
+      </span>
+      {onStar && (
+        <button
+          className="m3-star"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            onStar();
+          }}
+          title={starred ? t("removeFavorite", lang) : t("addFavorite", lang)}
+          aria-label={starred ? t("removeFavorite", lang) : t("addFavorite", lang)}
+          style={{
+            position: "absolute",
+            top: 4,
+            right: 4,
+            width: 24,
+            height: 24,
+            borderRadius: 12,
+            border: "none",
+            background: "transparent",
+            color: starred ? p.primary : p.outline,
+            cursor: "pointer",
+            display: "grid",
+            placeItems: "center",
+            opacity: starred ? 1 : undefined,
+          }}
+        >
+          <Icon name="star" size={16} fill={starred} />
+        </button>
+      )}
+    </div>
+  );
+}
+
+/** palette-role swatches; the dot shows the real color of the current theme */
+export function TokenChips({
+  value,
+  onChange,
+  p,
+}: {
+  value: ColorToken;
+  onChange: (t: ColorToken) => void;
+  p: Palette;
+}) {
+  return (
+    <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+      {COLOR_TOKENS.map((t) => {
+        const on = t.key === value;
+        return (
+          <button
+            key={t.key}
+            onClick={() => onChange(t.key)}
+            title={t.label}
+            aria-label={t.label}
+            aria-pressed={on}
+            className="m3-press"
+            style={{
+              width: 30,
+              height: 30,
+              borderRadius: 15,
+              border: `1px solid ${p.outlineVariant}`,
+              padding: 0,
+              cursor: "pointer",
+              background: p[t.key],
+              outline: on ? `2px solid ${p.primary}` : "2px solid transparent",
+              outlineOffset: 2,
+            }}
+          />
+        );
+      })}
+    </div>
+  );
+}
