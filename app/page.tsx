@@ -373,6 +373,11 @@ export default function Page() {
       const h = Math.round(window.innerHeight);
       if (h > 0) document.documentElement.style.setProperty("--app-h", `${h}px`);
     };
+    /* X, Instagram, Facebook and LINE keep their own action bar over the page
+       bottom, so the controls sit one button higher there */
+    if (/Twitter|X-Client|Instagram|FBAN|FBAV|Line\//i.test(navigator.userAgent)) {
+      document.documentElement.style.setProperty("--bottom-ui", "64px");
+    }
     apply();
     window.addEventListener("resize", apply);
     window.addEventListener("orientationchange", apply);
@@ -2324,7 +2329,7 @@ export default function Page() {
               style={{
                 position: "absolute",
                 right: 16,
-                bottom: "calc(16px + env(safe-area-inset-bottom))",
+                bottom: "calc(16px + var(--bottom-ui, 0px) + env(safe-area-inset-bottom))",
                 width: 64,
                 height: 64,
                 borderRadius: 20,

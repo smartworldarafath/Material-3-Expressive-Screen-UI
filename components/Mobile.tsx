@@ -33,7 +33,7 @@ export function BottomSheet({ p, onClose, children }: { p: Palette; onClose: () 
         background: p.surfaceContainerLow,
         boxShadow: "0 -6px 24px rgba(0,0,0,0.16)",
         zIndex: 60,
-        paddingBottom: "env(safe-area-inset-bottom)",
+        paddingBottom: "calc(var(--bottom-ui, 0px) + env(safe-area-inset-bottom))",
       }}
     >
       <button
@@ -361,7 +361,7 @@ export function MobileActionBar({
       style={{
         position: "absolute",
         left: 14,
-        bottom: "calc(16px + env(safe-area-inset-bottom))",
+        bottom: "calc(16px + var(--bottom-ui, 0px) + env(safe-area-inset-bottom))",
         display: "flex",
         gap: 4,
         padding: 6,
