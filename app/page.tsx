@@ -56,7 +56,7 @@ import { Preview } from "@/components/Preview";
 import { PartsPalette } from "@/components/PartsPalette";
 import { PromptPanel } from "@/components/PromptPanel";
 import { Mode, Toolbar } from "@/components/Toolbar";
-import { IconBtn, Segmented, Tile } from "@/components/ui";
+import { IconBtn, Segmented } from "@/components/ui";
 import { Lang, LangContext, setGlobalLang, t } from "@/lib/i18n";
 
 /** the dragged part's own travel: a little lag reads as weight */
@@ -128,6 +128,9 @@ type Gesture =
 
 type Snapshot = { groups: Group[]; frames: Frame[] };
 
+/** the phone version only offers the essentials */
+const MOBILE_KINDS: Kind[] = ["button", "text", "card", "listItem", "textField", "switch", "image", "fab"];
+
 const SEED_FRAMES: Frame[] = [{ id: "seedF1", name: "Home", x: 0, y: 0 }];
 
 /** Seed ids are deterministic so server and client render the same markup. */
@@ -175,7 +178,8 @@ export default function Page() {
   const [frame, setFrame] = useState<FrameMode>("phone");
   const [lang, setLang] = useState<Lang>("ja");
   const [isMobile, setIsMobile] = useState(false);
-  const [sheet, setSheet] = useState<"parts" | "prompt" | null>(null);
+  const [sheet, setSheet] = useState<"parts" | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
   const [noteDismissed, setNoteDismissed] = useState(false);
   const [title, setTitle] = useState("");
   const [brief, setBrief] = useState("");
@@ -448,7 +452,7 @@ export default function Page() {
     };
   };
   const inBin = (clientX: number) =>
-    leftOpenRef.current && clientX >= 0 && clientX <= leftWRef.current;
+    !mobileRef.current && leftOpenRef.current && clientX >= 0 && clientX <= leftWRef.current;
 
   const setZoomAt = useCallback((nz: number, cx?: number, cy?: number) => {
     const r = canvasRect();
@@ -2212,7 +2216,13 @@ export default function Page() {
             lang={lang}
             onLang={setLang}
             mobile={isMobile}
-            onPrompt={() => setSheet(sheet === "prompt" ? null : "prompt")}
+            onPrompt={async () => {
+              try {
+                await navigator.clipboard.writeText(buildPrompt(doc, widths, undefined, lang));
+                setToast(t("copied", lang));
+                window.setTimeout(() => setToast(null), 1400);
+              } catch {}
+            }}
           />
 
           {isMobile && !noteDismissed && (
@@ -2255,13 +2265,7 @@ export default function Page() {
               style={{
                 position: "absolute",
                 right: 18,
-                bottom:
-                  sheet === "parts"
-                    ? "calc(46vh + 14px)"
-                    : sheet || selected || selectedFrame
-                      ? "calc(54vh + 14px)"
-                      : 18,
-                transition: "bottom 200ms cubic-bezier(0.2, 0, 0, 1)",
+                bottom: 18,
                 width: 60,
                 height: 60,
                 borderRadius: 18,
@@ -2279,139 +2283,107 @@ export default function Page() {
             </button>
           )}
 
-          {isMobile &&
-            (sheet !== null || selected || (selectedFrame && !selected)) && (
-              <div
-                style={{
-                  position: "absolute",
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  height: sheet === "parts" ? "46vh" : "54vh",
-                  background: p.surface,
-                  borderRadius: "28px 28px 0 0",
-                  boxShadow: "0 -6px 24px rgba(0,0,0,0.12)",
-                  zIndex: 45,
-                  display: "flex",
-                  flexDirection: "column",
-                  overflow: "hidden",
-                }}
-              >
-                <div
+          {/* phone: a strip of the essential parts, tap to drop one in the middle of the view */}
+          {isMobile && sheet === "parts" && (
+            <div
+              className="no-scrollbar"
+              style={{
+                position: "absolute",
+                left: 12,
+                right: 90,
+                bottom: 22,
+                display: "flex",
+                gap: 6,
+                overflowX: "auto",
+                padding: 6,
+                borderRadius: 24,
+                background: p.surface,
+                boxShadow: "0 6px 18px rgba(0,0,0,0.14)",
+                zIndex: 46,
+              }}
+            >
+              {MOBILE_KINDS.map((k) => (
+                <button
+                  key={k}
+                  onClick={() => addAtCenter(k)}
+                  className="m3-press"
                   style={{
-                    display: "flex",
-                    justifyContent: "center",
-                    padding: "8px 0 0",
+                    flex: "0 0 auto",
+                    height: 44,
+                    padding: "0 14px 0 10px",
+                    borderRadius: 22,
+                    border: "none",
+                    background: p.surfaceContainerHigh,
+                    color: p.onSurface,
+                    fontSize: 13,
+                    fontWeight: 600,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 6,
+                    whiteSpace: "nowrap",
                   }}
                 >
-                  <div
-                    style={{
-                      width: 32,
-                      height: 4,
-                      borderRadius: 2,
-                      background: p.outlineVariant,
-                    }}
-                  />
-                </div>
-                <div style={{ flex: 1, minHeight: 0 }}>
-                  {sheet === "parts" ? (
-                    <div
-                      className="no-scrollbar"
-                      style={{ height: "100%", overflowY: "auto", padding: 12 }}
-                    >
-                      <div
-                        style={{
-                          fontSize: 12,
-                          fontWeight: 700,
-                          color: p.onSurfaceVariant,
-                          margin: "2px 4px 8px",
-                        }}
-                      >
-                        {t("tapToAdd", lang)}
-                      </div>
-                      <div
-                        style={{
-                          display: "grid",
-                          gridTemplateColumns:
-                            "repeat(auto-fill, minmax(96px, 1fr))",
-                          gap: 6,
-                        }}
-                      >
-                        {KIND_ORDER.map((k) => (
-                          <Tile
-                            key={k}
-                            icon={KIND_SPEC[k].paletteIcon}
-                            label={KIND_SPEC[k].label}
-                            p={p}
-                            onClick={() => addAtCenter(k)}
-                          />
-                        ))}
-                      </div>
-                      <div
-                        style={{
-                          display: "flex",
-                          gap: 8,
-                          justifyContent: "center",
-                          padding: "14px 0 4px",
-                        }}
-                      >
-                        {PALETTES.map((pal) => (
-                          <button
-                            key={pal.key}
-                            onClick={() => setPaletteKey(pal.key)}
-                            title={pal.label}
-                            aria-label={pal.label}
-                            style={{
-                              width: 28,
-                              height: 28,
-                              borderRadius: 14,
-                              border: "none",
-                              background: `linear-gradient(135deg, ${pal.primary} 50%, ${pal.primaryContainer} 50%)`,
-                              outline:
-                                pal.key === paletteKey
-                                  ? `2px solid ${p.primary}`
-                                  : "2px solid transparent",
-                              outlineOffset: 2,
-                            }}
-                          />
-                        ))}
-                      </div>
-                    </div>
-                  ) : sheet === "prompt" ? (
-                    <PromptPanel
-                      doc={doc}
-                      widths={widths}
-                      palette={p}
-                      onDoc={(patch) => {
-                        if (patch.title !== undefined) setTitle(patch.title);
-                        if (patch.brief !== undefined) setBrief(patch.brief);
-                      }}
-                    />
-                  ) : selectedFrame && !selected ? (
-                    <FrameInspector
-                      frame={selectedFrame}
-                      palette={p}
-                      onChange={(patch) => patchFrame(selectedFrame.id, patch)}
-                      onDelete={() => deleteFrame(selectedFrame.id)}
-                      onDuplicate={() => duplicateFrame(selectedFrame.id)}
-                      onPreview={() => openPreview(selectedFrame.id)}
-                      prompt={buildPrompt(doc, widths, selectedFrame.id, lang)}
-                      onSaveImage={() => saveFrameImage(selectedFrame)}
-                    />
-                  ) : (
-                    <Inspector
-                      item={selected}
-                      palette={p}
-                      frames={frame === "phone" ? frames : []}
-                      onChange={patchSelected}
-                      onDelete={deleteSelected}
-                      onDuplicate={duplicateSelected}
-                      multi={selectedIds.length}
-                    />
-                  )}
-                </div>
-              </div>
-            )}
+                  <Icon name={KIND_SPEC[k].paletteIcon} size={20} color={p.primary} />
+                  {KIND_SPEC[k].label}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* phone: the only edits are the label and delete */}
+          {isMobile && selected && sheet === null && (
+            <div
+              style={{
+                position: "absolute",
+                left: "50%",
+                bottom: 22,
+                transform: "translateX(-50%)",
+                display: "flex",
+                gap: 4,
+                padding: 6,
+                borderRadius: 26,
+                background: p.surface,
+                boxShadow: "0 6px 18px rgba(0,0,0,0.14)",
+                zIndex: 46,
+              }}
+            >
+              {KIND_SPEC[selected.kind].hasLabel && (
+                <IconBtn
+                  icon="edit"
+                  p={p}
+                  size={44}
+                  title={t("label", lang)}
+                  onClick={() => {
+                    const v = window.prompt(t("label", lang), selected.label);
+                    if (v !== null) patchSelected({ label: v });
+                  }}
+                />
+              )}
+              <IconBtn icon="content_copy" p={p} size={44} title={t("duplicate", lang)} onClick={duplicateSelected} />
+              <IconBtn icon="delete" p={p} size={44} danger title={t("delete", lang)} onClick={deleteSelected} />
+            </div>
+          )}
+
+          {toast && (
+            <div
+              style={{
+                position: "absolute",
+                left: "50%",
+                bottom: 96,
+                transform: "translateX(-50%)",
+                padding: "10px 18px",
+                borderRadius: 20,
+                background: p.inverseSurface,
+                color: p.inverseOnSurface,
+                fontSize: 13,
+                fontWeight: 600,
+                zIndex: 47,
+                pointerEvents: "none",
+              }}
+            >
+              {toast}
+            </div>
+          )}
 
           {!leftOpen && !isMobile && (
             <div
