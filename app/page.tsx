@@ -379,7 +379,7 @@ export default function Page() {
        views omit the Safari token and Android ones carry "wv" */
     const ua = navigator.userAgent;
     const iosWebView = /iPhone|iPad|iPod/.test(ua) && !/Safari\//.test(ua);
-    const androidWebView = /Android/.test(ua) && /wv/.test(ua);
+    const androidWebView = /Android/.test(ua) && /(?:^|\W)wv(?:\W|$)/.test(ua);
     if (iosWebView || androidWebView || /Twitter|Instagram|FBAN|FBAV|Line\//i.test(ua)) {
       document.documentElement.style.setProperty("--bottom-ui", "64px");
     }
