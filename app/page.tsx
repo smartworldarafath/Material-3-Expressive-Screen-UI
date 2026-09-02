@@ -373,9 +373,14 @@ export default function Page() {
       const h = Math.round(window.innerHeight);
       if (h > 0) document.documentElement.style.setProperty("--app-h", `${h}px`);
     };
-    /* X, Instagram, Facebook and LINE keep their own action bar over the page
-       bottom, so the controls sit one button higher there */
-    if (/Twitter|X-Client|Instagram|FBAN|FBAV|Line\//i.test(navigator.userAgent)) {
+    /* in-app browsers (X, Instagram, LINE...) keep their own action bar over the
+       page bottom, so the controls sit one button higher there. App names in the
+       user agent are unreliable; the embedded web view itself is not: iOS web
+       views omit the Safari token and Android ones carry "wv" */
+    const ua = navigator.userAgent;
+    const iosWebView = /iPhone|iPad|iPod/.test(ua) && !/Safari\//.test(ua);
+    const androidWebView = /Android/.test(ua) && /wv/.test(ua);
+    if (iosWebView || androidWebView || /Twitter|Instagram|FBAN|FBAV|Line\//i.test(ua)) {
       document.documentElement.style.setProperty("--bottom-ui", "64px");
     }
     apply();
