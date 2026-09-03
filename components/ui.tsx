@@ -425,12 +425,15 @@ export function Toggle({
   p,
   icon,
   label,
+  grow,
 }: {
   on: boolean;
   onChange: (v: boolean) => void;
   p: Palette;
   icon?: string;
   label?: string;
+  /** fill the row and push the switch to the trailing edge */
+  grow?: boolean;
 }) {
   return (
     <button
@@ -439,7 +442,8 @@ export function Toggle({
       aria-label={label}
       aria-pressed={on}
       style={{
-        display: "inline-flex",
+        display: grow ? "flex" : "inline-flex",
+        width: grow ? "100%" : undefined,
         alignItems: "center",
         gap: 10,
         border: "none",
@@ -450,7 +454,7 @@ export function Toggle({
       }}
     >
       {icon && <Icon name={icon} size={20} />}
-      {label && <span style={{ fontSize: 13, color: p.onSurface }}>{label}</span>}
+      {label && <span style={{ fontSize: 13, color: p.onSurface, flex: grow ? 1 : undefined, textAlign: "left" }}>{label}</span>}
       <span
         style={{
           position: "relative",
@@ -516,7 +520,7 @@ export function Section({
     });
   };
   return (
-    <div style={{ marginBottom: 6 }}>
+    <div style={{ marginBottom: 10 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 6, height: 36 }}>
         <button
           onClick={toggle}
@@ -545,7 +549,7 @@ export function Section({
         </button>
         {right}
       </div>
-      {open && <div style={{ padding: "2px 4px 10px" }}>{children}</div>}
+      {open && <div style={{ padding: "6px 4px 14px" }}>{children}</div>}
     </div>
   );
 }

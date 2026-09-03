@@ -2,6 +2,8 @@
 
 import { motion } from "motion/react";
 import {
+  FAB_MENU_GAP,
+  FAB_MENU_ITEM_H,
   H,
   Item,
   Kind,
@@ -12,12 +14,20 @@ import {
   STATUS_BAR_H,
   baseRadii,
   onToken,
+  scaleR,
   sizeOf,
   variantShadow,
   variantStyle,
 } from "@/lib/tokens";
 import { CircularProgress, LinearProgress, LoadingIndicator } from "./Loading";
 import { t, useLang } from "@/lib/i18n";
+import { useTheme } from "@/lib/theme";
+
+/** weight of a heading or label: heavier under the emphasized type setting */
+const useWeight = () => {
+  const emphasized = useTheme().emphasized;
+  return (normal: number, strong: number) => (emphasized ? strong : normal);
+};
 
 export function Icon({
   name,
@@ -61,13 +71,18 @@ const NO_BOX: Kind[] = [
   "loadingIndicator",
   "switch",
   "checkbox",
+  "radio",
   "slider",
   "text",
   "divider",
+  "splitButton",
+  "fabMenu",
+  "badge",
 ];
 
 /** Padding follows M3: icon+label is tighter than label alone. */
 export function ButtonContent({ item }: { item: Item }) {
+  const w = useWeight();
   const hasIcon = !!item.icon;
   const hasLabel = item.label.trim().length > 0;
   const padX = hasLabel ? (hasIcon ? 22 : 26) : 16;
@@ -81,7 +96,7 @@ export function ButtonContent({ item }: { item: Item }) {
         paddingRight: padX,
         height: H,
         fontSize: 16,
-        fontWeight: 500,
+        fontWeight: w(500, 700),
         letterSpacing: 0.1,
         whiteSpace: "nowrap",
       }}
@@ -93,6 +108,7 @@ export function ButtonContent({ item }: { item: Item }) {
 }
 
 function ExtendedFabContent({ item }: { item: Item }) {
+  const w = useWeight();
   const hasIcon = !!item.icon;
   const hasLabel = item.label.trim().length > 0;
   return (
@@ -104,7 +120,7 @@ function ExtendedFabContent({ item }: { item: Item }) {
         padding: "0 20px",
         height: 56,
         fontSize: 14,
-        fontWeight: 500,
+        fontWeight: w(500, 700),
         whiteSpace: "nowrap",
       }}
     >
@@ -173,7 +189,7 @@ function SwitchContent({ item, p }: { item: Item; p: Palette }) {
             transition: "left 160ms, width 160ms, height 160ms",
           }}
         >
-          {on && <Icon name="check" size={16} weight={600} />}
+          {on && !item.noCheck && <Icon name="check" size={16} weight={600} />}
         </span>
       </span>
     </span>
@@ -208,6 +224,7 @@ function CheckboxContent({ item, p }: { item: Item; p: Palette }) {
 }
 
 function TextContent({ item, p }: { item: Item; p: Palette }) {
+  const w = useWeight();
   const fs = item.size ?? 28;
   return (
     <span
@@ -215,13 +232,121 @@ function TextContent({ item, p }: { item: Item; p: Palette }) {
         display: "inline-block",
         fontSize: fs,
         lineHeight: 1.3,
-        fontWeight: item.bold ? 700 : 400,
+        fontWeight: item.bold ? w(700, 800) : w(400, fs >= 22 ? 600 : 500),
+        letterSpacing: fs >= 28 ? -0.25 : 0,
         color: p.onSurface,
         whiteSpace: "nowrap",
         padding: "0 2px",
       }}
     >
       {item.label || " "}
+    </span>
+  );
+}
+
+/** A split button: the labeled action and, after a hairline gap, a menu trigger.
+ *  The two halves keep their own corners, so the box around them stays plain. */
+function SplitButtonContent({ item, p }: { item: Item; p: Palette }) {
+  const w = useWeight();
+  const st = variantStyle(item.variant, p);
+  const outer = scaleR(28);
+  const inner = scaleR(8);
+  const hasLabel = item.label.trim().length > 0;
+  const shadow = variantShadow(item.variant);
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 2, height: H }}>
+      <span
+        style={{
+          ...st,
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 8,
+          height: H,
+          padding: hasLabel ? "0 20px 0 22px" : "0 16px",
+          borderTopLeftRadius: outer,
+          borderBottomLeftRadius: outer,
+          borderTopRightRadius: inner,
+          borderBottomRightRadius: inner,
+          fontSize: 16,
+          fontWeight: w(500, 700),
+          whiteSpace: "nowrap",
+          boxSizing: "border-box",
+          boxShadow: shadow,
+        }}
+      >
+        {item.icon && <Icon name={item.icon} size={22} fill={item.variant === "filled"} />}
+        {hasLabel && <span>{item.label}</span>}
+      </span>
+      <span
+        style={{
+          ...st,
+          display: "inline-grid",
+          placeItems: "center",
+          width: 52,
+          height: H,
+          borderTopLeftRadius: inner,
+          borderBottomLeftRadius: inner,
+          borderTopRightRadius: outer,
+          borderBottomRightRadius: outer,
+          boxSizing: "border-box",
+          boxShadow: shadow,
+        }}
+      >
+        <Icon name="keyboard_arrow_down" size={24} />
+      </span>
+    </span>
+  );
+}
+
+function RadioContent({ item, p }: { item: Item; p: Palette }) {
+  const on = !!item.checked;
+  const hasLabel = item.label.trim().length > 0;
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 4, height: 40, whiteSpace: "nowrap" }}>
+      <span style={{ width: 40, height: 40, display: "grid", placeItems: "center", flex: "0 0 auto" }}>
+        <span
+          style={{
+            width: 20,
+            height: 20,
+            borderRadius: 10,
+            boxSizing: "border-box",
+            border: `2px solid ${on ? p.primary : p.onSurfaceVariant}`,
+            display: "grid",
+            placeItems: "center",
+          }}
+        >
+          {on && <span style={{ width: 10, height: 10, borderRadius: 5, background: p.primary }} />}
+        </span>
+      </span>
+      {hasLabel && <span style={{ fontSize: 16, color: p.onSurface, paddingRight: 8 }}>{item.label}</span>}
+    </span>
+  );
+}
+
+/** A badge: a 6dp dot when it has no text, a 16dp pill with the count otherwise. */
+function BadgeContent({ item, p }: { item: Item; p: Palette }) {
+  const text = item.label.trim();
+  if (!text) return <span style={{ display: "inline-block", width: 6, height: 6, borderRadius: 3, background: p.error }} />;
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        minWidth: 16,
+        height: 16,
+        padding: "0 4px",
+        borderRadius: 8,
+        boxSizing: "border-box",
+        background: p.error,
+        color: p.onError,
+        fontSize: 11,
+        fontWeight: 500,
+        lineHeight: 1,
+        whiteSpace: "nowrap",
+      }}
+    >
+      {text}
     </span>
   );
 }
@@ -241,6 +366,12 @@ export function MeasuredContent({ item, p }: { item: Item; p: Palette }) {
       return <CheckboxContent item={item} p={p} />;
     case "text":
       return <TextContent item={item} p={p} />;
+    case "splitButton":
+      return <SplitButtonContent item={item} p={p} />;
+    case "radio":
+      return <RadioContent item={item} p={p} />;
+    case "badge":
+      return <BadgeContent item={item} p={p} />;
     default:
       return null;
   }
@@ -248,6 +379,7 @@ export function MeasuredContent({ item, p }: { item: Item; p: Palette }) {
 
 function Body({ item, p }: { item: Item; p: Palette }) {
   const lang = useLang();
+  const w = useWeight();
   const hasLabel = item.label.trim().length > 0;
   const hasSupporting = !!item.supporting?.trim();
 
@@ -303,7 +435,7 @@ function Body({ item, p }: { item: Item; p: Palette }) {
           <div style={{ width: 48, height: 48, display: "grid", placeItems: "center", flex: "0 0 auto" }}>
             {item.icon && <Icon name={item.icon} size={24} color={p.onSurface} />}
           </div>
-          <div style={{ flex: 1, minWidth: 0, fontSize: 22, color: p.onSurface, ...ellipsis }}>
+          <div style={{ flex: 1, minWidth: 0, fontSize: 22, fontWeight: w(400, 600), color: p.onSurface, ...ellipsis }}>
             {item.label}
           </div>
           <div style={{ width: 48, height: 48, display: "grid", placeItems: "center", flex: "0 0 auto" }}>
@@ -324,7 +456,7 @@ function Body({ item, p }: { item: Item; p: Palette }) {
       );
 
     case "card": {
-      const w = item.size ?? 320;
+      const cw = item.size ?? 320;
       return (
         <div
           style={{
@@ -338,8 +470,8 @@ function Body({ item, p }: { item: Item; p: Palette }) {
         >
           <div
             style={{
-              height: Math.round(w * 0.28),
-              borderRadius: 14,
+              height: Math.round(cw * 0.28),
+              borderRadius: scaleR(14),
               background: p.primaryContainer,
               color: p.onPrimaryContainer,
               display: "grid",
@@ -350,7 +482,7 @@ function Body({ item, p }: { item: Item; p: Palette }) {
             {item.icon && <Icon name={item.icon} size={34} />}
           </div>
           {hasLabel && (
-            <div style={{ fontSize: 16, fontWeight: 600, color: p.onSurface, ...ellipsis }}>{item.label}</div>
+            <div style={{ fontSize: 16, fontWeight: w(600, 700), color: p.onSurface, ...ellipsis }}>{item.label}</div>
           )}
           {hasSupporting && (
             <div style={{ fontSize: 13, lineHeight: 1.5, color: p.onSurfaceVariant, overflow: "hidden" }}>
@@ -413,6 +545,7 @@ function Body({ item, p }: { item: Item; p: Palette }) {
             <div
               style={{
                 fontSize: 24,
+                fontWeight: w(400, 600),
                 color: p.onSurface,
                 textAlign: item.icon ? "center" : "left",
                 ...ellipsis,
@@ -642,7 +775,7 @@ function Body({ item, p }: { item: Item; p: Palette }) {
                   style={{
                     width: 56,
                     height: 32,
-                    borderRadius: 16,
+                    borderRadius: scaleR(16),
                     display: "grid",
                     placeItems: "center",
                     background: on ? p.secondaryContainer : "transparent",
@@ -655,7 +788,7 @@ function Body({ item, p }: { item: Item; p: Palette }) {
                   <span
                     style={{
                       fontSize: 11,
-                      fontWeight: on ? 600 : 400,
+                      fontWeight: on ? w(600, 700) : w(400, 500),
                       color: on ? p.onSurface : p.onSurfaceVariant,
                       maxWidth: "100%",
                       ...ellipsis,
@@ -694,6 +827,136 @@ function Body({ item, p }: { item: Item; p: Palette }) {
           />
         </div>
       );
+
+    case "fabMenu": {
+      const tabs = item.tabs ?? [];
+      const filled = item.variant === "filled";
+      const fabStyle = variantStyle(item.variant, p);
+      const itemStyle = filled
+        ? { background: p.primaryContainer, color: p.onPrimaryContainer }
+        : { background: p.secondaryContainer, color: p.onSecondaryContainer };
+      return (
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: FAB_MENU_GAP, height: "100%" }}>
+          {tabs.map((tab, i) => (
+            <span
+              key={i}
+              style={{
+                ...itemStyle,
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 12,
+                height: FAB_MENU_ITEM_H,
+                padding: "0 24px 0 20px",
+                borderRadius: scaleR(28),
+                fontSize: 16,
+                fontWeight: w(500, 700),
+                whiteSpace: "nowrap",
+                maxWidth: "100%",
+                boxSizing: "border-box",
+                boxShadow: "0 1px 3px rgba(0,0,0,0.16)",
+              }}
+            >
+              {tab.icon && <Icon name={tab.icon} size={22} />}
+              <span style={ellipsis}>{tab.label}</span>
+            </span>
+          ))}
+          <span
+            style={{
+              ...fabStyle,
+              width: 56,
+              height: 56,
+              borderRadius: scaleR(16),
+              display: "grid",
+              placeItems: "center",
+              boxShadow: "0 3px 8px rgba(0,0,0,0.18), 0 1px 3px rgba(0,0,0,0.12)",
+              flex: "0 0 auto",
+            }}
+          >
+            {item.icon && <Icon name={item.icon} size={24} />}
+          </span>
+        </div>
+      );
+    }
+
+    case "toolbar": {
+      const tabs = item.tabs ?? [];
+      const vibrant = item.variant === "filled";
+      return (
+        <div style={{ display: "flex", alignItems: "center", gap: 4, padding: "0 8px", height: "100%", boxSizing: "border-box" }}>
+          {tabs.map((tab, i) => (
+            <span
+              key={i}
+              style={{
+                width: 48,
+                height: 48,
+                borderRadius: scaleR(24),
+                display: "grid",
+                placeItems: "center",
+                color: vibrant ? p.onPrimaryContainer : p.onSurfaceVariant,
+                flex: "0 0 auto",
+              }}
+            >
+              {tab.icon && <Icon name={tab.icon} size={24} />}
+            </span>
+          ))}
+        </div>
+      );
+    }
+
+    case "tabs": {
+      const tabs = item.tabs ?? [];
+      return (
+        <div style={{ display: "flex", alignItems: "stretch", height: "100%", position: "relative" }}>
+          {tabs.map((tab, i) => {
+            const on = i === 0;
+            return (
+              <div
+                key={i}
+                style={{
+                  flex: 1,
+                  minWidth: 0,
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  justifyContent: "flex-end",
+                  position: "relative",
+                  padding: "0 8px",
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: 14,
+                    fontWeight: w(500, 700),
+                    color: on ? p.primary : p.onSurfaceVariant,
+                    padding: "0 4px 14px",
+                    maxWidth: "100%",
+                    ...ellipsis,
+                  }}
+                >
+                  {tab.label}
+                </span>
+                {on && (
+                  <span
+                    style={{
+                      position: "absolute",
+                      left: "50%",
+                      bottom: 0,
+                      transform: "translateX(-50%)",
+                      width: `calc(100% - 24px)`,
+                      height: 3,
+                      borderTopLeftRadius: 3,
+                      borderTopRightRadius: 3,
+                      background: p.primary,
+                    }}
+                  />
+                )}
+              </div>
+            );
+          })}
+          <span style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: 1, background: p.outlineVariant }} />
+        </div>
+      );
+    }
 
     case "loadingIndicator": {
       const s = item.size ?? 48;
@@ -738,6 +1001,12 @@ function boxStyle(item: Item, p: Palette): React.CSSProperties {
     case "topAppBar":
     case "bottomNav":
       return { background: p.surfaceContainer, border: "none", color: p.onSurface };
+    case "toolbar":
+      return item.variant === "filled"
+        ? { background: p.primaryContainer, border: "none", color: p.onPrimaryContainer }
+        : { background: p.surfaceContainer, border: "none", color: p.onSurfaceVariant };
+    case "tabs":
+      return { background: p.surface, border: "none", color: p.onSurface };
     case "searchBar":
       return { background: p.surfaceContainerHigh, border: "none", color: p.onSurface };
     case "dialog":
@@ -770,6 +1039,8 @@ function shadowOf(item: Item): string {
       return "0 8px 24px rgba(0,0,0,0.18), 0 2px 6px rgba(0,0,0,0.10)";
     case "snackbar":
       return "0 3px 8px rgba(0,0,0,0.18)";
+    case "toolbar":
+      return "0 2px 6px rgba(0,0,0,0.14), 0 1px 2px rgba(0,0,0,0.10)";
     default:
       return "none";
   }

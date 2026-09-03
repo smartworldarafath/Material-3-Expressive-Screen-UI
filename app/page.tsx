@@ -17,6 +17,8 @@ import {
   Axis,
   BACK_TARGET,
   baseRadii,
+  explodeGroup,
+  freeRadii,
   BEZEL,
   canJoin,
   clamp,
@@ -39,6 +41,11 @@ import {
   layoutOf,
   lerp,
   makeItem,
+  DEFAULT_THEME,
+  Theme,
+  fontFamilyOf,
+  normalizeTheme,
+  setGlobalShape,
   MEASURED,
   NAV_BAR_H,
   Palette,
@@ -68,6 +75,8 @@ import { PromptPanel } from "@/components/PromptPanel";
 import { GitHubLink, Mode, Toolbar } from "@/components/Toolbar";
 import { LangMenu } from "@/components/Menus";
 import { ColorPanel } from "@/components/ColorPanel";
+import { MotionPanel, ShapePanel, TypePanel } from "@/components/ThemePanel";
+import { ThemeContext, ensureFontLoaded } from "@/lib/theme";
 import { BottomSheet, MobileActionBar, MobileInspector, MobileLang, MobileSettings } from "@/components/Mobile";
 import { ConfirmDialog, IconBtn, Segmented } from "@/components/ui";
 import { Lang, LangContext, isLang, setGlobalLang, t } from "@/lib/i18n";
@@ -213,6 +222,17 @@ const mobileSeed = (): Group[] => {
   ];
 };
 
+type LeftTab = "parts" | "layers" | "color" | "shape" | "type" | "motion";
+/** the left rail: parts and layers, then the four theme axes of the whole design */
+const LEFT_TABS: { key: LeftTab; icon: string; title: "parts" | "layers" | "colors" | "shape" | "typography" | "motion" }[] = [
+  { key: "parts", icon: "add_box", title: "parts" },
+  { key: "layers", icon: "layers", title: "layers" },
+  { key: "color", icon: "palette", title: "colors" },
+  { key: "shape", icon: "rounded_corner", title: "shape" },
+  { key: "type", icon: "text_fields", title: "typography" },
+  { key: "motion", icon: "animation", title: "motion" },
+];
+
 export default function Page() {
   /* ---------- document ---------- */
   const [groups, setGroups] = useState<Group[]>(seed);
@@ -220,6 +240,8 @@ export default function Page() {
   const [paletteKey, setPaletteKey] = useState("purple");
   const [customPalette, setCustomPalette] = useState<Palette | null>(null);
   const [dynamicColor, setDynamicColor] = useState(false);
+  const [theme, setTheme] = useState<Theme>(DEFAULT_THEME);
+  const patchTheme = (patch: Partial<Theme>) => setTheme((t) => ({ ...t, ...patch }));
   const [frame, setFrame] = useState<FrameMode>("phone");
   const [lang, setLang] = useState<Lang>("ja");
   const [isMobile, setIsMobile] = useState(false);
@@ -238,7 +260,7 @@ export default function Page() {
   const [leftOpen, setLeftOpen] = useState(true);
   const [rightOpen, setRightOpen] = useState(true);
   const [leftW, setLeftW] = useState(RAIL_W + 268);
-  const [leftTab, setLeftTab] = useState<"parts" | "layers" | "colors">("parts");
+  const [leftTab, setLeftTab] = useState<LeftTab>("parts");
   /** pointer over the collapsed rail: the logo becomes the open button */
   const [railHover, setRailHover] = useState(false);
   /** the screen whose layers are listed when nothing on a screen is selected */
@@ -257,7 +279,9 @@ export default function Page() {
   const [resizing, setResizing] = useState<"left" | "right" | null>(null);
   const [, bumpHistory] = useState(0);
 
-  const p = paletteOf(paletteKey, customPalette);
+  const p = paletteOf(paletteKey, customPalette, theme);
+  /* corner helpers read the shape scale outside React; keep it current before anything renders */
+  setGlobalShape(theme.shape);
 
   const canvasRef = useRef<HTMLDivElement>(null);
   const measureEls = useRef<Map<string, HTMLElement>>(new Map());
@@ -372,6 +396,7 @@ export default function Page() {
         if (doc.paletteKey) setPaletteKey(doc.paletteKey);
         if (doc.customPalette && typeof doc.customPalette.primary === "string") setCustomPalette(doc.customPalette);
         if (typeof doc.dynamicColor === "boolean") setDynamicColor(doc.dynamicColor);
+        if (doc.theme && typeof doc.theme === "object") setTheme(normalizeTheme(doc.theme));
         // frame mode is decided by the device (media-query effect), not restored
         if (typeof doc.title === "string") setTitle(doc.title);
         if (typeof doc.brief === "string") setBrief(doc.brief);
@@ -401,6 +426,17 @@ export default function Page() {
     setGlobalLang(lang);
     document.documentElement.lang = lang;
   }, [lang]);
+
+  useEffect(() => {
+    /* an empty width map makes every measured part read its width again in the new face */
+    ensureFontLoaded(theme.font, () => setWidths({}));
+  }, [theme.font]);
+
+  /* the page background outside the app root follows the scheme, so dark mode has no white edges */
+  useEffect(() => {
+    document.body.style.background = p.surface;
+    document.body.style.color = p.onSurface;
+  }, [p.surface, p.onSurface]);
 
   /* in-app browsers size the page behind their own toolbars and may ignore dvh,
      so the measured inner height wins over the CSS height (innerHeight, not the
@@ -464,10 +500,10 @@ export default function Page() {
     try {
       localStorage.setItem(
         DOC_KEY,
-        JSON.stringify({ groups, frames, paletteKey, frame, title, brief, customPalette: customPalette ?? undefined, dynamicColor }),
+        JSON.stringify({ groups, frames, paletteKey, frame, title, brief, customPalette: customPalette ?? undefined, dynamicColor, theme }),
       );
     } catch {}
-  }, [groups, frames, paletteKey, frame, title, brief, customPalette, dynamicColor]);
+  }, [groups, frames, paletteKey, frame, title, brief, customPalette, dynamicColor, theme]);
 
   useEffect(() => {
     if (!loadedRef.current) return;
@@ -1492,13 +1528,7 @@ export default function Page() {
     const g = selectedGroup;
     if (!g) return;
     snapshot();
-    const singles: Group[] = layoutOf(g, widthsRef.current).map((pl) => ({
-      id: uid(),
-      x: pl.x,
-      y: pl.y,
-      axis: connectSpecOf(pl.item)?.axis ?? "x",
-      items: [pl.item],
-    }));
+    const singles: Group[] = explodeGroup(g, widthsRef.current).map((run) => ({ ...run, id: uid() }));
     for (const sg of singles) instantRef.current.add(sg.id);
     setGroups((prev) => prev.flatMap((x) => (x.id === g.id ? singles : [x])));
   }, [selectedGroup, snapshot]);
@@ -1778,16 +1808,17 @@ export default function Page() {
       >
         {gs.map((g) =>
           g.free ? (
+            ((corners) =>
             layoutOf(g, widths).map((pl) => (
               <div key={pl.item.id} style={{ position: "absolute", left: pl.x - f.x, top: pl.y - f.y }}>
                 <M3Static
                   item={pl.item}
                   palette={p}
-                  radii={connectSpecOf(pl.item) ? uniformRadii(connectSpecOf(pl.item)!.outer) : baseRadii(pl.item)}
+                  radii={corners.get(pl.item.id)}
                   style={MEASURED.includes(pl.item.kind) ? undefined : { width: pl.w, height: pl.h }}
                 />
               </div>
-            ))
+            )))(freeRadii(g, widths))
           ) : (
           <div
             key={g.id}
@@ -1943,8 +1974,8 @@ export default function Page() {
   const dragSize = drag ? sizeOf(drag.item, widths) : { w: 0, h: 0 };
   const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
   const doc: Doc = useMemo(
-    () => ({ groups, frames, paletteKey, frame, title, brief, customPalette: customPalette ?? undefined, dynamicColor }),
-    [groups, frames, paletteKey, frame, title, brief, customPalette, dynamicColor],
+    () => ({ groups, frames, paletteKey, frame, title, brief, customPalette: customPalette ?? undefined, dynamicColor, theme }),
+    [groups, frames, paletteKey, frame, title, brief, customPalette, dynamicColor, theme],
   );
 
   /** arrows from tappable parts to the frames they open */
@@ -2086,6 +2117,7 @@ export default function Page() {
     if (g.free) {
       const instantG = instantRef.current.has(g.id);
       const allOn = g.items.every((it) => selectedSet.has(it.id));
+      const corners = freeRadii(g, widths);
       return (
         <motion.div
           key={g.id}
@@ -2100,7 +2132,7 @@ export default function Page() {
                 item={pl.item}
                 palette={p}
                 widths={widths}
-                radii={connectSpecOf(pl.item) ? uniformRadii(connectSpecOf(pl.item)!.outer) : baseRadii(pl.item)}
+                radii={corners.get(pl.item.id)}
                 pressed={false}
                 selected={selectedSet.has(pl.item.id)}
                 interactive={!handMode}
@@ -2239,6 +2271,7 @@ export default function Page() {
 
   return (
     <LangContext.Provider value={lang}>
+    <ThemeContext.Provider value={theme}>
       <div
         className="app-root"
         style={{
@@ -2259,6 +2292,7 @@ export default function Page() {
             top: 0,
             visibility: "hidden",
             pointerEvents: "none",
+            fontFamily: fontFamilyOf(theme.font),
           }}
         >
           {allItems
@@ -2288,7 +2322,7 @@ export default function Page() {
         </div>
 
         {exportFrame && (
-          <div aria-hidden style={{ position: "fixed", left: -99999, top: 0, pointerEvents: "none" }}>
+          <div aria-hidden style={{ position: "fixed", left: -99999, top: 0, pointerEvents: "none", fontFamily: fontFamilyOf(theme.font) }}>
             {renderExport(exportFrame)}
           </div>
         )}
@@ -2326,39 +2360,21 @@ export default function Page() {
                 </div>
               )}
               <div style={{ height: 6 }} />
-              <IconBtn
-                icon="add_box"
-                p={p}
-                on={leftOpen && leftTab === "parts"}
-                onClick={() => {
-                  setLeftTab("parts");
-                  setLeftOpen(true);
-                }}
-                title={t("parts", lang)}
-                size={44}
-              />
-              <IconBtn
-                icon="layers"
-                p={p}
-                on={leftOpen && leftTab === "layers"}
-                onClick={() => {
-                  setLeftTab("layers");
-                  setLeftOpen(true);
-                }}
-                title={t("layers", lang)}
-                size={44}
-              />
-              <IconBtn
-                icon="palette"
-                p={p}
-                on={leftOpen && leftTab === "colors"}
-                onClick={() => {
-                  setLeftTab("colors");
-                  setLeftOpen(true);
-                }}
-                title={t("colors", lang)}
-                size={44}
-              />
+              {LEFT_TABS.map((tab, i) => (
+                <div key={tab.key} style={{ marginTop: i === 2 ? 10 : 0 }}>
+                  <IconBtn
+                    icon={tab.icon}
+                    p={p}
+                    on={leftOpen && leftTab === tab.key}
+                    onClick={() => {
+                      setLeftTab(tab.key);
+                      setLeftOpen(true);
+                    }}
+                    title={t(tab.title, lang)}
+                    size={44}
+                  />
+                </div>
+              ))}
               <div style={{ flex: 1 }} onClick={() => !leftOpen && setLeftOpen(true)} />
               <LangMenu p={p} onLang={setLang} side="right" size={44} />
               <GitHubLink p={p} size={44} />
@@ -2381,7 +2397,7 @@ export default function Page() {
                     flex: 1,
                   }}
                 >
-                  {leftTab === "parts" ? t("parts", lang) : leftTab === "layers" ? t("layers", lang) : t("colors", lang)}
+                  {t(LEFT_TABS.find((x) => x.key === leftTab)?.title ?? "parts", lang)}
                 </span>
                 <IconBtn
                   icon="left_panel_close"
@@ -2403,7 +2419,7 @@ export default function Page() {
                     onPartPointerDown={onPartPointerDown}
                     overBin={(!!drag?.active && drag.overBin) || (gesture?.kind === "group" && gesture.overBin)}
                   />
-                ) : leftTab === "colors" ? (
+                ) : leftTab === "color" ? (
                   <ColorPanel
                     p={p}
                     paletteKey={paletteKey}
@@ -2412,7 +2428,15 @@ export default function Page() {
                     onCustom={setCustomPalette}
                     dynamic={dynamicColor}
                     onDynamic={setDynamicColor}
+                    theme={theme}
+                    onTheme={patchTheme}
                   />
+                ) : leftTab === "shape" ? (
+                  <ShapePanel p={p} theme={theme} onChange={patchTheme} />
+                ) : leftTab === "type" ? (
+                  <TypePanel p={p} theme={theme} onChange={patchTheme} />
+                ) : leftTab === "motion" ? (
+                  <MotionPanel p={p} theme={theme} onChange={patchTheme} />
                 ) : (
                   <LayersPanel
                     p={p}
@@ -2488,6 +2512,7 @@ export default function Page() {
                 transform: `translate(${view.x}px, ${view.y}px) scale(${view.z})`,
                 transformOrigin: "0 0",
                 willChange: "transform",
+                fontFamily: fontFamilyOf(theme.font),
               }}
             >
               {frame === "phone" &&
@@ -2517,6 +2542,7 @@ export default function Page() {
                           cursor: handMode ? "grab" : "move",
                           userSelect: "none",
                           whiteSpace: "nowrap",
+                          fontFamily: "Roboto, system-ui, sans-serif",
                         }}
                       >
                         <Icon name="smartphone" size={20} />
@@ -2868,7 +2894,7 @@ export default function Page() {
             )}
             {isMobile && sheet === "settings" && (
               <BottomSheet key="settings" p={p} onClose={() => setSheet(null)}>
-                <MobileSettings palette={p} paletteKey={paletteKey} onPalette={setPaletteKey} />
+                <MobileSettings palette={p} paletteKey={paletteKey} onPalette={setPaletteKey} theme={theme} onTheme={patchTheme} />
               </BottomSheet>
             )}
             {isMobile && sheet === "lang" && (
@@ -2948,15 +2974,11 @@ export default function Page() {
                 padding: "10px 10px 6px 12px",
               }}
             >
-              <div style={{ flex: 1 }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
                 <Segmented<"edit" | "prompt">
                   options={[
                     { key: "edit", icon: "tune", title: t("edit", lang) },
-                    {
-                      key: "prompt",
-                      icon: "auto_awesome",
-                      title: t("prompt", lang),
-                    },
+                    { key: "prompt", icon: "auto_awesome", title: t("prompt", lang) },
                   ]}
                   value={rightTab}
                   onChange={setRightTab}
@@ -3031,6 +3053,7 @@ export default function Page() {
           />
         )}
       </div>
+    </ThemeContext.Provider>
     </LangContext.Provider>
   );
 }

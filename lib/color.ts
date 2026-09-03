@@ -82,12 +82,55 @@ export function tone(L: number, C: number, h: number): string {
   return rgbToHex(rgb[0], rgb[1], rgb[2]);
 }
 
-/** Material 3 light scheme from a seed color. */
-export function schemeFromSeed(seedHex: string, label = "Custom"): Palette {
+export type Contrast = "standard" | "medium" | "high";
+export type SchemeOptions = { dark?: boolean; contrast?: Contrast; /** keep a muted seed muted instead of lifting it to a vivid accent */ keepChroma?: boolean };
+
+/** tone (CIE L*) of every role, light and dark, at each contrast level.
+ *  The standard tones are Material's; medium and high push the accents and
+ *  outlines further from their backgrounds the way Material Theme Builder does. */
+type Tones = Record<
+  | "primary" | "onPrimary" | "primaryContainer" | "onPrimaryContainer" | "inversePrimary"
+  | "secondaryContainer" | "onSecondaryContainer" | "tertiaryContainer" | "onTertiaryContainer"
+  | "surface" | "surfaceContainerLow" | "surfaceContainer" | "surfaceContainerHigh" | "surfaceContainerHighest"
+  | "onSurface" | "onSurfaceVariant" | "outline" | "outlineVariant" | "inverseSurface" | "inverseOnSurface",
+  number
+>;
+
+const LIGHT: Tones = {
+  primary: 40, onPrimary: 100, primaryContainer: 90, onPrimaryContainer: 10, inversePrimary: 80,
+  secondaryContainer: 90, onSecondaryContainer: 10, tertiaryContainer: 90, onTertiaryContainer: 10,
+  surface: 98, surfaceContainerLow: 96, surfaceContainer: 94, surfaceContainerHigh: 92, surfaceContainerHighest: 90,
+  onSurface: 10, onSurfaceVariant: 30, outline: 50, outlineVariant: 80, inverseSurface: 20, inverseOnSurface: 95,
+};
+const DARK: Tones = {
+  primary: 80, onPrimary: 20, primaryContainer: 30, onPrimaryContainer: 90, inversePrimary: 40,
+  secondaryContainer: 30, onSecondaryContainer: 90, tertiaryContainer: 30, onTertiaryContainer: 90,
+  surface: 6, surfaceContainerLow: 10, surfaceContainer: 12, surfaceContainerHigh: 17, surfaceContainerHighest: 22,
+  onSurface: 90, onSurfaceVariant: 80, outline: 60, outlineVariant: 30, inverseSurface: 90, inverseOnSurface: 20,
+};
+
+function tonesFor(dark: boolean, contrast: Contrast): Tones {
+  const t = { ...(dark ? DARK : LIGHT) };
+  if (contrast === "medium") {
+    if (dark) Object.assign(t, { primary: 85, onPrimaryContainer: 95, onSecondaryContainer: 95, onTertiaryContainer: 95, onSurfaceVariant: 85, outline: 70, outlineVariant: 50 });
+    else Object.assign(t, { primary: 30, onPrimaryContainer: 20, onSecondaryContainer: 20, onTertiaryContainer: 20, onSurfaceVariant: 25, outline: 40, outlineVariant: 65 });
+  } else if (contrast === "high") {
+    if (dark) Object.assign(t, { primary: 95, onPrimary: 0, primaryContainer: 80, onPrimaryContainer: 0, secondaryContainer: 80, onSecondaryContainer: 0, tertiaryContainer: 80, onTertiaryContainer: 0, onSurface: 100, onSurfaceVariant: 95, outline: 90, outlineVariant: 90 });
+    else Object.assign(t, { primary: 20, primaryContainer: 30, onPrimaryContainer: 100, secondaryContainer: 30, onSecondaryContainer: 100, tertiaryContainer: 30, onTertiaryContainer: 100, onSurface: 0, onSurfaceVariant: 10, outline: 20, outlineVariant: 20 });
+  }
+  return t;
+}
+
+const ERROR_LIGHT = { error: "#B3261E", onError: "#FFFFFF", errorContainer: "#F9DEDC", onErrorContainer: "#410E0B" };
+const ERROR_DARK = { error: "#F2B8B5", onError: "#601410", errorContainer: "#8C1D18", onErrorContainer: "#F9DEDC" };
+
+/** Material 3 scheme from a seed color: light by default, dark and higher
+ *  contrast on request. */
+export function schemeFromSeed(seedHex: string, label = "Custom", opts: SchemeOptions = {}): Palette {
   const rgb = hexToRgb(seedHex) ?? [103, 80, 164];
   const lch = labToLch(rgbToLab(rgb[0], rgb[1], rgb[2]));
   const h = lch.h;
-  const primaryC = Math.max(36, Math.min(lch.C, 60));
+  const primaryC = opts.keepChroma ? Math.min(lch.C, 60) : Math.max(36, Math.min(lch.C, 60));
   const secondaryC = primaryC / 3;
   const tertiaryH = (h + 60) % 360;
   const tertiaryC = primaryC / 2;
@@ -98,34 +141,33 @@ export function schemeFromSeed(seedHex: string, label = "Custom"): Palette {
   const T = (L: number) => tone(L, tertiaryC, tertiaryH);
   const N = (L: number) => tone(L, neutralC, h);
   const NV = (L: number) => tone(L, neutralVarC, h);
+  const dark = !!opts.dark;
+  const k = tonesFor(dark, opts.contrast ?? "standard");
   return {
     key: "custom",
     label,
     seed: seedHex.toUpperCase(),
-    primary: P(40),
-    onPrimary: P(100),
-    primaryContainer: P(90),
-    onPrimaryContainer: P(10),
-    inversePrimary: P(80),
-    secondaryContainer: S(90),
-    onSecondaryContainer: S(10),
-    tertiaryContainer: T(90),
-    onTertiaryContainer: T(10),
-    surface: N(98),
-    surfaceContainerLow: N(96),
-    surfaceContainer: N(94),
-    surfaceContainerHigh: N(92),
-    surfaceContainerHighest: N(90),
-    onSurface: N(10),
-    onSurfaceVariant: NV(30),
-    outline: NV(50),
-    outlineVariant: NV(80),
-    inverseSurface: N(20),
-    inverseOnSurface: N(95),
-    error: "#B3261E",
-    onError: "#FFFFFF",
-    errorContainer: "#F9DEDC",
-    onErrorContainer: "#410E0B",
+    primary: P(k.primary),
+    onPrimary: P(k.onPrimary),
+    primaryContainer: P(k.primaryContainer),
+    onPrimaryContainer: P(k.onPrimaryContainer),
+    inversePrimary: P(k.inversePrimary),
+    secondaryContainer: S(k.secondaryContainer),
+    onSecondaryContainer: S(k.onSecondaryContainer),
+    tertiaryContainer: T(k.tertiaryContainer),
+    onTertiaryContainer: T(k.onTertiaryContainer),
+    surface: N(k.surface),
+    surfaceContainerLow: N(k.surfaceContainerLow),
+    surfaceContainer: N(k.surfaceContainer),
+    surfaceContainerHigh: N(k.surfaceContainerHigh),
+    surfaceContainerHighest: N(k.surfaceContainerHighest),
+    onSurface: N(k.onSurface),
+    onSurfaceVariant: NV(k.onSurfaceVariant),
+    outline: NV(k.outline),
+    outlineVariant: NV(k.outlineVariant),
+    inverseSurface: N(k.inverseSurface),
+    inverseOnSurface: N(k.inverseOnSurface),
+    ...(dark ? ERROR_DARK : ERROR_LIGHT),
   };
 }
 

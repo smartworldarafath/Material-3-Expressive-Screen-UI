@@ -108,6 +108,7 @@ const UI = {
   swipeTo: { ja: "スワイプで移動", en: "Swipe to open", zh: "滑动跳转" },
   toggle: { ja: "切り替えボタン", en: "Toggle button", zh: "切换按钮" },
   toggleHint: { ja: "タップでオン／オフ", en: "Tap toggles on / off", zh: "点击切换开/关" },
+  thumbCheck: { ja: "オンのときチェックアイコン", en: "Check icon when on", zh: "开启时显示勾选图标" },
   behavior: { ja: "振る舞い", en: "Behavior", zh: "行为" },
   whenPressed: { ja: "押したとき…", en: "When pressed…", zh: "按下时…" },
   whatItDoes: { ja: "この部品の動き…", en: "What this part does…", zh: "这个组件的作用…" },
@@ -177,6 +178,43 @@ const UI = {
   done: { ja: "完了", en: "Done", zh: "完成" },
   theme: { ja: "テーマ", en: "Theme", zh: "主题" },
   settings: { ja: "テーマと設定", en: "Theme and settings", zh: "主题与设置" },
+  // theme panels
+  shape: { ja: "シェイプ", en: "Shape", zh: "形状" },
+  typography: { ja: "タイポグラフィ", en: "Type", zh: "字体" },
+  motion: { ja: "モーション", en: "Motion", zh: "动效" },
+  brightness: { ja: "明るさ", en: "Brightness", zh: "明暗" },
+  light: { ja: "ライト", en: "Light", zh: "浅色" },
+  dark: { ja: "ダーク", en: "Dark", zh: "深色" },
+  contrast: { ja: "コントラスト", en: "Contrast", zh: "对比度" },
+  bothModes: { ja: "両対応", en: "Both", zh: "两者" },
+  contrastStandard: { ja: "標準", en: "Standard", zh: "标准" },
+  contrastMedium: { ja: "中", en: "Medium", zh: "中" },
+  contrastHigh: { ja: "高", en: "High", zh: "高" },
+  shapeScale: { ja: "角丸の度合い", en: "Corner roundness", zh: "圆角程度" },
+  shapeSquare: { ja: "スクエア", en: "Square", zh: "方形" },
+  shapeRounded: { ja: "標準", en: "Rounded", zh: "圆角" },
+  shapeFull: { ja: "フル", en: "Full", zh: "全圆" },
+  shapeHint: {
+    ja: "すべての部品の初期の角丸をまとめて変えます。部品ごとに入力した角丸はそのまま残ります。",
+    en: "Changes the default corners of every part at once. A radius you typed on a part stays as it is.",
+    zh: "统一改变所有组件的默认圆角。已为单个组件输入的圆角保持不变。",
+  },
+  fontFamily: { ja: "書体", en: "Typeface", zh: "字体" },
+  emphasized: { ja: "強調スタイル", en: "Emphasized", zh: "强调样式" },
+  emphasizedHint: {
+    ja: "見出しやラベルを M3 Expressive の太めのスタイルにします。",
+    en: "Headlines and labels use the heavier M3 Expressive styles.",
+    zh: "标题和标签使用 M3 Expressive 的加粗样式。",
+  },
+  motionScheme: { ja: "動きの種類", en: "Motion scheme", zh: "动效方案" },
+  motionStandard: { ja: "スタンダード", en: "Standard", zh: "标准" },
+  motionExpressive: { ja: "エクスプレッシブ", en: "Expressive", zh: "富有表现力" },
+  motionHint: {
+    ja: "エクスプレッシブは弾むスプリング。プレビューの画面遷移とプロンプトに反映されます。",
+    en: "Expressive is a bouncy spring. It drives the preview transitions and the prompt.",
+    zh: "富有表现力为弹性弹簧动效，作用于预览的屏幕过渡和提示词。",
+  },
+  tryIt: { ja: "タップして確認", en: "Tap to try", zh: "点击试试" },
 } as const satisfies Record<string, Str>;
 
 export type UIKey = keyof typeof UI;
@@ -213,6 +251,12 @@ export const KIND_TEXT: Record<
     loadingIndicator: { noun: "ローディングインジケータ" },
     linearProgress: { noun: "リニアプログレス" },
     circularProgress: { noun: "サーキュラープログレス" },
+    splitButton: { noun: "スプリットボタン", label: "送信" },
+    fabMenu: { noun: "FAB メニュー" },
+    toolbar: { noun: "ツールバー" },
+    tabs: { noun: "タブ" },
+    radio: { noun: "ラジオボタン", label: "選択肢" },
+    badge: { noun: "バッジ", label: "3" },
   },
   en: {
     box: { noun: "box" },
@@ -238,6 +282,12 @@ export const KIND_TEXT: Record<
     loadingIndicator: { noun: "loading indicator" },
     linearProgress: { noun: "linear progress indicator" },
     circularProgress: { noun: "circular progress indicator" },
+    splitButton: { noun: "split button", label: "Send" },
+    fabMenu: { noun: "FAB menu" },
+    toolbar: { noun: "toolbar" },
+    tabs: { noun: "tabs" },
+    radio: { noun: "radio button", label: "Option" },
+    badge: { noun: "badge", label: "3" },
   },
   zh: {
     box: { noun: "容器框" },
@@ -263,7 +313,45 @@ export const KIND_TEXT: Record<
     loadingIndicator: { noun: "加载指示器" },
     linearProgress: { noun: "线性进度条" },
     circularProgress: { noun: "圆形进度条" },
+    splitButton: { noun: "拆分按钮", label: "发送" },
+    fabMenu: { noun: "FAB 菜单" },
+    toolbar: { noun: "工具栏" },
+    tabs: { noun: "标签页" },
+    radio: { noun: "单选按钮", label: "选项" },
+    badge: { noun: "徽标", label: "3" },
   },
+};
+
+/** default labels of a tab row */
+export const TAB_LABELS: Record<Lang, string[]> = {
+  ja: ["おすすめ", "フォロー中", "人気", "新着", "保存済み"],
+  en: ["For you", "Following", "Trending", "New", "Saved"],
+  zh: ["推荐", "关注", "热门", "最新", "已保存"],
+};
+
+/** default entries of a FAB menu */
+export const FAB_MENU_TABS: Record<Lang, { icon: string; label: string }[]> = {
+  ja: [
+    { icon: "edit", label: "メモ" },
+    { icon: "photo_camera", label: "写真" },
+    { icon: "mic", label: "音声" },
+    { icon: "attach_file", label: "ファイル" },
+    { icon: "event", label: "予定" },
+  ],
+  en: [
+    { icon: "edit", label: "Note" },
+    { icon: "photo_camera", label: "Photo" },
+    { icon: "mic", label: "Audio" },
+    { icon: "attach_file", label: "File" },
+    { icon: "event", label: "Event" },
+  ],
+  zh: [
+    { icon: "edit", label: "笔记" },
+    { icon: "photo_camera", label: "照片" },
+    { icon: "mic", label: "语音" },
+    { icon: "attach_file", label: "文件" },
+    { icon: "event", label: "日程" },
+  ],
 };
 
 export const NAV_TABS: Record<Lang, { icon: string; label: string }[]> = {

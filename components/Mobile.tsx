@@ -2,12 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { motion, useDragControls } from "motion/react";
-import { Item, KIND_SPEC, PALETTES, Palette, iconSlotsOf, setIconSlot } from "@/lib/tokens";
+import { CONTRASTS, Contrast, FONTS, Item, KIND_SPEC, NavTab, PALETTES, Palette, SHAPES, ShapeScale, Theme, defaultTabsFor, iconSlotsOf, setIconSlot } from "@/lib/tokens";
+import { ensureFontLoaded } from "@/lib/theme";
 import { LANGS, Lang, t, useLang } from "@/lib/i18n";
 import { IconPicker } from "./IconPicker";
 import { Icon } from "./M3Node";
 import { VariantSwatch, variantsOf } from "./Inspector";
-import { Field, IconBtn, Toggle } from "./ui";
+import { Field, IconBtn, Segmented, Toggle } from "./ui";
 
 /** Sheet that slides up from the bottom edge; the canvas above stays usable.
  *  Dragging the handle moves the sheet with the finger; a flick or a long pull closes it. */
@@ -119,6 +120,14 @@ export function MobileInspector({
   }, [item.id]);
   const activeSlot = slots.find((s) => s.key === slotKey) ?? slots[0];
   const variants = spec.hasVariant ? variantsOf(item.kind) : [];
+  const tabs: NavTab[] = item.tabs ?? [];
+  const [tabSlot, setTabSlot] = useState<number | null>(null);
+  const setTabCount = (n: number) => {
+    const defaults = defaultTabsFor(item.kind);
+    const next: NavTab[] = [];
+    for (let i = 0; i < n; i++) next.push(tabs[i] ? { ...tabs[i] } : { ...defaults[i % defaults.length] });
+    onChange({ tabs: next });
+  };
 
   return (
     <div>
@@ -164,6 +173,35 @@ export function MobileInspector({
               />
             )}
           </div>
+        </Row>
+      )}
+
+      {spec.hasTabs && (
+        <Row icon="view_column" label={t("tabs", lang)} p={p}>
+          <Segmented
+            options={(item.kind === "toolbar" ? [2, 3, 4, 5, 6] : [2, 3, 4, 5]).map((n) => ({ key: String(n), label: String(n) }))}
+            value={String(tabs.length)}
+            onChange={(k) => setTabCount(Number(k))}
+            p={p}
+            height={44}
+          />
+          <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 8 }}>
+            {tabs.map((tab, i) => (
+              <div key={i} style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                {item.kind !== "tabs" && (
+                  <IconBtn icon={tab.icon || "add"} p={p} size={48} on={tabSlot === i} onClick={() => setTabSlot(tabSlot === i ? null : i)} title={t("changeIcon", lang)} />
+                )}
+                {item.kind !== "toolbar" && (
+                  <Field value={tab.label} onChange={(label) => onChange({ tabs: tabs.map((x, j) => (j === i ? { ...x, label } : x)) })} placeholder={t("label", lang)} p={p} height={48} />
+                )}
+              </div>
+            ))}
+          </div>
+          {tabSlot !== null && tabs[tabSlot] && (
+            <div style={{ marginTop: 8 }}>
+              <IconPicker value={tabs[tabSlot].icon || null} onChange={(icon) => onChange(setIconSlot(item, `tab:${tabSlot}`, icon))} palette={p} />
+            </div>
+          )}
         </Row>
       )}
 
@@ -303,19 +341,48 @@ export function MobileLang({ palette: p, lang, onLang }: { palette: Palette; lan
   );
 }
 
-/** Theme and the project link, in one small sheet. */
+/** The theme sheet: palette, light / dark, shape, type and motion, sized for thumbs. */
 export function MobileSettings({
   palette: p,
   paletteKey,
   onPalette,
+  theme,
+  onTheme,
 }: {
   palette: Palette;
   paletteKey: string;
   onPalette: (key: string) => void;
+  theme: Theme;
+  onTheme: (patch: Partial<Theme>) => void;
 }) {
   const lang = useLang();
+  const shapeLabel = (k: ShapeScale) => (k === "square" ? t("shapeSquare", lang) : k === "full" ? t("shapeFull", lang) : t("shapeRounded", lang));
   return (
     <div>
+      <Row icon="brightness_6" label={t("brightness", lang)} p={p}>
+        <Segmented<"light" | "dark">
+          options={[
+            { key: "light", icon: "light_mode", label: t("light", lang) },
+            { key: "dark", icon: "dark_mode", label: t("dark", lang) },
+          ]}
+          value={theme.dark ? "dark" : "light"}
+          onChange={(k) => onTheme({ dark: k === "dark" })}
+          p={p}
+          height={44}
+        />
+        <div style={{ marginTop: 8 }}>
+          <Toggle on={theme.bothModes} onChange={(bothModes) => onTheme({ bothModes })} p={p} icon="routine" label={t("bothModes", lang)} grow />
+        </div>
+      </Row>
+      <Row icon="contrast" label={t("contrast", lang)} p={p}>
+        <Segmented<Contrast>
+          options={CONTRASTS.map((c) => ({ key: c.key, label: c.key === "high" ? t("contrastHigh", lang) : c.key === "medium" ? t("contrastMedium", lang) : t("contrastStandard", lang) }))}
+          value={theme.contrast}
+          onChange={(contrast) => onTheme({ contrast })}
+          p={p}
+          height={44}
+        />
+      </Row>
       <Row icon="palette" label={t("theme", lang)} p={p}>
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap", padding: "2px 0" }}>
           {PALETTES.map((pal) => {
@@ -347,6 +414,65 @@ export function MobileSettings({
             );
           })}
         </div>
+      </Row>
+      <Row icon="rounded_corner" label={t("shape", lang)} p={p}>
+        <Segmented<ShapeScale>
+          options={SHAPES.map((s) => ({ key: s.key, icon: s.icon, label: shapeLabel(s.key) }))}
+          value={theme.shape}
+          onChange={(shape) => onTheme({ shape })}
+          p={p}
+          height={44}
+        />
+      </Row>
+      <Row icon="text_fields" label={t("typography", lang)} p={p}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          {FONTS.map((f) => {
+            const on = theme.font === f.key;
+            ensureFontLoaded(f.key);
+            return (
+              <button
+                key={f.key}
+                onClick={() => onTheme({ font: f.key })}
+                aria-pressed={on}
+                className="m3-press"
+                style={{
+                  height: 48,
+                  padding: "0 16px 0 12px",
+                  borderRadius: 16,
+                  border: "none",
+                  background: on ? p.secondaryContainer : p.surfaceContainerHigh,
+                  color: on ? p.onSecondaryContainer : p.onSurface,
+                  fontSize: 15,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 12,
+                  textAlign: "left",
+                  fontFamily: f.family,
+                }}
+              >
+                <span style={{ width: 22, display: "inline-flex" }}>{on && <Icon name="check" size={22} />}</span>
+                {f.label}
+              </button>
+            );
+          })}
+          <div style={{ marginTop: 4 }}>
+            <Toggle on={theme.emphasized} onChange={(emphasized) => onTheme({ emphasized })} p={p} icon="format_bold" label={t("emphasized", lang)} />
+          </div>
+        </div>
+      </Row>
+      <Row icon="animation" label={t("motion", lang)} p={p}>
+        <Segmented<"standard" | "expressive">
+          options={[
+            { key: "standard", label: t("motionStandard", lang) },
+            { key: "expressive", label: t("motionExpressive", lang) },
+          ]}
+          value={theme.motion}
+          onChange={(motion) => onTheme({ motion })}
+          p={p}
+          height={44}
+        />
       </Row>
     </div>
   );

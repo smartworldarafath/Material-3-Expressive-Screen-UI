@@ -25,7 +25,10 @@ import {
   Transition,
   baseRadii,
   connectSpecOf,
+  fontFamilyOf,
+  freeRadii,
   groupsInFrame,
+  normalizeTheme,
   toggleIcon,
   uniformRadii,
 } from "@/lib/tokens";
@@ -36,7 +39,10 @@ import { t, useLang } from "@/lib/i18n";
 const EASE = [0.2, 0, 0, 1] as const;
 const SLIDE_MS = 0.42;
 
-type Anim = { t: Transition; back: boolean };
+type Anim = { t: Transition; back: boolean; /** the expressive motion scheme: springs instead of eased tweens */ spring?: boolean };
+
+/** M3 Expressive spatial spring, with a visible overshoot */
+const SPRING = { type: "spring" as const, stiffness: 360, damping: 26, mass: 1 };
 /** how the current screen was reached, so "back" can play it in reverse */
 type Entry = { id: string; t: Transition };
 
@@ -52,7 +58,7 @@ function poses(c: Anim): { initial: Pose; animate: Pose; exit: Pose } {
   const zi = { zIndex: { duration: 0 } };
   const s = SLIDE_SPEC[c.t];
   if (s) {
-    const tr = { duration: SLIDE_MS, ease: EASE, ...zi };
+    const tr = c.spring ? { ...SPRING, ...zi } : { duration: SLIDE_MS, ease: EASE, ...zi };
     return c.back
       ? {
           initial: { ...off(s.axis, s.exit), opacity: 0.6, scale: 1, zIndex: 1 },
@@ -74,7 +80,7 @@ function poses(c: Anim): { initial: Pose; animate: Pose; exit: Pose } {
     };
   }
   if (c.t === "expand") {
-    const tr = { duration: 0.36, ease: EASE, ...zi };
+    const tr = c.spring ? { ...SPRING, ...zi } : { duration: 0.36, ease: EASE, ...zi };
     return c.back
       ? {
           initial: { x: 0, y: 0, scale: 0.92, opacity: 0, zIndex: 1 },
@@ -157,10 +163,19 @@ function Tappable({
     if (item.icon) slots.push({ key: "icon", style: { left: 4, top: STATUS_BAR_H + 8, width: 48, height: 48, borderRadius: 24 } });
     if (item.icon2) slots.push({ key: "icon2", style: { right: 4, top: STATUS_BAR_H + 8, width: 48, height: 48, borderRadius: 24 } });
   }
-  if (onSlot && item.kind === "bottomNav") {
+  if (onSlot && (item.kind === "bottomNav" || item.kind === "tabs")) {
     const n = item.tabs?.length ?? 0;
     for (let i = 0; i < n; i++)
-      slots.push({ key: `tab:${i}`, style: { left: `${(i / n) * 100}%`, width: `${100 / n}%`, top: 0, bottom: NAV_BAR_H, borderRadius: 16 } });
+      slots.push({ key: `tab:${i}`, style: { left: `${(i / n) * 100}%`, width: `${100 / n}%`, top: 0, bottom: item.kind === "bottomNav" ? NAV_BAR_H : 0, borderRadius: 16 } });
+  }
+  if (onSlot && item.kind === "toolbar") {
+    const n = item.tabs?.length ?? 0;
+    for (let i = 0; i < n; i++) slots.push({ key: `tab:${i}`, style: { left: 8 + i * 52, width: 48, top: 8, height: 48, borderRadius: 24 } });
+  }
+  if (onSlot && item.kind === "fabMenu") {
+    /* the pills hug their text on the right; the hit area covers the right part of the row */
+    const n = item.tabs?.length ?? 0;
+    for (let i = 0; i < n; i++) slots.push({ key: `tab:${i}`, style: { right: 0, width: "70%", top: i * 64, height: 56, borderRadius: 28 } });
   }
 
   return (
@@ -272,11 +287,12 @@ function Screen({
                 }
           }
         >
-          {g.items.map((it, i) => {
+          {((corners) => g.items.map((it, i) => {
             const conn = connectSpecOf(it);
             const n = g.free ? 1 : g.items.length;
-            const radii =
-              conn && n > 1
+            const radii = g.free
+              ? (corners?.get(it.id) ?? baseRadii(it))
+              : conn && n > 1
                 ? g.axis === "x"
                   ? {
                       tl: i === 0 ? conn.outer : conn.inner,
@@ -323,7 +339,7 @@ function Screen({
                 {node}
               </div>
             );
-          })}
+          }))(g.free ? freeRadii(g, widths) : null)}
         </div>
       ))}
     </div>
@@ -350,6 +366,8 @@ export function Preview({
   const frames = doc.frames;
   const [stack, setStack] = useState<Entry[]>(() => [{ id: startId ?? frames[0]?.id ?? "", t: "none" }]);
   const [anim, setAnim] = useState<Anim>({ t: "none", back: false });
+  const theme = normalizeTheme(doc.theme);
+  const spring = theme.motion === "expressive";
   const [scale, setScale] = useState(1);
   const [flipped, setFlipped] = useState<Set<string>>(() => new Set());
   const [values, setValues] = useState<Record<string, number>>({});
@@ -384,9 +402,9 @@ export function Preview({
   const back = useCallback(() => {
     const s = stackRef.current;
     if (s.length < 2 || peekRef.current) return;
-    setAnim({ t: s[s.length - 1].t, back: true });
+    setAnim({ t: s[s.length - 1].t, back: true, spring });
     setStack(s.slice(0, -1));
-  }, []);
+  }, [spring]);
 
   const go = useCallback(
     (a: Action) => {
@@ -396,10 +414,10 @@ export function Preview({
         return;
       }
       if (!frames.some((f) => f.id === a.to)) return;
-      setAnim({ t: a.transition, back: false });
+      setAnim({ t: a.transition, back: false, spring });
       setStack((s) => [...s, { id: a.to, t: a.transition }]);
     },
-    [frames, back],
+    [frames, back, spring],
   );
 
   useEffect(() => {
@@ -497,7 +515,7 @@ export function Preview({
       const commit = prog.get() > 0.25 || g.vel > 0.0012;
       animate(prog, commit ? 1 : 0, { duration: 0.26, ease: EASE }).then(() => {
         if (commit) {
-          setAnim({ t: "none", back: false });
+          setAnim({ t: "none", back: false, spring });
           setStack((s) => [...s, { id: pk.frameId, t: pk.t }]);
         }
         peekRef.current = null;
@@ -611,6 +629,7 @@ export function Preview({
               borderRadius: PHONE_R,
               overflow: "hidden",
               background: p[current.bg ?? "surface"],
+              fontFamily: fontFamilyOf(theme.font),
               touchAction: "none",
             }}
           >
@@ -747,7 +766,7 @@ export function Preview({
                         onClick={() => {
                           setPicker(false);
                           if (on) return;
-                          setAnim({ t: "fade", back: false });
+                          setAnim({ t: "fade", back: false, spring });
                           setStack([{ id: f.id, t: "fade" }]);
                         }}
                         className="m3-press"

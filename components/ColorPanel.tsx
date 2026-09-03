@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { PALETTES, Palette } from "@/lib/tokens";
+import { CONTRASTS, Contrast, PALETTES, Palette, Theme } from "@/lib/tokens";
 import { isHex, onColorFor, schemeFromSeed } from "@/lib/color";
 import { t, useLang } from "@/lib/i18n";
-import { Section, Segmented, Toggle } from "./ui";
+import { Section, Segmented } from "./ui";
+import { Icon } from "./M3Node";
 
 /** roles the author can override by hand; their "on" color follows automatically */
 type Role = Exclude<keyof Palette, "seed">;
@@ -19,7 +20,7 @@ const TUNABLE: { key: Role; on?: Role }[] = [
 ];
 
 /** the palette's key colors as overlapping dots, right-aligned in the row */
-function Swatches({ pal }: { pal: Palette }) {
+function Swatches({ pal, p }: { pal: Palette; p: Palette }) {
   const colors = [pal.primary, pal.primaryContainer, pal.secondaryContainer, pal.tertiaryContainer, pal.surfaceContainerHigh];
   return (
     <span style={{ display: "inline-flex", flex: "0 0 auto", marginLeft: "auto", paddingLeft: 8 }}>
@@ -32,7 +33,7 @@ function Swatches({ pal }: { pal: Palette }) {
             borderRadius: 10,
             background: c,
             marginLeft: i === 0 ? 0 : -7,
-            boxShadow: "0 0 0 2px rgba(255,255,255,0.9), inset 0 0 0 1px rgba(0,0,0,0.08)",
+            boxShadow: `0 0 0 2px ${p.surfaceContainerLow}, inset 0 0 0 1px rgba(0,0,0,0.08)`,
             zIndex: colors.length - i,
             position: "relative",
           }}
@@ -82,8 +83,88 @@ function ColorField({ value, onChange, p, label }: { value: string; onChange: (h
   );
 }
 
-/** The color tab of the left panel: preset themes, a seed-based custom scheme
- *  with per-role tweaks, and the dynamic-color (wallpaper) switch. */
+/** A settings row in the same shape as the palette rows: icon disc, label, and the
+ *  value or switch at the trailing edge. The whole row is the control. */
+function SettingRow({
+  p,
+  icon,
+  label,
+  onClick,
+  pressed,
+  children,
+}: {
+  p: Palette;
+  icon: string;
+  label: string;
+  onClick: () => void;
+  pressed?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      aria-pressed={pressed}
+      className="m3-press"
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 10,
+        height: 48,
+        padding: "0 12px 0 10px",
+        borderRadius: 16,
+        border: "none",
+        background: p.surfaceContainerLow,
+        color: p.onSurface,
+        cursor: "pointer",
+        textAlign: "left",
+        width: "100%",
+      }}
+    >
+      <span style={{ width: 28, height: 28, borderRadius: 14, background: p.secondaryContainer, color: p.onSecondaryContainer, display: "grid", placeItems: "center", flex: "0 0 auto" }}>
+        <Icon name={icon} size={18} />
+      </span>
+      <span style={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</span>
+      {children}
+    </button>
+  );
+}
+
+/** the switch of a settings row, drawn without its own button */
+function Knob({ on, p }: { on: boolean; p: Palette }) {
+  return (
+    <span
+      aria-hidden
+      style={{
+        position: "relative",
+        width: 44,
+        height: 26,
+        borderRadius: 13,
+        background: on ? p.primary : p.surfaceContainerHighest,
+        border: on ? "2px solid transparent" : `2px solid ${p.outline}`,
+        boxSizing: "border-box",
+        transition: "background 160ms",
+        flex: "0 0 auto",
+      }}
+    >
+      <span
+        style={{
+          position: "absolute",
+          top: "50%",
+          left: on ? 20 : 3,
+          width: on ? 18 : 12,
+          height: on ? 18 : 12,
+          marginTop: on ? -9 : -6,
+          borderRadius: 9,
+          background: on ? p.onPrimary : p.outline,
+          transition: "left 160ms, width 160ms, height 160ms, margin 160ms",
+        }}
+      />
+    </span>
+  );
+}
+
+/** The color tab of the theme panel: light / dark and contrast, preset themes,
+ *  a seed-based custom scheme with per-role tweaks, and the dynamic-color switch. */
 export function ColorPanel({
   p,
   paletteKey,
@@ -92,6 +173,8 @@ export function ColorPanel({
   onCustom,
   dynamic,
   onDynamic,
+  theme,
+  onTheme,
 }: {
   p: Palette;
   paletteKey: string;
@@ -100,8 +183,11 @@ export function ColorPanel({
   onCustom: (pal: Palette) => void;
   dynamic: boolean;
   onDynamic: (on: boolean) => void;
+  theme: Theme;
+  onTheme: (patch: Partial<Theme>) => void;
 }) {
   const lang = useLang();
+  const contrastLabel = (c: Contrast) => (c === "high" ? t("contrastHigh", lang) : c === "medium" ? t("contrastMedium", lang) : t("contrastStandard", lang));
   const [tab, setTab] = useState<"templates" | "custom">(paletteKey === "custom" ? "custom" : "templates");
   const [seed, setSeed] = useState(custom?.seed ?? custom?.primary ?? "#6750A4");
 
@@ -114,6 +200,32 @@ export function ColorPanel({
 
   return (
     <div className="no-scrollbar" style={{ height: "100%", overflowY: "auto", padding: "12px 12px 20px" }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 14 }}>
+        <SettingRow p={p} icon={theme.dark ? "dark_mode" : "light_mode"} label={t("brightness", lang)} onClick={() => onTheme({ dark: !theme.dark })} pressed={theme.dark}>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 13, fontWeight: 600, color: p.primary }}>
+            {theme.dark ? t("dark", lang) : t("light", lang)}
+            <Icon name="swap_horiz" size={18} />
+          </span>
+        </SettingRow>
+        <SettingRow p={p} icon="routine" label={t("bothModes", lang)} onClick={() => onTheme({ bothModes: !theme.bothModes })} pressed={theme.bothModes}>
+          <Knob on={theme.bothModes} p={p} />
+        </SettingRow>
+        <SettingRow
+          p={p}
+          icon="contrast"
+          label={t("contrast", lang)}
+          onClick={() => {
+            const i = CONTRASTS.findIndex((c) => c.key === theme.contrast);
+            onTheme({ contrast: CONTRASTS[(i + 1) % CONTRASTS.length].key });
+          }}
+        >
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 13, fontWeight: 600, color: p.primary }}>
+            {contrastLabel(theme.contrast)}
+            <Icon name="chevron_right" size={18} />
+          </span>
+        </SettingRow>
+      </div>
+
       <Segmented<"templates" | "custom">
         options={[
           { key: "templates", icon: "palette", label: t("templates", lang) },
@@ -151,7 +263,7 @@ export function ColorPanel({
               >
                 <span style={{ width: 28, height: 28, borderRadius: 14, background: `linear-gradient(135deg, ${pal.primary} 50%, ${pal.primaryContainer} 50%)`, flex: "0 0 auto" }} />
                 <span style={{ fontSize: 13, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>{pal.label}</span>
-                <Swatches pal={pal} />
+                <Swatches pal={pal} p={p} />
               </button>
             );
           })}
@@ -218,9 +330,11 @@ export function ColorPanel({
         </div>
       )}
 
-      <div style={{ marginTop: 16, padding: 12, borderRadius: 16, background: p.surfaceContainerLow }}>
-        <Toggle on={dynamic} onChange={onDynamic} p={p} icon="wallpaper" label={t("dynamicColor", lang)} />
-        <div style={{ marginTop: 8, fontSize: 11, lineHeight: 1.5, color: p.onSurfaceVariant }}>
+      <div style={{ marginTop: 16, display: "flex", flexDirection: "column", gap: 6 }}>
+        <SettingRow p={p} icon="wallpaper" label={t("dynamicColor", lang)} onClick={() => onDynamic(!dynamic)} pressed={dynamic}>
+          <Knob on={dynamic} p={p} />
+        </SettingRow>
+        <div style={{ fontSize: 11, lineHeight: 1.5, color: p.onSurfaceVariant, padding: "2px 4px 0" }}>
           {dynamic ? t("dynamicOnHint", lang) : t("dynamicOffHint", lang)}
         </div>
       </div>

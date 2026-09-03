@@ -23,7 +23,7 @@ import {
   VARIANTS,
   Variant,
   actionSlotsOf,
-  defaultTabs,
+  defaultTabsFor,
   toggleIcon,
   iconSlotsOf,
   setIconSlot,
@@ -54,7 +54,15 @@ export function variantsOf(kind: Kind): { key: Variant; label: string }[] {
       ];
     case "fab":
     case "extendedFab":
+    case "fabMenu":
       return VARIANTS.filter((v) => v.key !== "text" && v.key !== "elevated" && v.key !== "outlined");
+    case "splitButton":
+      return VARIANTS.filter((v) => v.key !== "text");
+    case "toolbar":
+      return [
+        { key: "tonal", label: "Standard" },
+        { key: "filled", label: "Vibrant" },
+      ];
     case "iconButton":
       return VARIANTS.filter((v) => v.key !== "elevated" && v.key !== "text").concat({
         key: "text",
@@ -563,12 +571,14 @@ export function Inspector({
 
   const setTabCount = (n: number) => {
     const next: NavTab[] = [];
-    for (let i = 0; i < n; i++) {
-      const defaults = defaultTabs();
-      next.push(tabs[i] ? { ...tabs[i] } : { ...defaults[i % defaults.length] });
-    }
+    const defaults = defaultTabsFor(item.kind);
+    for (let i = 0; i < n; i++) next.push(tabs[i] ? { ...tabs[i] } : { ...defaults[i % defaults.length] });
     onChange({ tabs: next });
   };
+  /** entries of a tab row have no icon; toolbar buttons have no label */
+  const tabIcons = item.kind !== "tabs";
+  const tabLabels = item.kind !== "toolbar";
+  const mainSlots = slots.filter((s) => !s.key.startsWith("tab:"));
 
   const setTabLabel = (i: number, label: string) =>
     onChange({ tabs: tabs.map((t, j) => (j === i ? { ...t, label } : t)) });
@@ -601,7 +611,7 @@ export function Inspector({
       </div>
 
       {TOGGLEABLE.includes(item.kind) && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: "0 4px", marginBottom: 10 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 10, padding: "10px 4px 12px", marginBottom: 12 }}>
           <Toggle
             on={!!item.toggle}
             onChange={(on) => {
@@ -611,7 +621,8 @@ export function Inspector({
             }}
             p={p}
             icon="swap_horiz"
-            label={`${t("toggle", lang)}（${t("toggleHint", lang)}）`}
+            label={t("toggle", lang)}
+            grow
           />
           {item.toggle && (
             <>
@@ -671,10 +682,10 @@ export function Inspector({
         </Section>
       )}
 
-      {item.kind === "bottomNav" && !editOn && (
+      {spec.hasTabs && !editOn && (
         <Section id="tabs" icon="view_column" title={t("tabs", lang)} p={p}>
           <Segmented
-            options={[2, 3, 4, 5].map((n) => ({ key: String(n), label: String(n) }))}
+            options={(item.kind === "toolbar" ? [2, 3, 4, 5, 6] : [2, 3, 4, 5]).map((n) => ({ key: String(n), label: String(n) }))}
             value={String(tabs.length)}
             onChange={(k) => setTabCount(Number(k))}
             p={p}
@@ -685,6 +696,7 @@ export function Inspector({
               const on = slotKey === `tab:${i}` && pickerOpen;
               return (
                 <div key={i} style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                  {tabIcons && (
                   <button
                     onClick={() => {
                       setSlotKey(`tab:${i}`);
@@ -708,7 +720,11 @@ export function Inspector({
                   >
                     <Icon name={tab.icon || "add"} size={20} />
                   </button>
-                  <Field value={tab.label} onChange={(v) => setTabLabel(i, v)} placeholder={t("label", lang)} p={p} height={40} />
+                  )}
+                  {tabLabels && <Field value={tab.label} onChange={(v) => setTabLabel(i, v)} placeholder={t("label", lang)} p={p} height={40} />}
+                  {tabIcons && tab.icon && (
+                    <IconBtn icon="close" p={p} size={40} onClick={() => onChange(setIconSlot(item, `tab:${i}`, null))} title={t("noIcon", lang)} />
+                  )}
                 </div>
               );
             })}
@@ -762,13 +778,13 @@ export function Inspector({
         </Section>
       )}
 
-      {slots.length > 0 && activeSlot && item.kind !== "bottomNav" && !item.src && (
+      {mainSlots.length > 0 && activeSlot && !item.src && (
         <Section id="icon" icon="emoji_symbols" title={t("icon", lang)} p={p}>
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-            {slots.map((s) =>
+            {mainSlots.map((s) =>
               slotBtn(
                 s.key,
-                slots.length > 1 ? s.label : undefined,
+                mainSlots.length > 1 ? s.label : undefined,
                 editOn && s.key === "icon" ? shown.icon : s.value,
                 s.key === activeSlot.key && pickerOpen,
                 () => {
@@ -779,7 +795,7 @@ export function Inspector({
                 !s.value,
               ),
             )}
-            {activeSlot.value && (
+            {activeSlot.value && !activeSlot.key.startsWith("tab:") && (
               <IconBtn
                 icon="close"
                 p={p}
@@ -849,7 +865,7 @@ export function Inspector({
 
       {(spec.hasChecked || spec.hasValue || spec.hasWavy || spec.hasContained) && !editOn && (
         <Section id="state" icon="tune" title={t("state", lang)} p={p}>
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 14, padding: "2px 0" }}>
             {spec.hasChecked && (
               <Toggle
                 on={!!item.checked}
@@ -857,7 +873,11 @@ export function Inspector({
                 p={p}
                 icon={item.kind === "chip" ? "check_circle" : item.kind === "box" ? "drag_handle" : "toggle_on"}
                 label={item.kind === "chip" ? t("selected", lang) : item.kind === "box" ? t("handle", lang) : t("on", lang)}
+                grow
               />
+            )}
+            {item.kind === "switch" && (
+              <Toggle on={!item.noCheck} onChange={(on) => onChange({ noCheck: on ? undefined : true })} p={p} icon="check" label={t("thumbCheck", lang)} grow />
             )}
             {spec.hasContained && (
               <Toggle
@@ -866,10 +886,11 @@ export function Inspector({
                 p={p}
                 icon="circle"
                 label={t("container", lang)}
+                grow
               />
             )}
             {spec.hasWavy && (
-              <Toggle on={!!item.wavy} onChange={(wavy) => onChange({ wavy })} p={p} icon="airwave" label={t("wavy", lang)} />
+              <Toggle on={!!item.wavy} onChange={(wavy) => onChange({ wavy })} p={p} icon="airwave" label={t("wavy", lang)} grow />
             )}
             {spec.hasValue && item.kind !== "slider" && (
               <Toggle
@@ -878,6 +899,7 @@ export function Inspector({
                 p={p}
                 icon="percent"
                 label={t("determinate", lang)}
+                grow
               />
             )}
             {spec.hasValue && (item.kind === "slider" || item.value !== undefined) && (
@@ -1003,7 +1025,8 @@ export function Inspector({
               <Segmented<string>
                 options={actionSlots.map((s) => ({
                   key: s.key,
-                  icon: s.value ?? "block",
+                  icon: s.value ?? undefined,
+                  label: s.value ? undefined : s.label,
                   title: s.label,
                   dot: !!item.actions?.[s.key],
                 }))}

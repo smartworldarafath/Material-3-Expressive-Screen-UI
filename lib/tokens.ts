@@ -1,5 +1,6 @@
 import type { CSSProperties } from "react";
-import { KIND_TEXT, NAV_TABS, getLang, t } from "./i18n";
+import { FAB_MENU_TABS, KIND_TEXT, NAV_TABS, TAB_LABELS, getLang, t } from "./i18n";
+import { Contrast, schemeFromSeed } from "./color";
 
 /* ---------- geometry ---------- */
 export const H = 56; // M3 medium button height (dp)
@@ -264,8 +265,86 @@ export const PALETTES: Palette[] = [
   },
 ];
 
-export const paletteOf = (key: string, custom?: Palette | null): Palette =>
-  (key === "custom" && custom) || PALETTES.find((p) => p.key === key) || PALETTES[0];
+/* ---------- theme: the four expressive axes ---------- */
+export type ShapeScale = "square" | "rounded" | "full";
+export type FontKey = "roboto" | "robotoFlex" | "robotoSerif" | "system";
+export type MotionScheme = "standard" | "expressive";
+export type { Contrast };
+
+export type Theme = {
+  dark: boolean;
+  /** the app follows the system setting; the canvas shows the mode chosen in `dark` */
+  bothModes: boolean;
+  contrast: Contrast;
+  shape: ShapeScale;
+  font: FontKey;
+  /** headings and labels take the heavier M3 Expressive "emphasized" styles */
+  emphasized: boolean;
+  motion: MotionScheme;
+};
+
+export const DEFAULT_THEME: Theme = { dark: false, bothModes: false, contrast: "standard", shape: "rounded", font: "roboto", emphasized: false, motion: "standard" };
+
+/** a stored theme with any missing or unknown field replaced by its default */
+export function normalizeTheme(t: Partial<Theme> | undefined): Theme {
+  const d = DEFAULT_THEME;
+  if (!t) return d;
+  return {
+    dark: typeof t.dark === "boolean" ? t.dark : d.dark,
+    bothModes: typeof t.bothModes === "boolean" ? t.bothModes : d.bothModes,
+    contrast: CONTRASTS.some((c) => c.key === t.contrast) ? (t.contrast as Contrast) : d.contrast,
+    shape: SHAPES.some((c) => c.key === t.shape) ? (t.shape as ShapeScale) : d.shape,
+    font: FONTS.some((c) => c.key === t.font) ? (t.font as FontKey) : d.font,
+    emphasized: typeof t.emphasized === "boolean" ? t.emphasized : d.emphasized,
+    motion: t.motion === "expressive" || t.motion === "standard" ? t.motion : d.motion,
+  };
+}
+
+export const SHAPES: { key: ShapeScale; label: string; icon: string }[] = [
+  { key: "square", label: "Square", icon: "crop_square" },
+  { key: "rounded", label: "Rounded", icon: "rounded_corner" },
+  { key: "full", label: "Full", icon: "circle" },
+];
+
+export const FONTS: { key: FontKey; label: string; family: string; /** Google Fonts family to fetch, if any */ google?: string }[] = [
+  { key: "roboto", label: "Roboto", family: "Roboto, system-ui, sans-serif" },
+  { key: "robotoFlex", label: "Roboto Flex", family: "'Roboto Flex', Roboto, system-ui, sans-serif", google: "Roboto+Flex:wght@400;500;600;700" },
+  { key: "robotoSerif", label: "Roboto Serif", family: "'Roboto Serif', Georgia, serif", google: "Roboto+Serif:wght@400;500;600;700" },
+  { key: "system", label: "System", family: "system-ui, -apple-system, 'Segoe UI', sans-serif" },
+];
+
+export const fontFamilyOf = (f: FontKey) => FONTS.find((x) => x.key === f)?.family ?? FONTS[0].family;
+
+export const CONTRASTS: { key: Contrast; label: string }[] = [
+  { key: "standard", label: "Standard" },
+  { key: "medium", label: "Medium" },
+  { key: "high", label: "High" },
+];
+
+/** the shape scale that rendering helpers read outside React; the page sets it once per render */
+let curShape: ShapeScale = "rounded";
+export const setGlobalShape = (s: ShapeScale) => {
+  curShape = s;
+};
+export const getShape = () => curShape;
+
+/** a default corner radius under the document's shape scale */
+export function scaleR(r: number): number {
+  if (curShape === "square") return Math.round(r * 0.35);
+  if (curShape === "full") return Math.round(r * 1.6);
+  return r;
+}
+
+/** The scheme the document renders with. Hand-written presets and the author's
+ *  fine-tuned custom scheme are light and standard contrast; dark mode and the
+ *  other contrast levels are generated from the same seed. */
+export function paletteOf(key: string, custom?: Palette | null, theme?: Theme): Palette {
+  const base = (key === "custom" && custom) || PALETTES.find((p) => p.key === key) || PALETTES[0];
+  if (!theme || (!theme.dark && theme.contrast === "standard")) return base;
+  const seed = base.seed ?? base.primary;
+  /* a preset's hue and chroma are deliberate (Mono is nearly grey), so they are kept as they are */
+  return { ...schemeFromSeed(seed, base.label, { dark: theme.dark, contrast: theme.contrast, keepChroma: base.key !== "custom" }), key: base.key };
+}
 
 /* ---------- contrast roles a component can take ---------- */
 export type Variant = "filled" | "tonal" | "elevated" | "outlined" | "text";
@@ -322,7 +401,13 @@ export type Kind =
   | "divider"
   | "loadingIndicator"
   | "linearProgress"
-  | "circularProgress";
+  | "circularProgress"
+  | "splitButton"
+  | "fabMenu"
+  | "toolbar"
+  | "tabs"
+  | "radio"
+  | "badge";
 
 export type Axis = "x" | "y";
 /** kinds that fuse into a run: buttons side by side, list items stacked */
@@ -357,6 +442,8 @@ export type KindSpec = {
   hasSupporting: boolean;
   hasIcon: boolean;
   hasChecked?: boolean;
+  /** carries a list of icon + label entries (navigation bar, tabs, FAB menu, toolbar) */
+  hasTabs?: boolean;
   /** second dimension (height) for free-form boxes */
   size2?: SizeSpec;
   hasFill?: boolean;
@@ -509,6 +596,7 @@ export const KIND_SPEC: Record<Kind, KindSpec> = {
     hasLabel: false,
     hasSupporting: false,
     hasIcon: false,
+    hasTabs: true,
     defLabel: "",
     defIcon: null,
   },
@@ -778,6 +866,107 @@ export const KIND_SPEC: Record<Kind, KindSpec> = {
     defIcon: null,
     defSize: 48,
   },
+  splitButton: {
+    label: "Split Button",
+    noun: "スプリットボタン",
+    category: "actions",
+    paletteIcon: "splitscreen_right",
+    w: 0,
+    h: H,
+    radius: R_FULL,
+    hasVariant: true,
+    hasLabel: true,
+    hasSupporting: false,
+    hasIcon: true,
+    defLabel: "送信",
+    defIcon: "send",
+    defVariant: "filled",
+  },
+  fabMenu: {
+    label: "FAB Menu",
+    noun: "FAB メニュー",
+    category: "actions",
+    paletteIcon: "add_circle",
+    w: 220,
+    h: 56,
+    radius: 16,
+    hasVariant: true,
+    hasLabel: false,
+    hasSupporting: false,
+    hasIcon: true,
+    hasTabs: true,
+    size: { min: 160, max: CONTENT_W, step: 4, icon: "width", presets: [220, HALF_W, CONTENT_W] },
+    defLabel: "",
+    defIcon: "close",
+    defSize: 220,
+    defVariant: "filled",
+  },
+  toolbar: {
+    label: "Toolbar",
+    noun: "ツールバー",
+    category: "navigation",
+    paletteIcon: "toolbar",
+    w: 0,
+    h: 64,
+    radius: 32,
+    hasVariant: true,
+    hasLabel: false,
+    hasSupporting: false,
+    hasIcon: false,
+    hasTabs: true,
+    defLabel: "",
+    defIcon: null,
+    defVariant: "tonal",
+  },
+  tabs: {
+    label: "Tabs",
+    noun: "タブ",
+    category: "navigation",
+    paletteIcon: "tab",
+    w: PHONE_W,
+    h: 48,
+    radius: 0,
+    hasVariant: false,
+    hasLabel: false,
+    hasSupporting: false,
+    hasIcon: false,
+    hasTabs: true,
+    size: { min: 200, max: PHONE_W, step: 4, icon: "width", presets: WIDTH_PRESETS },
+    defLabel: "",
+    defIcon: null,
+    defSize: PHONE_W,
+  },
+  radio: {
+    label: "Radio Button",
+    noun: "ラジオボタン",
+    category: "inputs",
+    paletteIcon: "radio_button_checked",
+    w: 0,
+    h: 40,
+    radius: 20,
+    hasVariant: false,
+    hasLabel: true,
+    hasSupporting: false,
+    hasIcon: false,
+    hasChecked: true,
+    defLabel: "選択肢",
+    defIcon: null,
+  },
+  badge: {
+    label: "Badge",
+    noun: "バッジ",
+    category: "content",
+    paletteIcon: "notifications_unread",
+    w: 0,
+    h: 16,
+    radius: 8,
+    hasVariant: false,
+    hasLabel: true,
+    hasSupporting: false,
+    hasIcon: false,
+    defLabel: "3",
+    defIcon: null,
+  },
 };
 
 export const KIND_ORDER: Kind[] = [
@@ -785,9 +974,13 @@ export const KIND_ORDER: Kind[] = [
   "iconButton",
   "fab",
   "extendedFab",
+  "splitButton",
+  "fabMenu",
   "chip",
   "topAppBar",
   "bottomNav",
+  "toolbar",
+  "tabs",
   "searchBar",
   "card",
   "listItem",
@@ -797,9 +990,11 @@ export const KIND_ORDER: Kind[] = [
   "textField",
   "switch",
   "checkbox",
+  "radio",
   "slider",
   "text",
   "image",
+  "badge",
   "divider",
   "loadingIndicator",
   "linearProgress",
@@ -823,6 +1018,8 @@ export type Item = {
   tabs?: NavTab[];
   /** on/off state for switches, checkboxes and chips */
   checked?: boolean;
+  /** a switch whose handle stays plain when on, without the check icon */
+  noCheck?: boolean;
   /** 0..100 for sliders and determinate progress; undefined = indeterminate */
   value?: number;
   wavy?: boolean;
@@ -887,7 +1084,9 @@ export const TRANSITIONS: { key: Transition; label: string; icon: string }[] = [
 
 /** slots on a bar that can each carry their own tap action */
 export function actionSlotsOf(it: Item): IconSlot[] {
-  if (it.kind === "topAppBar" || it.kind === "bottomNav") return iconSlotsOf(it).filter((s) => !!s.value);
+  if (it.kind === "topAppBar" || it.kind === "bottomNav" || it.kind === "toolbar") return iconSlotsOf(it).filter((s) => !!s.value);
+  if (it.kind === "fabMenu") return (it.tabs ?? []).map((t, i) => ({ key: `tab:${i}`, label: t.label || `${i + 1}`, value: t.icon || null }));
+  if (it.kind === "tabs") return (it.tabs ?? []).map((t, i) => ({ key: `tab:${i}`, label: t.label || `${i + 1}`, value: null }));
   return [];
 }
 
@@ -910,7 +1109,7 @@ export function actionsOf(it: Item): { slot: string; action: Action }[] {
 }
 
 /** kinds a user can tap in the preview */
-export const TAPPABLE: Kind[] = ["button", "iconButton", "fab", "extendedFab", "chip", "listItem", "card", "image", "text"];
+export const TAPPABLE: Kind[] = ["button", "iconButton", "fab", "extendedFab", "chip", "listItem", "card", "image", "text", "splitButton", "radio"];
 
 /** palette roles a user may pick as a background */
 export type ColorToken =
@@ -1003,16 +1202,56 @@ export function groupBounds(g: Group, widths: Record<string, number>) {
   return { l, t, r, b };
 }
 
-/** a free group written as one run per part, so layout logic sees the parts themselves */
+/** A free group written as the runs it holds: parts of one family that still sit
+ *  one GAP apart along their axis stay a connected run, everything else is a run
+ *  of one. Layout logic, the prompt and ungrouping all see the same runs. */
 export function explodeGroup(g: Group, widths: Record<string, number>): Group[] {
   if (!g.free) return [g];
-  return layoutOf(g, widths).map((pl) => ({
-    id: `${g.id}:${pl.item.id}`,
-    x: pl.x,
-    y: pl.y,
-    axis: connectSpecOf(pl.item)?.axis ?? "x",
-    items: [pl.item],
-  }));
+  const placed = [...layoutOf(g, widths)].sort((a, b) => a.y - b.y || a.x - b.x);
+  const used = new Set<string>();
+  const out: Group[] = [];
+  const near = (a: number, b: number) => Math.abs(a - b) <= 3;
+  for (const start of placed) {
+    if (used.has(start.item.id)) continue;
+    used.add(start.item.id);
+    const run = [start];
+    const axis = connectSpecOf(start.item)?.axis ?? "x";
+    let last = start;
+    for (;;) {
+      const next = placed.find(
+        (q) =>
+          !used.has(q.item.id) &&
+          canJoin(last.item, q.item) &&
+          (axis === "x" ? near(q.y, last.y) && near(q.x, last.x + last.w + GAP) : near(q.x, last.x) && near(q.y, last.y + last.h + GAP)),
+      );
+      if (!next) break;
+      used.add(next.item.id);
+      run.push(next);
+      last = next;
+    }
+    out.push({ id: `${g.id}:${start.item.id}`, x: start.x, y: start.y, axis, items: run.map((r) => r.item) });
+  }
+  return out;
+}
+
+/** corners of one part of a run: round outside, small where it meets a neighbour */
+export function runCorners(axis: Axis, first: boolean, last: boolean, outer: number, inner: number): Radii {
+  const a = first ? outer : inner;
+  const b = last ? outer : inner;
+  return axis === "x" ? { tl: a, bl: a, tr: b, br: b } : { tl: a, tr: a, bl: b, br: b };
+}
+
+/** the corner radii of every part in a free group, with its hidden runs kept connected */
+export function freeRadii(g: Group, widths: Record<string, number>): Map<string, Radii> {
+  const out = new Map<string, Radii>();
+  for (const run of explodeGroup(g, widths)) {
+    const n = run.items.length;
+    run.items.forEach((it, i) => {
+      const c = connectSpecOf(it);
+      out.set(it.id, c ? runCorners(run.axis, i === 0, i === n - 1, c.outer, c.inner) : baseRadii(it));
+    });
+  }
+  return out;
 }
 
 /** a run belongs to the frame that contains its centre */
@@ -1053,9 +1292,27 @@ export type Doc = {
   frame: FrameMode;
   title: string;
   brief: string;
+  /** shape, type, motion and the light / dark and contrast switches */
+  theme?: Theme;
 };
 
 export const defaultTabs = (): NavTab[] => NAV_TABS[getLang()].map((t) => ({ ...t }));
+
+const TOOLBAR_ICONS = ["format_bold", "format_italic", "format_underlined", "attach_file", "format_color_text", "more_vert"];
+
+/** the entries a kind starts with, also used to fill in rows the author adds */
+export function defaultTabsFor(kind: Kind): NavTab[] {
+  switch (kind) {
+    case "tabs":
+      return TAB_LABELS[getLang()].map((label) => ({ icon: "", label }));
+    case "fabMenu":
+      return FAB_MENU_TABS[getLang()].map((t) => ({ ...t }));
+    case "toolbar":
+      return TOOLBAR_ICONS.map((icon) => ({ icon, label: "" }));
+    default:
+      return defaultTabs();
+  }
+}
 
 export function makeItem(kind: Kind): Item {
   const s = KIND_SPEC[kind];
@@ -1083,11 +1340,13 @@ export function makeItem(kind: Kind): Item {
     it.radiusTop = 0;
     it.radiusBottom = 0;
   }
+  if (kind === "tabs" || kind === "fabMenu") it.tabs = defaultTabsFor(kind);
+  if (kind === "toolbar") it.tabs = defaultTabsFor(kind).slice(0, 4);
   return it;
 }
 
 /** Content-sized kinds are measured in the DOM; the rest derive from spec + size. */
-export const MEASURED: Kind[] = ["button", "extendedFab", "chip", "switch", "checkbox", "text"];
+export const MEASURED: Kind[] = ["button", "extendedFab", "chip", "switch", "checkbox", "text", "splitButton", "radio", "badge"];
 
 export function sizeOf(it: Item, widths: Record<string, number>) {
   const s = KIND_SPEC[it.kind];
@@ -1098,7 +1357,17 @@ export function sizeOf(it: Item, widths: Record<string, number>) {
     case "chip":
     case "switch":
     case "checkbox":
+    case "splitButton":
+    case "radio":
       return { w: widths[it.id] ?? 128, h: s.h };
+    case "badge":
+      return { w: widths[it.id] ?? 16, h: it.label.trim() ? s.h : 6 };
+    case "fabMenu":
+      return { w: n, h: 56 + (it.tabs?.length ?? 0) * (FAB_MENU_ITEM_H + FAB_MENU_GAP) };
+    case "toolbar":
+      return { w: toolbarWidth(it), h: s.h };
+    case "tabs":
+      return { w: n, h: s.h };
     case "text":
       return { w: widths[it.id] ?? 120, h: Math.round(n * 1.3) };
     case "iconButton":
@@ -1123,33 +1392,52 @@ export function sizeOf(it: Item, widths: Record<string, number>) {
   }
 }
 
-/** Corners for a part that is not part of a connected run. */
+/** Corners for a part that is not part of a connected run. Defaults follow the
+ *  document's shape scale; a radius the author typed in is kept as is. */
 export function baseRadii(it: Item): Radii {
   const s = KIND_SPEC[it.kind];
   switch (it.kind) {
     case "box":
     case "bottomNav":
-    case "topAppBar": {
+    case "topAppBar":
+    case "tabs": {
       const t = it.radiusTop ?? 0;
       const b = it.radiusBottom ?? 0;
       return { tl: t, tr: t, bl: b, br: b };
     }
     case "fab":
-      return uniformRadii(Math.round((it.size ?? 56) * 0.28));
+      return uniformRadii(scaleR(Math.round((it.size ?? 56) * 0.28)));
+    case "fabMenu":
+      return uniformRadii(0);
     case "iconButton":
+      return uniformRadii(scaleR((it.size ?? 48) / 2));
     case "circularProgress":
     case "loadingIndicator":
       return uniformRadii((it.size ?? 48) / 2);
     case "image":
-      return uniformRadii(it.radiusTop ?? s.radius);
     case "card":
-      return uniformRadii(it.radiusTop ?? s.radius);
-    default:
+      return uniformRadii(it.radiusTop ?? scaleR(s.radius));
+    case "badge":
+    case "radio":
+    case "splitButton":
       return uniformRadii(s.radius);
+    default:
+      return uniformRadii(scaleR(s.radius));
   }
 }
 
-export const connectSpecOf = (it: Item): ConnectSpec | undefined => KIND_SPEC[it.kind].connect;
+export const FAB_MENU_ITEM_H = 56;
+export const FAB_MENU_GAP = 8;
+/** a toolbar hugs its icon buttons: 48dp each with 4dp between, 8dp at the ends */
+export const toolbarWidth = (it: Item) => {
+  const n = Math.max(1, it.tabs?.length ?? 0);
+  return 16 + n * 48 + (n - 1) * 4;
+};
+
+export const connectSpecOf = (it: Item): ConnectSpec | undefined => {
+  const c = KIND_SPEC[it.kind].connect;
+  return c && { ...c, outer: scaleR(c.outer), inner: scaleR(c.inner) };
+};
 export const connectable = (it: Item) => !!KIND_SPEC[it.kind].connect;
 /** two parts fuse when they share an axis and a family (buttons and icon buttons mix) */
 export const canJoin = (a: Item, b: Item) => {
@@ -1171,11 +1459,17 @@ export function iconSlotsOf(it: Item): IconSlot[] {
         { key: "icon2", label: t("trailing"), value: it.icon2 ?? null },
       ];
     case "bottomNav":
+    case "toolbar":
       return (it.tabs ?? []).map((t, i) => ({
         key: `tab:${i}`,
         label: `${i + 1}`,
         value: t.icon || null,
       }));
+    case "fabMenu":
+      return [
+        { key: "icon", label: t("icon"), value: it.icon },
+        ...(it.tabs ?? []).map((t, i) => ({ key: `tab:${i}`, label: `${i + 1}`, value: t.icon || null })),
+      ];
     default:
       return KIND_SPEC[it.kind].hasIcon
         ? [{ key: "icon", label: t("icon"), value: it.icon }]
