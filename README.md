@@ -22,7 +22,9 @@
   <a href="#日本語">日本語</a> · <a href="#中文">中文</a> · <a href="https://lnkiai.github.io/m3e-canvas/">Open the app</a>
 </p>
 
-![The M3E Canvas editor with two linked screens](docs/editor.png)
+![A habit-tracker sketched in M3E Canvas on the left, and the same app running on Android on the right](docs/editor-to-android.gif)
+
+<p align="center"><sub>Left: the sketch in the editor. Right: the app an AI coding tool built from the generated prompt, running on Android. (<a href="docs/editor-to-android.mp4">mp4</a>)</sub></p>
 
 ## What it does
 
@@ -97,7 +99,9 @@ MIT © lnkiai
 
 公開版: https://lnkiai.github.io/m3e-canvas/
 
-![M3E Canvas のエディタ画面](docs/editor.png)
+![左は M3E Canvas で組んだ習慣トラッカー、右は同じアプリが Android で動いている様子](docs/editor-to-android.gif)
+
+<p align="center"><sub>左: エディタ上のスケッチ。右: 生成したプロンプトから AI コーディングツールが作ったアプリを Android で動かしたもの。（<a href="docs/editor-to-android.mp4">mp4</a>）</sub></p>
 
 ### できること
 
@@ -141,7 +145,9 @@ MIT © lnkiai
 
 在线版本：https://lnkiai.github.io/m3e-canvas/
 
-![M3E Canvas 编辑器](docs/editor.png)
+![左侧是在 M3E Canvas 中拼装的习惯追踪应用，右侧是同一应用在 Android 上运行](docs/editor-to-android.gif)
+
+<p align="center"><sub>左：编辑器中的草图。右：AI 编程工具根据生成的提示词做出的应用，在 Android 上运行。（<a href="docs/editor-to-android.mp4">mp4</a>）</sub></p>
 
 ### 功能
 
