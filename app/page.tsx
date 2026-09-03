@@ -12,7 +12,10 @@ import { AnimatePresence, motion, useSpring } from "motion/react";
 import { toPng } from "html-to-image";
 import { buildPrompt } from "@/lib/prompt";
 import {
+  Action,
+  actionsOf,
   Axis,
+  BACK_TARGET,
   baseRadii,
   BEZEL,
   canJoin,
@@ -32,12 +35,14 @@ import {
   Kind,
   KIND_ORDER,
   KIND_SPEC,
+  collapseFree,
+  layoutOf,
   lerp,
   makeItem,
   MEASURED,
   NAV_BAR_H,
+  Palette,
   paletteOf,
-  PALETTES,
   PHONE_H,
   PHONE_MARGIN,
   PHONE_R,
@@ -51,17 +56,21 @@ import {
   Transition,
   TRANSITIONS,
   uid,
+  uniformRadii,
 } from "@/lib/tokens";
-import { Icon, M3Node, MeasuredContent } from "@/components/M3Node";
+import { Icon, M3Node, M3Static, MeasuredContent } from "@/components/M3Node";
+import { LayersPanel } from "@/components/Layers";
 import { FrameInspector, Inspector } from "@/components/Inspector";
 import { Preview } from "@/components/Preview";
 import { Logo } from "@/components/Logo";
 import { PartsPalette } from "@/components/PartsPalette";
 import { PromptPanel } from "@/components/PromptPanel";
-import { Mode, Toolbar } from "@/components/Toolbar";
-import { BottomSheet, MobileActionBar, MobileInspector, MobileSettings } from "@/components/Mobile";
-import { IconBtn, Segmented } from "@/components/ui";
-import { Lang, LangContext, setGlobalLang, t } from "@/lib/i18n";
+import { GitHubLink, Mode, Toolbar } from "@/components/Toolbar";
+import { LangMenu } from "@/components/Menus";
+import { ColorPanel } from "@/components/ColorPanel";
+import { BottomSheet, MobileActionBar, MobileInspector, MobileLang, MobileSettings } from "@/components/Mobile";
+import { ConfirmDialog, IconBtn, Segmented } from "@/components/ui";
+import { Lang, LangContext, isLang, setGlobalLang, t } from "@/lib/i18n";
 
 /** the dragged part's own travel: a little lag reads as weight */
 const CARRY = {
@@ -79,6 +88,8 @@ const OPEN = {
 };
 const INSTANT = { duration: 0 };
 
+/** the icon rail on the left edge of the parts / layers panel */
+const RAIL_W = 52;
 const MIN_Z = 0.25;
 const MAX_Z = 3;
 const HISTORY_MAX = 100;
@@ -128,7 +139,8 @@ type Gesture =
       fy: number;
       groups: { id: string; x: number; y: number }[];
       moved: boolean;
-    };
+    }
+  | { kind: "group"; id: string; sx: number; sy: number; gx: number; gy: number; moved: boolean; overBin: boolean };
 
 type Snapshot = { groups: Group[]; frames: Frame[] };
 
@@ -206,10 +218,15 @@ export default function Page() {
   const [groups, setGroups] = useState<Group[]>(seed);
   const [frames, setFrames] = useState<Frame[]>(SEED_FRAMES);
   const [paletteKey, setPaletteKey] = useState("purple");
+  const [customPalette, setCustomPalette] = useState<Palette | null>(null);
+  const [dynamicColor, setDynamicColor] = useState(false);
   const [frame, setFrame] = useState<FrameMode>("phone");
   const [lang, setLang] = useState<Lang>("ja");
   const [isMobile, setIsMobile] = useState(false);
-  const [sheet, setSheet] = useState<"edit" | "settings" | null>(null);
+  const [sheet, setSheet] = useState<"edit" | "settings" | "lang" | null>(null);
+  const [confirmClear, setConfirmClear] = useState(false);
+  /** frame being rendered offscreen for the PNG export */
+  const [exportFrame, setExportFrame] = useState<Frame | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [brief, setBrief] = useState("");
@@ -220,7 +237,12 @@ export default function Page() {
   const [spaceHeld, setSpaceHeld] = useState(false);
   const [leftOpen, setLeftOpen] = useState(true);
   const [rightOpen, setRightOpen] = useState(true);
-  const [leftW, setLeftW] = useState(232);
+  const [leftW, setLeftW] = useState(RAIL_W + 268);
+  const [leftTab, setLeftTab] = useState<"parts" | "layers" | "colors">("parts");
+  /** pointer over the collapsed rail: the logo becomes the open button */
+  const [railHover, setRailHover] = useState(false);
+  /** the screen whose layers are listed when nothing on a screen is selected */
+  const [layersFrameId, setLayersFrameId] = useState<string | null>(null);
   const [rightW, setRightW] = useState(320);
   const [rightTab, setRightTab] = useState<"edit" | "prompt">("edit");
   const [favorites, setFavorites] = useState<Kind[]>([]);
@@ -235,7 +257,7 @@ export default function Page() {
   const [resizing, setResizing] = useState<"left" | "right" | null>(null);
   const [, bumpHistory] = useState(0);
 
-  const p = paletteOf(paletteKey);
+  const p = paletteOf(paletteKey, customPalette);
 
   const canvasRef = useRef<HTMLDivElement>(null);
   const measureEls = useRef<Map<string, HTMLElement>>(new Map());
@@ -348,6 +370,8 @@ export default function Page() {
         if (Array.isArray(doc.groups)) setGroups(migrateGroups(doc.groups, frames));
         if (Array.isArray(doc.frames)) setFrames(doc.frames);
         if (doc.paletteKey) setPaletteKey(doc.paletteKey);
+        if (doc.customPalette && typeof doc.customPalette.primary === "string") setCustomPalette(doc.customPalette);
+        if (typeof doc.dynamicColor === "boolean") setDynamicColor(doc.dynamicColor);
         // frame mode is decided by the device (media-query effect), not restored
         if (typeof doc.title === "string") setTitle(doc.title);
         if (typeof doc.brief === "string") setBrief(doc.brief);
@@ -358,17 +382,15 @@ export default function Page() {
         if (ui.view) setView(ui.view);
         if (typeof ui.leftOpen === "boolean") setLeftOpen(ui.leftOpen);
         if (typeof ui.rightOpen === "boolean") setRightOpen(ui.rightOpen);
-        if (ui.leftW) setLeftW(ui.leftW);
+        if (ui.leftW) setLeftW(Math.max(RAIL_W + 244, ui.leftW));
         if (ui.rightW) setRightW(ui.rightW);
         if (Array.isArray(ui.favorites)) setFavorites(ui.favorites);
         if (ui.mode) setMode(ui.mode);
-        if (ui.lang === "ja" || ui.lang === "en") setLang(ui.lang);
+        if (isLang(ui.lang)) setLang(ui.lang);
       } else {
-        if (
-          navigator.language &&
-          !navigator.language.toLowerCase().startsWith("ja")
-        )
-          setLang("en");
+        const nl = (navigator.language ?? "").toLowerCase();
+        if (nl.startsWith("zh")) setLang("zh");
+        else if (!nl.startsWith("ja")) setLang("en");
         queueMicrotask(() => fitRef.current());
       }
     } catch {}
@@ -442,10 +464,10 @@ export default function Page() {
     try {
       localStorage.setItem(
         DOC_KEY,
-        JSON.stringify({ groups, frames, paletteKey, frame, title, brief }),
+        JSON.stringify({ groups, frames, paletteKey, frame, title, brief, customPalette: customPalette ?? undefined, dynamicColor }),
       );
     } catch {}
-  }, [groups, frames, paletteKey, frame, title, brief]);
+  }, [groups, frames, paletteKey, frame, title, brief, customPalette, dynamicColor]);
 
   useEffect(() => {
     if (!loadedRef.current) return;
@@ -521,7 +543,7 @@ export default function Page() {
     };
   };
   const inBin = (clientX: number) =>
-    !mobileRef.current && leftOpenRef.current && clientX >= 0 && clientX <= leftWRef.current;
+    !mobileRef.current && clientX >= 0 && clientX <= (leftOpenRef.current ? leftWRef.current : RAIL_W);
 
   const setZoomAt = useCallback((nz: number, cx?: number, cy?: number) => {
     const r = canvasRect();
@@ -561,16 +583,11 @@ export default function Page() {
       x1 = -Infinity;
       y1 = -Infinity;
       for (const g of gs) {
-        let off = 0;
-        for (const it of g.items) {
-          const sz = sizeOf(it, widthsRef.current);
-          const l = g.axis === "x" ? g.x + off : g.x;
-          const t = g.axis === "x" ? g.y : g.y + off;
-          x0 = Math.min(x0, l);
-          y0 = Math.min(y0, t);
-          x1 = Math.max(x1, l + sz.w);
-          y1 = Math.max(y1, t + sz.h);
-          off += (g.axis === "x" ? sz.w : sz.h) + GAP;
+        for (const pl of layoutOf(g, widthsRef.current)) {
+          x0 = Math.min(x0, pl.x);
+          y0 = Math.min(y0, pl.y);
+          x1 = Math.max(x1, pl.x + pl.w);
+          y1 = Math.max(y1, pl.y + pl.h);
         }
       }
     }
@@ -699,7 +716,7 @@ export default function Page() {
       let best: Snap | null = null;
       let bestD = 1;
       for (const g of groupsRef.current) {
-        if (g.axis !== spec.axis || !g.items[0] || !canJoin(g.items[0], item))
+        if (g.free || g.axis !== spec.axis || !g.items[0] || !canJoin(g.items[0], item))
           continue;
         for (let k = 0; k <= g.items.length; k++) {
           const r = restPos(g, k, sz);
@@ -732,15 +749,10 @@ export default function Page() {
       const xs: number[] = [];
       const ys: number[] = [];
       for (const g of groupsRef.current) {
-        let off = 0;
-        for (const it of g.items) {
-          const s2 = sizeOf(it, widthsRef.current);
-          const l = g.axis === "x" ? g.x + off : g.x;
-          const tp = g.axis === "x" ? g.y : g.y + off;
-          off += (g.axis === "x" ? s2.w : s2.h) + GAP;
-          if (it.id === item.id) continue;
-          xs.push(l, l + s2.w / 2, l + s2.w);
-          ys.push(tp, tp + s2.h / 2, tp + s2.h);
+        for (const pl of layoutOf(g, widthsRef.current)) {
+          if (pl.item.id === item.id) continue;
+          xs.push(pl.x, pl.x + pl.w / 2, pl.x + pl.w);
+          ys.push(pl.y, pl.y + pl.h / 2, pl.y + pl.h);
         }
       }
       if (frameRef.current === "phone") {
@@ -828,6 +840,16 @@ export default function Page() {
     e.preventDefault();
     e.stopPropagation();
     flushPending();
+    if (g.free) {
+      setSelectedIds((cur) => (e.shiftKey ? [...cur.filter((x) => !g.items.some((it) => it.id === x)), ...g.items.map((it) => it.id)] : g.items.map((it) => it.id)));
+      setSelectedFrameId(null);
+      setSelectedLinkId(null);
+      setRightTab("edit");
+      const gg: Gesture = { kind: "group", id: g.id, sx: e.clientX, sy: e.clientY, gx: g.x, gy: g.y, moved: false, overBin: false };
+      gestureRef.current = gg;
+      setGesture(gg);
+      return;
+    }
     const pt = toWorld(e.clientX, e.clientY);
     const off = prefixOf(g, index);
     const left = g.axis === "x" ? g.x + off : g.x;
@@ -1077,13 +1099,8 @@ export default function Page() {
     const out: { id: string; l: number; t: number; r: number; b: number }[] =
       [];
     for (const g of groupsRef.current) {
-      let off = 0;
-      for (const it of g.items) {
-        const sz = sizeOf(it, widthsRef.current);
-        const l = g.axis === "x" ? g.x + off : g.x;
-        const t = g.axis === "x" ? g.y : g.y + off;
-        out.push({ id: it.id, l, t, r: l + sz.w, b: t + sz.h });
-        off += (g.axis === "x" ? sz.w : sz.h) + GAP;
+      for (const pl of layoutOf(g, widthsRef.current)) {
+        out.push({ id: pl.item.id, l: pl.x, t: pl.y, r: pl.x + pl.w, b: pl.y + pl.h });
       }
     }
     return out;
@@ -1181,6 +1198,21 @@ export default function Page() {
         }));
         return;
       }
+      if (g.kind === "group") {
+        const z = viewRef.current.z;
+        const dx = (e.clientX - g.sx) / z;
+        const dy = (e.clientY - g.sy) / z;
+        if (!g.moved) {
+          if (Math.hypot(dx, dy) * z < 4) return;
+          g.moved = true;
+          snapshot();
+        }
+        instantRef.current.add(g.id);
+        g.overBin = inBin(e.clientX);
+        setGesture({ ...g });
+        setGroups((gs) => gs.map((gr) => (gr.id === g.id ? { ...gr, x: Math.round(g.gx + dx), y: Math.round(g.gy + dy) } : gr)));
+        return;
+      }
       if (g.kind === "frame") {
         const z = viewRef.current.z;
         const dx = (e.clientX - g.sx) / z;
@@ -1229,9 +1261,15 @@ export default function Page() {
       }
       setGesture({ ...g });
     };
-    const up = () => {
+    const up = (e: PointerEvent) => {
+      const g = gestureRef.current;
       gestureRef.current = null;
       setGesture(null);
+      // a group dragged onto the parts panel is deleted, like a single part
+      if (g?.kind === "group" && g.moved && inBin(e.clientX)) {
+        setGroups((gs) => gs.filter((x) => x.id !== g.id));
+        setSelectedIds([]);
+      }
     };
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);
@@ -1248,7 +1286,7 @@ export default function Page() {
   useEffect(() => {
     if (!resizing) return;
     const move = (e: PointerEvent) => {
-      if (resizing === "left") setLeftW(clamp(e.clientX, 196, 400));
+      if (resizing === "left") setLeftW(clamp(e.clientX, RAIL_W + 244, 480));
       else setRightW(clamp(window.innerWidth - e.clientX, 280, 480));
     };
     const up = () => setResizing(null);
@@ -1330,6 +1368,7 @@ export default function Page() {
     setGroups((prev) =>
       prev
         .map((g) => {
+          if (g.free) return collapseFree({ ...g, items: g.items.filter((it) => !ids.has(it.id)) }, widthsRef.current);
           let x = g.x;
           let y = g.y;
           let items = g.items;
@@ -1349,6 +1388,25 @@ export default function Page() {
 
   const duplicateSelected = useCallback(() => {
     if (!selected) return;
+    /* a selected hand-made group is copied whole, keeping its layout */
+    const fg = groupsRef.current.find((g) => g.free && g.items.some((it) => it.id === selected.id));
+    if (fg && fg.items.every((it) => selectedIds.includes(it.id))) {
+      const idMap = new Map(fg.items.map((it) => [it.id, uid()]));
+      const pos: Record<string, { x: number; y: number }> = {};
+      for (const it of fg.items) pos[idMap.get(it.id)!] = fg.pos?.[it.id] ?? { x: 0, y: 0 };
+      const copyG: Group = {
+        ...fg,
+        id: uid(),
+        x: fg.x + 24,
+        y: fg.y + 24,
+        pos,
+        items: fg.items.map((it) => ({ ...it, id: idMap.get(it.id)!, tabs: it.tabs?.map((t) => ({ ...t })) })),
+      };
+      snapshot();
+      setGroups((prev) => [...prev, copyG]);
+      setSelectedIds(copyG.items.map((it) => it.id));
+      return;
+    }
     const rect = itemRects().find((r) => r.id === selected.id);
     if (!rect) return;
     const copy: Item = {
@@ -1368,7 +1426,82 @@ export default function Page() {
       },
     ]);
     setSelectedIds([copy.id]);
-  }, [selected, itemRects, snapshot]);
+  }, [selected, selectedIds, itemRects, snapshot]);
+
+  /** the free group the whole selection belongs to, if it is exactly one */
+  const selectedGroup = useMemo(() => {
+    if (selectedIds.length === 0) return null;
+    const g = groups.find((x) => x.free && x.items.some((it) => it.id === selectedIds[0]));
+    if (!g) return null;
+    const ids = new Set(g.items.map((it) => it.id));
+    return selectedIds.every((id) => ids.has(id)) && selectedIds.length === g.items.length ? g : null;
+  }, [groups, selectedIds]);
+
+  /** Pull the selected parts out of their runs into one free group that keeps
+   *  their positions. It takes the layer slot of the topmost run involved. */
+  const groupSelected = useCallback(() => {
+    const ids = new Set(selectedIds);
+    if (ids.size < 2) return;
+    const rects = new Map(itemRects().map((r) => [r.id, r]));
+    const picked: Item[] = [];
+    let top = -1;
+    groupsRef.current.forEach((g, i) => {
+      for (const it of g.items) if (ids.has(it.id)) {
+        picked.push(it);
+        top = i;
+      }
+    });
+    if (picked.length < 2) return;
+    const l = Math.min(...picked.map((it) => rects.get(it.id)!.l));
+    const t = Math.min(...picked.map((it) => rects.get(it.id)!.t));
+    const pos: Record<string, { x: number; y: number }> = {};
+    for (const it of picked) pos[it.id] = { x: rects.get(it.id)!.l - l, y: rects.get(it.id)!.t - t };
+    const ng: Group = { id: uid(), x: l, y: t, axis: "x", items: picked, free: true, pos };
+    snapshot();
+    setGroups((prev) => {
+      const out: Group[] = [];
+      prev.forEach((g, i) => {
+        if (g.free) {
+          const rest = g.items.filter((it) => !ids.has(it.id));
+          if (rest.length) out.push(collapseFree({ ...g, items: rest }, widthsRef.current));
+        } else {
+          let x = g.x;
+          let y = g.y;
+          let items = g.items;
+          while (items.length && ids.has(items[0].id)) {
+            const sz = sizeOf(items[0], widthsRef.current);
+            if (g.axis === "x") x += sz.w + GAP;
+            else y += sz.h + GAP;
+            items = items.slice(1);
+          }
+          items = items.filter((it) => !ids.has(it.id));
+          if (items.length) {
+            if (x !== g.x || y !== g.y) instantRef.current.add(g.id);
+            out.push({ ...g, x, y, items });
+          }
+        }
+        if (i === top) out.push(ng);
+      });
+      return out;
+    });
+    setSelectedIds(picked.map((it) => it.id));
+  }, [selectedIds, itemRects, snapshot]);
+
+  /** Split a free group back into single runs at their current positions, in the same layer slot. */
+  const ungroupSelected = useCallback(() => {
+    const g = selectedGroup;
+    if (!g) return;
+    snapshot();
+    const singles: Group[] = layoutOf(g, widthsRef.current).map((pl) => ({
+      id: uid(),
+      x: pl.x,
+      y: pl.y,
+      axis: connectSpecOf(pl.item)?.axis ?? "x",
+      items: [pl.item],
+    }));
+    for (const sg of singles) instantRef.current.add(sg.id);
+    setGroups((prev) => prev.flatMap((x) => (x.id === g.id ? singles : [x])));
+  }, [selectedGroup, snapshot]);
 
   const nudge = useCallback(
     (dx: number, dy: number) => {
@@ -1413,6 +1546,7 @@ export default function Page() {
   );
 
   const clearAll = () => {
+    setConfirmClear(false);
     if (groupsRef.current.length === 0 && framesRef.current.length === 0)
       return;
     snapshot();
@@ -1530,19 +1664,42 @@ export default function Page() {
     setFrames((fs) => fs.map((f) => (f.id === id ? { ...f, ...patch } : f)));
   };
 
+  /** a screen takes everything on it along, and links into it are dropped */
   const deleteFrame = useCallback(
     (id: string) => {
       snapshot();
-      setFrames((fs) => fs.filter((f) => f.id !== id));
+      const gone = new Set(
+        groupsRef.current
+          .filter((g) => frameOfGroup(g, framesRef.current, widthsRef.current)?.id === id)
+          .map((g) => g.id),
+      );
+      setFrames((fs) =>
+        fs
+          .filter((f) => f.id !== id)
+          .map((f) => {
+            if (!f.swipe) return f;
+            const swipe = Object.fromEntries(Object.entries(f.swipe).filter(([, to]) => to !== id));
+            return { ...f, swipe: Object.keys(swipe).length ? swipe : undefined };
+          }),
+      );
       setGroups((gs) =>
-        gs.map((g) => ({
-          ...g,
-          items: g.items.map((it) =>
-            it.action?.to === id ? { ...it, action: undefined } : it,
-          ),
-        })),
+        gs
+          .filter((g) => !gone.has(g.id))
+          .map((g) => ({
+            ...g,
+            items: g.items.map((it) => {
+              const next = { ...it };
+              if (next.action?.to === id) next.action = undefined;
+              if (next.actions) {
+                const actions = Object.fromEntries(Object.entries(next.actions).filter(([, a]) => a.to !== id));
+                next.actions = Object.keys(actions).length ? actions : undefined;
+              }
+              return next;
+            }),
+          })),
       );
       setSelectedFrameId(null);
+      setSelectedIds((cur) => cur.filter((x) => !groupsRef.current.some((g) => gone.has(g.id) && g.items.some((it) => it.id === x))));
     },
     [snapshot],
   );
@@ -1562,31 +1719,112 @@ export default function Page() {
       .filter(
         (g) => frameOfGroup(g, framesRef.current, widthsRef.current)?.id === id,
       )
-      .map((g) => ({
-        ...g,
-        id: uid(),
-        x: g.x + dx,
-        items: g.items.map((it) => ({
-          ...it,
+      .map((g) => {
+        const idMap = new Map(g.items.map((it) => [it.id, uid()]));
+        const pos = g.pos
+          ? Object.fromEntries(Object.entries(g.pos).map(([id, o]) => [idMap.get(id) ?? id, o]))
+          : undefined;
+        return {
+          ...g,
           id: uid(),
-          tabs: it.tabs?.map((t) => ({ ...t })),
-        })),
-      }));
+          x: g.x + dx,
+          pos,
+          items: g.items.map((it) => ({
+            ...it,
+            id: idMap.get(it.id)!,
+            tabs: it.tabs?.map((t) => ({ ...t })),
+          })),
+        };
+      });
     setFrames((fs) => [...fs, nf]);
     setGroups((gs) => [...gs, ...copies]);
     setSelectedFrameId(nf.id);
   };
+  const duplicateFrameRef = useRef(duplicateFrame);
+  duplicateFrameRef.current = duplicateFrame;
 
+  /** The screen is re-rendered offscreen at 1:1 with static parts, so the
+   *  canvas zoom, selection outlines and in-flight animations never leak into the PNG. */
   const saveFrameImage = async (f: Frame) => {
-    const el = document.querySelector<HTMLElement>(`[data-screen="${f.id}"]`);
-    if (!el) return;
-    setSelectedIds([]);
-    await new Promise((r) => requestAnimationFrame(() => r(null)));
-    const url = await toPng(el, { pixelRatio: 2, cacheBust: true });
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${f.name || "screen"}.png`;
-    a.click();
+    setExportFrame(f);
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => r(null))));
+    try {
+      await document.fonts?.ready;
+      const el = document.querySelector<HTMLElement>(`[data-export="${f.id}"]`);
+      if (!el) return;
+      const url = await toPng(el, { pixelRatio: 2, cacheBust: true, width: PHONE_W, height: PHONE_H });
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${f.name || "screen"}.png`;
+      a.click();
+    } finally {
+      setExportFrame(null);
+    }
+  };
+
+  /** the runs of one screen drawn with plain divs: the export layer */
+  const renderExport = (f: Frame) => {
+    const gs = groups.filter((g) => frameOfGroup(g, frames, widths)?.id === f.id);
+    return (
+      <div
+        data-export={f.id}
+        style={{
+          position: "relative",
+          width: PHONE_W,
+          height: PHONE_H,
+          background: p[f.bg ?? "surface"],
+          overflow: "hidden",
+        }}
+      >
+        {gs.map((g) =>
+          g.free ? (
+            layoutOf(g, widths).map((pl) => (
+              <div key={pl.item.id} style={{ position: "absolute", left: pl.x - f.x, top: pl.y - f.y }}>
+                <M3Static
+                  item={pl.item}
+                  palette={p}
+                  radii={connectSpecOf(pl.item) ? uniformRadii(connectSpecOf(pl.item)!.outer) : baseRadii(pl.item)}
+                  style={MEASURED.includes(pl.item.kind) ? undefined : { width: pl.w, height: pl.h }}
+                />
+              </div>
+            ))
+          ) : (
+          <div
+            key={g.id}
+            style={{
+              position: "absolute",
+              left: g.x - f.x,
+              top: g.y - f.y,
+              display: "flex",
+              flexDirection: g.axis === "x" ? "row" : "column",
+              alignItems: g.axis === "x" ? "center" : "stretch",
+              gap: GAP,
+            }}
+          >
+            {g.items.map((it, i) => {
+              const conn = connectSpecOf(it);
+              const n = g.items.length;
+              const radii =
+                conn && n > 1
+                  ? runRadii(g.axis, i === 0, i === n - 1, false, false, 0, conn.outer, conn.inner)
+                  : conn
+                    ? uniformRadii(conn.outer)
+                    : baseRadii(it);
+              return (
+                <M3Static
+                  key={it.id}
+                  item={it}
+                  palette={p}
+                  radii={radii}
+                  style={MEASURED.includes(it.kind) ? undefined : { width: sizeOf(it, widths).w, height: sizeOf(it, widths).h }}
+                />
+              );
+            })}
+          </div>
+          ),
+        )}
+      </div>
+    );
   };
 
   const openPreview = (startId?: string | null) => {
@@ -1609,6 +1847,8 @@ export default function Page() {
           t.tagName === "TEXTAREA" ||
           t.isContentEditable);
       if (typing) return;
+      // the confirm dialog and the preview own the keyboard while they are up
+      if (confirmClear || previewId !== null) return;
       const mod = e.ctrlKey || e.metaKey;
       if (mod && e.key.toLowerCase() === "z") {
         e.preventDefault();
@@ -1623,7 +1863,14 @@ export default function Page() {
       }
       if (mod && e.key.toLowerCase() === "d") {
         e.preventDefault();
-        duplicateSelected();
+        if (selectedIds.length === 0 && selectedFrameId) duplicateFrameRef.current(selectedFrameId);
+        else duplicateSelected();
+        return;
+      }
+      if (mod && e.key.toLowerCase() === "g") {
+        e.preventDefault();
+        if (e.shiftKey) ungroupSelected();
+        else groupSelected();
         return;
       }
       if (e.key === " " && !e.repeat) {
@@ -1677,6 +1924,8 @@ export default function Page() {
   }, [
     deleteSelected,
     duplicateSelected,
+    groupSelected,
+    ungroupSelected,
     nudge,
     redo,
     undo,
@@ -1684,6 +1933,8 @@ export default function Page() {
     selectedIds,
     selectedFrameId,
     deleteFrame,
+    confirmClear,
+    previewId,
   ]);
   const openPreviewRef = useRef(openPreview);
   openPreviewRef.current = openPreview;
@@ -1692,8 +1943,8 @@ export default function Page() {
   const dragSize = drag ? sizeOf(drag.item, widths) : { w: 0, h: 0 };
   const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
   const doc: Doc = useMemo(
-    () => ({ groups, frames, paletteKey, frame, title, brief }),
-    [groups, frames, paletteKey, frame, title, brief],
+    () => ({ groups, frames, paletteKey, frame, title, brief, customPalette: customPalette ?? undefined, dynamicColor }),
+    [groups, frames, paletteKey, frame, title, brief, customPalette, dynamicColor],
   );
 
   /** arrows from tappable parts to the frames they open */
@@ -1712,8 +1963,9 @@ export default function Page() {
     }[] = [];
     for (const g of groups) {
       for (const it of g.items) {
-        if (!it.action) continue;
-        const f = frames.find((x) => x.id === it.action!.to);
+        for (const { slot, action } of actionsOf(it)) {
+        if (action.to === BACK_TARGET) continue;
+        const f = frames.find((x) => x.id === action.to);
         const r = rects.find((x) => x.id === it.id);
         if (!f || !r) continue;
         const fr = frameRect(f);
@@ -1730,43 +1982,49 @@ export default function Page() {
         const mx = 0.125 * sx + 0.375 * c1x + 0.375 * c2x + 0.125 * tx;
         const my = 0.125 * sy + 0.375 * sy + 0.375 * ty + 0.125 * ty;
         out.push({
-          id: it.id,
+          id: `${it.id}|${slot}`,
           d,
           mx,
           my,
           tx,
           ty,
           ang: rightward ? 0 : 180,
-          t: it.action.transition,
+          t: action.transition,
         });
+        }
       }
     }
     return out;
   }, [groups, frames, frame, itemRects, widths]);
 
-  const setLinkTransition = (itemId: string, transition: Transition) => {
-    snapshotFor("link:" + itemId);
+  /** apply a change to the action behind a link id ("itemId|slot") */
+  const patchLink = (linkId: string, fn: (a: Action) => Action | undefined) => {
+    const [itemId, slot] = linkId.split("|");
     setGroups((gs) =>
       gs.map((g) => ({
         ...g,
-        items: g.items.map((it) =>
-          it.id === itemId && it.action
-            ? { ...it, action: { ...it.action, transition } }
-            : it,
-        ),
+        items: g.items.map((it) => {
+          if (it.id !== itemId) return it;
+          if (!slot) return { ...it, action: it.action ? fn(it.action) : undefined };
+          const cur = it.actions?.[slot];
+          if (!cur) return it;
+          const next = fn(cur);
+          const actions = { ...(it.actions ?? {}) };
+          if (next) actions[slot] = next;
+          else delete actions[slot];
+          return { ...it, actions: Object.keys(actions).length ? actions : undefined };
+        }),
       })),
     );
   };
-  const removeLink = (itemId: string) => {
+
+  const setLinkTransition = (linkId: string, transition: Transition) => {
+    snapshotFor("link:" + linkId);
+    patchLink(linkId, (a) => ({ ...a, transition }));
+  };
+  const removeLink = (linkId: string) => {
     snapshot();
-    setGroups((gs) =>
-      gs.map((g) => ({
-        ...g,
-        items: g.items.map((it) =>
-          it.id === itemId ? { ...it, action: undefined } : it,
-        ),
-      })),
-    );
+    patchLink(linkId, () => undefined);
     setSelectedLinkId(null);
   };
 
@@ -1799,7 +2057,75 @@ export default function Page() {
     return m;
   }, [groups, frames, frame, widths]);
 
+  /** the screen whose layers the panel lists: the selection's, else the chosen one */
+  const layersFrame = useMemo(() => {
+    if (frame !== "phone") return null;
+    if (primaryId) {
+      const g = groups.find((x) => x.items.some((it) => it.id === primaryId));
+      const fid = g ? frameOf.get(g.id) : undefined;
+      if (fid) return frames.find((f) => f.id === fid) ?? null;
+    }
+    if (selectedFrameId) return frames.find((f) => f.id === selectedFrameId) ?? null;
+    return frames.find((f) => f.id === layersFrameId) ?? frames[0] ?? null;
+  }, [frame, primaryId, groups, frameOf, frames, selectedFrameId, layersFrameId]);
+  const layerGroups = useMemo(
+    () => (layersFrame ? groups.filter((g) => frameOf.get(g.id) === layersFrame.id) : []),
+    [groups, frameOf, layersFrame],
+  );
+  const reorderLayers = (topFirst: string[]) => {
+    const inFrame = new Set(topFirst);
+    const byId = new Map(groupsRef.current.map((g) => [g.id, g]));
+    const ordered = [...topFirst].reverse().map((id) => byId.get(id)).filter((g): g is Group => !!g);
+    if (ordered.length !== inFrame.size) return;
+    snapshotFor("layers:" + (layersFrame?.id ?? ""));
+    for (const id of inFrame) instantRef.current.add(id);
+    setGroups((gs) => [...gs.filter((g) => !inFrame.has(g.id)), ...ordered]);
+  };
+
   const renderGroup = (g: Group, ox: number, oy: number) => {
+    if (g.free) {
+      const instantG = instantRef.current.has(g.id);
+      const allOn = g.items.every((it) => selectedSet.has(it.id));
+      return (
+        <motion.div
+          key={g.id}
+          initial={false}
+          animate={{ x: g.x - ox, y: g.y - oy }}
+          transition={instantG ? INSTANT : OPEN}
+          style={{ position: "absolute", left: 0, top: 0 }}
+        >
+          {layoutOf(g, widths).map((pl) => (
+            <div key={pl.item.id} style={{ position: "absolute", left: pl.x - g.x, top: pl.y - g.y }}>
+              <M3Node
+                item={pl.item}
+                palette={p}
+                widths={widths}
+                radii={connectSpecOf(pl.item) ? uniformRadii(connectSpecOf(pl.item)!.outer) : baseRadii(pl.item)}
+                pressed={false}
+                selected={selectedSet.has(pl.item.id)}
+                interactive={!handMode}
+                onPointerDown={(e) => onItemPointerDown(e, g, pl.index, pl.item)}
+              />
+            </div>
+          ))}
+          {allOn && (
+            <div
+              aria-hidden
+              style={{
+                position: "absolute",
+                left: -6,
+                top: -6,
+                width: groupBounds(g, widths).r - g.x + 12,
+                height: groupBounds(g, widths).b - g.y + 12,
+                border: `${1.5 / view.z}px dashed ${p.primary}`,
+                borderRadius: 10,
+                pointerEvents: "none",
+              }}
+            />
+          )}
+        </motion.div>
+      );
+    }
     const snap = drag?.active && drag.snap?.groupId === g.id ? drag.snap : null;
     const pull = snap?.pull ?? 0;
     const phMain = snap ? (g.axis === "x" ? dragSize.w : dragSize.h) * pull : 0;
@@ -1899,7 +2225,6 @@ export default function Page() {
     flex: "0 0 auto",
   };
 
-  const showLeft = leftOpen && !isMobile;
   const showRight = rightOpen && !isMobile;
   const guide = drag?.active ? drag.guide : null;
   const visibleWorld = (() => {
@@ -1962,50 +2287,157 @@ export default function Page() {
             ))}
         </div>
 
-        {/* ---- left: parts ---- */}
-        {showLeft && (
-          <aside style={{ ...panelStyle, width: leftW }}>
+        {exportFrame && (
+          <div aria-hidden style={{ position: "fixed", left: -99999, top: 0, pointerEvents: "none" }}>
+            {renderExport(exportFrame)}
+          </div>
+        )}
+
+        {/* ---- left: rail + parts / layers ---- */}
+        {!isMobile && (
+          <aside style={{ ...panelStyle, width: leftOpen ? leftW : RAIL_W, flexDirection: "row", transition: "width 200ms cubic-bezier(0.2, 0, 0, 1)" }}>
             <div
+              onPointerEnter={() => setRailHover(true)}
+              onPointerLeave={() => setRailHover(false)}
+              onClick={(e) => {
+                // a click on the rail's empty background opens the panel
+                if (!leftOpen && e.target === e.currentTarget) setLeftOpen(true);
+              }}
               style={{
+                width: RAIL_W,
+                flex: "0 0 auto",
                 display: "flex",
+                flexDirection: "column",
                 alignItems: "center",
-                gap: 8,
-                padding: "10px 10px 0 14px",
+                gap: 6,
+                padding: "10px 0",
+                background: p.surfaceContainerLow,
+                cursor: leftOpen ? undefined : "pointer",
               }}
             >
-              <Logo size={32} color={p.primary} glyph={p.onPrimary} />
-              <span
+              {!leftOpen && railHover ? (
+                <IconBtn icon="left_panel_open" p={p} on onClick={() => setLeftOpen(true)} title={t("openPanel", lang)} size={40} />
+              ) : (
+                <div
+                  onClick={() => !leftOpen && setLeftOpen(true)}
+                  style={{ width: 40, height: 40, display: "grid", placeItems: "center", cursor: leftOpen ? "default" : "pointer" }}
+                >
+                  <Logo size={32} color={p.primary} glyph={p.onPrimary} />
+                </div>
+              )}
+              <div style={{ height: 6 }} />
+              <IconBtn
+                icon="add_box"
+                p={p}
+                on={leftOpen && leftTab === "parts"}
+                onClick={() => {
+                  setLeftTab("parts");
+                  setLeftOpen(true);
+                }}
+                title={t("parts", lang)}
+                size={44}
+              />
+              <IconBtn
+                icon="layers"
+                p={p}
+                on={leftOpen && leftTab === "layers"}
+                onClick={() => {
+                  setLeftTab("layers");
+                  setLeftOpen(true);
+                }}
+                title={t("layers", lang)}
+                size={44}
+              />
+              <IconBtn
+                icon="palette"
+                p={p}
+                on={leftOpen && leftTab === "colors"}
+                onClick={() => {
+                  setLeftTab("colors");
+                  setLeftOpen(true);
+                }}
+                title={t("colors", lang)}
+                size={44}
+              />
+              <div style={{ flex: 1 }} onClick={() => !leftOpen && setLeftOpen(true)} />
+              <LangMenu p={p} onLang={setLang} side="right" size={44} />
+              <GitHubLink p={p} size={44} />
+            </div>
+            {leftOpen && (
+            <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
+              <div
                 style={{
-                  fontWeight: 700,
-                  fontSize: 14,
-                  color: p.onSurface,
-                  flex: 1,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  padding: "10px 10px 0 14px",
                 }}
               >
-                M3E Canvas
-              </span>
-              <IconBtn
-                icon="left_panel_close"
-                p={p}
-                onClick={() => setLeftOpen(false)}
-                title={t("closePanel", lang)}
-              />
+                <span
+                  style={{
+                    fontWeight: 700,
+                    fontSize: 14,
+                    color: p.onSurface,
+                    flex: 1,
+                  }}
+                >
+                  {leftTab === "parts" ? t("parts", lang) : leftTab === "layers" ? t("layers", lang) : t("colors", lang)}
+                </span>
+                <IconBtn
+                  icon="left_panel_close"
+                  p={p}
+                  onClick={() => setLeftOpen(false)}
+                  title={t("closePanel", lang)}
+                />
+              </div>
+              <div style={{ flex: 1, minHeight: 0 }}>
+                {leftTab === "parts" ? (
+                  <PartsPalette
+                    palette={p}
+                    favorites={favorites}
+                    onToggleFavorite={(k) =>
+                      setFavorites((f) =>
+                        f.includes(k) ? f.filter((x) => x !== k) : [...f, k],
+                      )
+                    }
+                    onPartPointerDown={onPartPointerDown}
+                    overBin={(!!drag?.active && drag.overBin) || (gesture?.kind === "group" && gesture.overBin)}
+                  />
+                ) : leftTab === "colors" ? (
+                  <ColorPanel
+                    p={p}
+                    paletteKey={paletteKey}
+                    onPalette={setPaletteKey}
+                    custom={customPalette}
+                    onCustom={setCustomPalette}
+                    dynamic={dynamicColor}
+                    onDynamic={setDynamicColor}
+                  />
+                ) : (
+                  <LayersPanel
+                    p={p}
+                    frames={frames}
+                    frameId={layersFrame?.id ?? null}
+                    onFrame={(id) => {
+                      setLayersFrameId(id);
+                      setSelectedIds([]);
+                      setSelectedFrameId(id);
+                    }}
+                    groups={layerGroups}
+                    selectedIds={selectedIds}
+                    onSelect={(ids, add) => {
+                      setSelectedIds((cur) => (add ? [...cur.filter((x) => !ids.includes(x)), ...ids] : ids));
+                      setSelectedFrameId(null);
+                      setSelectedLinkId(null);
+                      setRightTab("edit");
+                    }}
+                    onReorder={reorderLayers}
+                  />
+                )}
+              </div>
             </div>
-            <div style={{ flex: 1, minHeight: 0 }}>
-              <PartsPalette
-                palette={p}
-                paletteKey={paletteKey}
-                onPalette={setPaletteKey}
-                favorites={favorites}
-                onToggleFavorite={(k) =>
-                  setFavorites((f) =>
-                    f.includes(k) ? f.filter((x) => x !== k) : [...f, k],
-                  )
-                }
-                onPartPointerDown={onPartPointerDown}
-                overBin={!!drag?.active && drag.overBin}
-              />
-            </div>
+            )}
+            {leftOpen && (
             <div
               onPointerDown={(e) => {
                 e.preventDefault();
@@ -2021,6 +2453,7 @@ export default function Page() {
                 zIndex: 5,
               }}
             />
+            )}
           </aside>
         )}
 
@@ -2344,14 +2777,15 @@ export default function Page() {
             canRedo={futureRef.current.length > 0}
             onUndo={undo}
             onRedo={redo}
-            onClear={clearAll}
+            onClear={() => {
+              if (groupsRef.current.length || framesRef.current.length) setConfirmClear(true);
+            }}
             onAddFrame={addFrame}
             onPreview={() => openPreview()}
             rightInset={showRight ? rightW : 0}
-            lang={lang}
-            onLang={setLang}
             mobile={isMobile}
             onSettings={() => setSheet(sheet === "settings" ? null : "settings")}
+            onLangSheet={() => setSheet(sheet === "lang" ? null : "lang")}
             onPrompt={async () => {
               try {
                 await navigator.clipboard.writeText(buildPrompt(doc, widths, undefined, lang));
@@ -2434,7 +2868,19 @@ export default function Page() {
             )}
             {isMobile && sheet === "settings" && (
               <BottomSheet key="settings" p={p} onClose={() => setSheet(null)}>
-                <MobileSettings palette={p} paletteKey={paletteKey} onPalette={setPaletteKey} lang={lang} onLang={setLang} />
+                <MobileSettings palette={p} paletteKey={paletteKey} onPalette={setPaletteKey} />
+              </BottomSheet>
+            )}
+            {isMobile && sheet === "lang" && (
+              <BottomSheet key="lang" p={p} onClose={() => setSheet(null)}>
+                <MobileLang
+                  palette={p}
+                  lang={lang}
+                  onLang={(l) => {
+                    setLang(l);
+                    setSheet(null);
+                  }}
+                />
               </BottomSheet>
             )}
           </AnimatePresence>
@@ -2460,20 +2906,6 @@ export default function Page() {
             </div>
           )}
 
-          {!leftOpen && !isMobile && (
-            <div
-              style={{ position: "absolute", left: 20, top: 20, zIndex: 45 }}
-            >
-              <IconBtn
-                icon="left_panel_open"
-                p={p}
-                on
-                onClick={() => setLeftOpen(true)}
-                title={t("parts", lang)}
-                size={44}
-              />
-            </div>
-          )}
           {!rightOpen && !isMobile && (
             <div
               style={{ position: "absolute", right: 20, top: 20, zIndex: 45 }}
@@ -2550,16 +2982,20 @@ export default function Page() {
                   onPreview={() => openPreview(selectedFrame.id)}
                   prompt={buildPrompt(doc, widths, selectedFrame.id, lang)}
                   onSaveImage={() => saveFrameImage(selectedFrame)}
+                  frames={frames}
                 />
               ) : rightTab === "edit" ? (
                 <Inspector
-                  item={selected}
+                  item={selectedIds.length > 1 ? null : selected}
                   palette={p}
                   frames={frame === "phone" ? frames : []}
                   onChange={patchSelected}
                   onDelete={deleteSelected}
                   onDuplicate={duplicateSelected}
                   multi={selectedIds.length}
+                  grouped={!!selectedGroup}
+                  onGroup={groupSelected}
+                  onUngroup={ungroupSelected}
                 />
               ) : (
                 <PromptPanel
@@ -2575,6 +3011,15 @@ export default function Page() {
             </div>
           </aside>
         )}
+
+        <ConfirmDialog
+          open={confirmClear}
+          title={t("clearAllTitle", lang)}
+          body={t("clearAllBody", lang)}
+          p={p}
+          onCancel={() => setConfirmClear(false)}
+          onConfirm={clearAll}
+        />
 
         {previewId !== null && frames.length > 0 && (
           <Preview

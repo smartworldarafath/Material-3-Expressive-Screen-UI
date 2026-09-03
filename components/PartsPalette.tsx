@@ -1,23 +1,19 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { CATEGORIES, KIND_ORDER, KIND_SPEC, Kind, PALETTES, Palette } from "@/lib/tokens";
+import { CATEGORIES, KIND_ORDER, KIND_SPEC, Kind, Palette } from "@/lib/tokens";
 import { Icon } from "./M3Node";
 import { t, useLang } from "@/lib/i18n";
 import { Field, Section, Tile } from "./ui";
 
 export function PartsPalette({
   palette: p,
-  paletteKey,
-  onPalette,
   favorites,
   onToggleFavorite,
   onPartPointerDown,
   overBin,
 }: {
   palette: Palette;
-  paletteKey: string;
-  onPalette: (key: string) => void;
   favorites: Kind[];
   onToggleFavorite: (k: Kind) => void;
   onPartPointerDown: (e: React.PointerEvent, kind: Kind) => void;
@@ -52,7 +48,7 @@ export function PartsPalette({
 
   const grid: React.CSSProperties = {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fill, minmax(84px, 1fr))",
+    gridTemplateColumns: "repeat(auto-fill, minmax(78px, 1fr))",
     gap: 6,
   };
 
@@ -84,41 +80,6 @@ export function PartsPalette({
             </Section>
           ))
         )}
-      </div>
-
-      <div
-        style={{
-          display: "flex",
-          gap: 6,
-          padding: "10px 12px 12px",
-          justifyContent: "center",
-          borderTop: `1px solid ${p.surfaceContainerHigh}`,
-        }}
-      >
-        {PALETTES.map((pal) => {
-          const on = pal.key === paletteKey;
-          return (
-            <button
-              key={pal.key}
-              onClick={() => onPalette(pal.key)}
-              title={pal.label}
-              aria-label={pal.label}
-              aria-pressed={on}
-              className="m3-press"
-              style={{
-                width: 26,
-                height: 26,
-                borderRadius: 13,
-                border: "none",
-                padding: 0,
-                cursor: "pointer",
-                background: `linear-gradient(135deg, ${pal.primary} 50%, ${pal.primaryContainer} 50%)`,
-                outline: on ? `2px solid ${p.primary}` : "2px solid transparent",
-                outlineOffset: 2,
-              }}
-            />
-          );
-        })}
       </div>
 
       {overBin && (

@@ -1,23 +1,32 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Item } from "@/lib/tokens";
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence, animate, motion, useMotionValue, useTransform } from "motion/react";
+import type { TargetAndTransition, Variants } from "motion/react";
 import {
+  Action,
+  BACK_TARGET,
   BEZEL,
   Doc,
   Frame,
   GAP,
   Group,
+  NAV_BAR_H,
   PHONE_H,
   PHONE_R,
   PHONE_W,
   Palette,
+  SLIDE_SPEC,
+  STATUS_BAR_H,
+  SWIPE_DIRS,
+  SwipeDir,
   TAPPABLE,
   Transition,
   baseRadii,
   connectSpecOf,
   groupsInFrame,
+  toggleIcon,
   uniformRadii,
 } from "@/lib/tokens";
 import { Icon, M3Node } from "./M3Node";
@@ -25,43 +34,90 @@ import { IconBtn } from "./ui";
 import { t, useLang } from "@/lib/i18n";
 
 const EASE = [0.2, 0, 0, 1] as const;
+const SLIDE_MS = 0.42;
 
-function variantsFor(t: Transition, back: boolean) {
-  switch (t) {
-    case "slide":
-      return {
-        initial: { x: back ? "-30%" : "100%", opacity: back ? 0.6 : 1 },
-        animate: { x: 0, opacity: 1 },
-        exit: { x: back ? "100%" : "-30%", opacity: back ? 1 : 0.6 },
-        transition: { duration: 0.42, ease: EASE },
-      };
-    case "fade":
-      return {
-        initial: { opacity: 0 },
-        animate: { opacity: 1 },
-        exit: { opacity: 0 },
-        transition: { duration: 0.3, ease: EASE },
-      };
-    case "expand":
-      return {
-        initial: { scale: back ? 1.06 : 0.92, opacity: 0 },
-        animate: { scale: 1, opacity: 1 },
-        exit: { scale: back ? 0.92 : 1.06, opacity: 0 },
-        transition: { duration: 0.36, ease: EASE },
-      };
-    default:
-      return {
-        initial: { opacity: 1 },
-        animate: { opacity: 1 },
-        exit: { opacity: 1 },
-        transition: { duration: 0 },
-      };
+type Anim = { t: Transition; back: boolean };
+/** how the current screen was reached, so "back" can play it in reverse */
+type Entry = { id: string; t: Transition };
+
+const pct = (v: number) => `${v * 100}%`;
+
+/** offset along one axis, as a percentage of the screen */
+const off = (axis: "x" | "y", v: number) => (axis === "x" ? { x: pct(v), y: 0 } : { x: 0, y: pct(v) });
+
+type Pose = TargetAndTransition;
+
+/** enter / leave poses for one screen change; the same spec drives forward and back */
+function poses(c: Anim): { initial: Pose; animate: Pose; exit: Pose } {
+  const zi = { zIndex: { duration: 0 } };
+  const s = SLIDE_SPEC[c.t];
+  if (s) {
+    const tr = { duration: SLIDE_MS, ease: EASE, ...zi };
+    return c.back
+      ? {
+          initial: { ...off(s.axis, s.exit), opacity: 0.6, scale: 1, zIndex: 1 },
+          animate: { x: 0, y: 0, opacity: 1, scale: 1, zIndex: 1, transition: tr },
+          exit: { ...off(s.axis, s.enter), opacity: 1, scale: 1, zIndex: 2, transition: tr },
+        }
+      : {
+          initial: { ...off(s.axis, s.enter), opacity: 1, scale: 1, zIndex: 2 },
+          animate: { x: 0, y: 0, opacity: 1, scale: 1, zIndex: 2, transition: tr },
+          exit: { ...off(s.axis, s.exit), opacity: 0.6, scale: 1, zIndex: 1, transition: tr },
+        };
   }
+  if (c.t === "fade") {
+    const tr = { duration: 0.3, ease: EASE, ...zi };
+    return {
+      initial: { x: 0, y: 0, opacity: 0, scale: 1, zIndex: 2 },
+      animate: { x: 0, y: 0, opacity: 1, scale: 1, zIndex: 2, transition: tr },
+      exit: { x: 0, y: 0, opacity: 0, scale: 1, zIndex: 1, transition: tr },
+    };
+  }
+  if (c.t === "expand") {
+    const tr = { duration: 0.36, ease: EASE, ...zi };
+    return c.back
+      ? {
+          initial: { x: 0, y: 0, scale: 0.92, opacity: 0, zIndex: 1 },
+          animate: { x: 0, y: 0, scale: 1, opacity: 1, zIndex: 1, transition: tr },
+          exit: { x: 0, y: 0, scale: 1.06, opacity: 0, zIndex: 2, transition: tr },
+        }
+      : {
+          initial: { x: 0, y: 0, scale: 0.92, opacity: 0, zIndex: 2 },
+          animate: { x: 0, y: 0, scale: 1, opacity: 1, zIndex: 2, transition: tr },
+          exit: { x: 0, y: 0, scale: 1.06, opacity: 0, zIndex: 1, transition: tr },
+        };
+  }
+  const tr = { duration: 0, ...zi };
+  return {
+    initial: { x: 0, y: 0, opacity: 1, scale: 1, zIndex: 2 },
+    animate: { x: 0, y: 0, opacity: 1, scale: 1, zIndex: 2, transition: tr },
+    exit: { x: 0, y: 0, opacity: 1, scale: 1, zIndex: 1, transition: tr },
+  };
 }
+
+const screenVariants: Variants = {
+  initial: (c: Anim) => poses(c).initial,
+  animate: (c: Anim) => poses(c).animate,
+  exit: (c: Anim) => poses(c).exit,
+};
 
 /** kinds whose on/off state flips when tapped in the preview */
 const TOGGLES = ["switch", "checkbox", "chip"] as const;
-const toggles = (it: Item) => (TOGGLES as readonly string[]).includes(it.kind);
+const flips = (it: Item) => (TOGGLES as readonly string[]).includes(it.kind) || !!it.toggle;
+
+/** the look of a part after the visitor tapped it */
+function flippedLook(it: Item): Item {
+  if ((TOGGLES as readonly string[]).includes(it.kind)) return { ...it, checked: !it.checked };
+  if (it.toggle) {
+    return {
+      ...it,
+      label: it.toggle.label ?? it.label,
+      icon: toggleIcon(it),
+      variant: it.toggle.variant ?? it.variant,
+    };
+  }
+  return it;
+}
 
 /** A part in the preview: presses down and shows a state layer while the
  *  pointer is on it, then fires its action on release, like a real widget. */
@@ -71,25 +127,65 @@ function Tappable({
   radii,
   widths,
   onTap,
+  onSlot,
+  onValue,
 }: {
   item: Item;
   p: Palette;
   radii: ReturnType<typeof baseRadii>;
   widths: Record<string, number>;
   onTap?: () => void;
+  /** per-slot targets on bars */
+  onSlot?: (slot: string) => void;
+  /** live value for sliders */
+  onValue?: (v: number) => void;
 }) {
   const [pressed, setPressed] = useState(false);
-  const live = !!onTap || TAPPABLE.includes(item.kind);
+  const [hot, setHot] = useState<string | null>(null);
+  const live = !!onTap || (TAPPABLE.includes(item.kind) && item.kind !== "text");
+  const ref = useRef<HTMLDivElement>(null);
+
+  const dragValue = (e: React.PointerEvent) => {
+    const r = ref.current?.getBoundingClientRect();
+    if (!r || !onValue) return;
+    onValue(Math.round(Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * 100));
+  };
+
+  /** hit areas for the icons on a top app bar and the destinations on a navigation bar */
+  const slots: { key: string; style: React.CSSProperties }[] = [];
+  if (onSlot && item.kind === "topAppBar") {
+    if (item.icon) slots.push({ key: "icon", style: { left: 4, top: STATUS_BAR_H + 8, width: 48, height: 48, borderRadius: 24 } });
+    if (item.icon2) slots.push({ key: "icon2", style: { right: 4, top: STATUS_BAR_H + 8, width: 48, height: 48, borderRadius: 24 } });
+  }
+  if (onSlot && item.kind === "bottomNav") {
+    const n = item.tabs?.length ?? 0;
+    for (let i = 0; i < n; i++)
+      slots.push({ key: `tab:${i}`, style: { left: `${(i / n) * 100}%`, width: `${100 / n}%`, top: 0, bottom: NAV_BAR_H, borderRadius: 16 } });
+  }
+
   return (
     <div
-      onPointerDown={() => live && setPressed(true)}
+      ref={ref}
+      onPointerDown={(e) => {
+        if (onValue) {
+          e.stopPropagation();
+          e.currentTarget.setPointerCapture(e.pointerId);
+          dragValue(e);
+          setPressed(true);
+          return;
+        }
+        if (live) setPressed(true);
+      }}
+      onPointerMove={(e) => {
+        if (onValue && pressed) dragValue(e);
+      }}
       onPointerUp={() => setPressed(false)}
       onPointerCancel={() => setPressed(false)}
-      onPointerLeave={() => setPressed(false)}
+      onPointerLeave={() => !onValue && setPressed(false)}
       onClick={onTap}
-      style={{ cursor: live ? "pointer" : "default", display: "flex", position: "relative" }}
+      style={{ cursor: live || onValue ? "pointer" : "default", display: "flex", position: "relative", touchAction: "none" }}
     >
-      <M3Node item={item} palette={p} widths={widths} radii={radii} interactive={false} pressed={pressed} />
+      <M3Node item={item} palette={p} widths={widths} radii={radii} interactive={false} pressed={pressed && !onValue} />
       {live && (
         <motion.div
           aria-hidden
@@ -108,6 +204,29 @@ function Tappable({
           }}
         />
       )}
+      {slots.map((s) => (
+        <div
+          key={s.key}
+          onPointerDown={(e) => {
+            e.stopPropagation();
+            setHot(s.key);
+          }}
+          onPointerUp={() => setHot(null)}
+          onPointerCancel={() => setHot(null)}
+          onPointerLeave={() => setHot(null)}
+          onClick={(e) => {
+            e.stopPropagation();
+            onSlot!(s.key);
+          }}
+          style={{
+            position: "absolute",
+            cursor: "pointer",
+            background: hot === s.key ? `color-mix(in srgb, ${p.onSurface} 12%, transparent)` : "transparent",
+            transition: "background 120ms",
+            ...s.style,
+          }}
+        />
+      ))}
     </div>
   );
 }
@@ -117,37 +236,45 @@ function Screen({
   groups,
   widths,
   p,
-  onTap,
+  onAction,
   flipped,
   onFlip,
+  values,
+  onValue,
 }: {
   frame: Frame;
   groups: Group[];
   widths: Record<string, number>;
   p: Palette;
-  onTap: (to: string, t: Transition) => void;
+  onAction: (a: Action) => void;
   /** ids of toggles the visitor has flipped since the preview opened */
   flipped: Set<string>;
   onFlip: (id: string) => void;
+  values: Record<string, number>;
+  onValue: (id: string, v: number) => void;
 }) {
   return (
     <div style={{ position: "absolute", inset: 0, background: p[frame.bg ?? "surface"], overflow: "hidden" }}>
       {groups.map((g) => (
         <div
           key={g.id}
-          style={{
-            position: "absolute",
-            left: g.x - frame.x,
-            top: g.y - frame.y,
-            display: "flex",
-            flexDirection: g.axis === "x" ? "row" : "column",
-            alignItems: g.axis === "x" ? "center" : "stretch",
-            gap: GAP,
-          }}
+          style={
+            g.free
+              ? { position: "absolute", left: g.x - frame.x, top: g.y - frame.y }
+              : {
+                  position: "absolute",
+                  left: g.x - frame.x,
+                  top: g.y - frame.y,
+                  display: "flex",
+                  flexDirection: g.axis === "x" ? "row" : "column",
+                  alignItems: g.axis === "x" ? "center" : "stretch",
+                  gap: GAP,
+                }
+          }
         >
           {g.items.map((it, i) => {
             const conn = connectSpecOf(it);
-            const n = g.items.length;
+            const n = g.free ? 1 : g.items.length;
             const radii =
               conn && n > 1
                 ? g.axis === "x"
@@ -167,19 +294,44 @@ function Screen({
                   ? uniformRadii(conn.outer)
                   : baseRadii(it);
             const act = it.action;
-            const shown = flipped.has(it.id) ? { ...it, checked: !it.checked } : it;
-            const tap = act
-              ? () => onTap(act.to, act.transition)
-              : toggles(it)
-                ? () => onFlip(it.id)
+            let shown = flipped.has(it.id) ? flippedLook(it) : it;
+            if (it.kind === "slider" && values[it.id] !== undefined) shown = { ...shown, value: values[it.id] };
+            const tap =
+              act || flips(it)
+                ? () => {
+                    if (flips(it)) onFlip(it.id);
+                    if (act) onAction(act);
+                  }
                 : undefined;
-            return <Tappable key={it.id} item={shown} p={p} radii={radii} widths={widths} onTap={tap} />;
+            const slotActions = it.actions;
+            const node = (
+              <Tappable
+                key={it.id}
+                item={shown}
+                p={p}
+                radii={radii}
+                widths={widths}
+                onTap={tap}
+                onSlot={slotActions ? (slot) => slotActions[slot] && onAction(slotActions[slot]) : undefined}
+                onValue={it.kind === "slider" ? (v) => onValue(it.id, v) : undefined}
+              />
+            );
+            if (!g.free) return node;
+            const o = g.pos?.[it.id] ?? { x: 0, y: 0 };
+            return (
+              <div key={it.id} style={{ position: "absolute", left: o.x, top: o.y }}>
+                {node}
+              </div>
+            );
           })}
         </div>
       ))}
     </div>
   );
 }
+
+/** the screen being pulled in by a swipe, and the slide it arrives with */
+type Peek = { frameId: string; t: Transition };
 
 export function Preview({
   doc,
@@ -196,11 +348,18 @@ export function Preview({
 }) {
   const lang = useLang();
   const frames = doc.frames;
-  const [stack, setStack] = useState<string[]>(() => [startId ?? frames[0]?.id ?? ""]);
-  const [anim, setAnim] = useState<{ t: Transition; back: boolean }>({ t: "none", back: false });
+  const [stack, setStack] = useState<Entry[]>(() => [{ id: startId ?? frames[0]?.id ?? "", t: "none" }]);
+  const [anim, setAnim] = useState<Anim>({ t: "none", back: false });
   const [scale, setScale] = useState(1);
-  const pressed = useRef(false);
   const [flipped, setFlipped] = useState<Set<string>>(() => new Set());
+  const [values, setValues] = useState<Record<string, number>>({});
+  const [peek, setPeek] = useState<Peek | null>(null);
+  const stackRef = useRef(stack);
+  stackRef.current = stack;
+  const peekRef = useRef(peek);
+  peekRef.current = peek;
+  const swiped = useRef(false);
+
   const flip = (id: string) =>
     setFlipped((s) => {
       const n = new Set(s);
@@ -209,7 +368,8 @@ export function Preview({
       return n;
     });
 
-  const current = frames.find((f) => f.id === stack[stack.length - 1]) ?? frames[0];
+  const top = stack[stack.length - 1];
+  const current = frames.find((f) => f.id === top?.id) ?? frames[0];
 
   useEffect(() => {
     const fit = () =>
@@ -221,17 +381,26 @@ export function Preview({
     return () => window.removeEventListener("resize", fit);
   }, []);
 
-  const go = (to: string, t: Transition) => {
-    if (pressed.current) return;
-    if (!frames.some((f) => f.id === to)) return;
-    setAnim({ t, back: false });
-    setStack((s) => [...s, to]);
-  };
-  const back = () => {
-    if (stack.length < 2) return;
-    setAnim({ t: anim.t === "none" ? "slide" : anim.t, back: true });
-    setStack((s) => s.slice(0, -1));
-  };
+  const back = useCallback(() => {
+    const s = stackRef.current;
+    if (s.length < 2 || peekRef.current) return;
+    setAnim({ t: s[s.length - 1].t, back: true });
+    setStack(s.slice(0, -1));
+  }, []);
+
+  const go = useCallback(
+    (a: Action) => {
+      if (swiped.current) return;
+      if (a.to === BACK_TARGET) {
+        back();
+        return;
+      }
+      if (!frames.some((f) => f.id === a.to)) return;
+      setAnim({ t: a.transition, back: false });
+      setStack((s) => [...s, { id: a.to, t: a.transition }]);
+    },
+    [frames, back],
+  );
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -240,22 +409,159 @@ export function Preview({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stack, anim]);
+  }, [back, onClose]);
 
-  const groups = useMemo(
-    () => (current ? groupsInFrame(doc.groups, current, frames, widths) : []),
-    [doc.groups, current, frames, widths],
-  );
+  const groupsFor = useCallback((f: Frame) => groupsInFrame(doc.groups, f, frames, widths), [doc.groups, frames, widths]);
+  const groups = useMemo(() => (current ? groupsFor(current) : []), [current, groupsFor]);
+  const peekFrame = peek ? frames.find((f) => f.id === peek.frameId) : undefined;
+  const peekGroups = useMemo(() => (peekFrame ? groupsFor(peekFrame) : []), [peekFrame, groupsFor]);
+
+  /* ---- finger-tracked swipes: only the swipes the author set on the frame ---- */
+  const prog = useMotionValue(0);
+  const axisMV = useMotionValue(0); // 0 = x, 1 = y
+  const enterMV = useMotionValue(0);
+  const exitMV = useMotionValue(0);
+  const curX = useTransform([prog, axisMV, exitMV], ([p, a, ex]: number[]) => (a === 0 ? pct(ex * p) : "0%"));
+  const curY = useTransform([prog, axisMV, exitMV], ([p, a, ex]: number[]) => (a === 1 ? pct(ex * p) : "0%"));
+  const curOp = useTransform(prog, (p: number) => 1 - 0.4 * p);
+  const peekX = useTransform([prog, axisMV, enterMV], ([p, a, en]: number[]) => (a === 0 ? pct(en * (1 - p)) : "0%"));
+  const peekY = useTransform([prog, axisMV, enterMV], ([p, a, en]: number[]) => (a === 1 ? pct(en * (1 - p)) : "0%"));
+
+  const gesture = useRef<{
+    id: number;
+    x0: number;
+    y0: number;
+    phase: "idle" | "drag" | "none";
+    dir?: SwipeDir;
+    size: number;
+    last: number;
+    lastT: number;
+    vel: number;
+  } | null>(null);
+
+  const onScreenPointerDown = (e: React.PointerEvent) => {
+    if (peekRef.current || e.button !== 0) return;
+    gesture.current = { id: e.pointerId, x0: e.clientX, y0: e.clientY, phase: "idle", size: PHONE_W, last: 0, lastT: e.timeStamp, vel: 0 };
+    swiped.current = false;
+  };
+
+  useEffect(() => {
+    const move = (e: PointerEvent) => {
+      const g = gesture.current;
+      if (!g || g.id !== e.pointerId) return;
+      const dx = (e.clientX - g.x0) / scale;
+      const dy = (e.clientY - g.y0) / scale;
+      if (g.phase === "none") return;
+      if (g.phase === "idle") {
+        if (Math.hypot(dx, dy) < 8) return;
+        const dir: SwipeDir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "right" : "left") : dy > 0 ? "down" : "up";
+        const s = stackRef.current;
+        const cur = frames.find((f) => f.id === s[s.length - 1]?.id);
+        if (!cur) return;
+        const to = cur.swipe?.[dir];
+        const spec = SWIPE_DIRS.find((d) => d.key === dir)!;
+        /* only swipes the author set up move screens; nothing is inferred */
+        let pk: Peek | null = null;
+        if (to && frames.some((f) => f.id === to)) pk = { frameId: to, t: spec.transition };
+        if (!pk) {
+          g.phase = "none";
+          return;
+        }
+        const sl = SLIDE_SPEC[pk.t]!;
+        g.phase = "drag";
+        g.dir = dir;
+        g.size = sl.axis === "x" ? PHONE_W : PHONE_H;
+        swiped.current = true;
+        axisMV.set(sl.axis === "x" ? 0 : 1);
+        enterMV.set(sl.enter);
+        exitMV.set(sl.exit);
+        prog.set(0);
+        peekRef.current = pk;
+        setPeek(pk);
+      }
+      const along = g.dir === "left" ? -dx : g.dir === "right" ? dx : g.dir === "up" ? -dy : dy;
+      const pr = Math.max(0, Math.min(1, along / g.size));
+      const dt = Math.max(1, e.timeStamp - g.lastT);
+      g.vel = (pr - g.last) / dt;
+      g.last = pr;
+      g.lastT = e.timeStamp;
+      prog.set(pr);
+    };
+    const up = (e: PointerEvent) => {
+      const g = gesture.current;
+      if (!g || g.id !== e.pointerId) return;
+      gesture.current = null;
+      if (g.phase !== "drag") return;
+      const pk = peekRef.current;
+      if (!pk) return;
+      const commit = prog.get() > 0.25 || g.vel > 0.0012;
+      animate(prog, commit ? 1 : 0, { duration: 0.26, ease: EASE }).then(() => {
+        if (commit) {
+          setAnim({ t: "none", back: false });
+          setStack((s) => [...s, { id: pk.frameId, t: pk.t }]);
+        }
+        peekRef.current = null;
+        setPeek(null);
+        enterMV.set(0);
+        exitMV.set(0);
+        prog.set(0);
+        window.setTimeout(() => {
+          swiped.current = false;
+        }, 50);
+      });
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+    window.addEventListener("pointercancel", up);
+    return () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointercancel", up);
+    };
+  }, [frames, scale, prog, axisMV, enterMV, exitMV]);
+
+  const [picker, setPicker] = useState(false);
+  const pickerRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!picker) return;
+    const onDown = (e: PointerEvent) => {
+      if (!pickerRef.current?.contains(e.target as Node)) setPicker(false);
+    };
+    window.addEventListener("pointerdown", onDown);
+    return () => window.removeEventListener("pointerdown", onDown);
+  }, [picker]);
 
   if (!current) {
     return null;
   }
-  const v = variantsFor(anim.t, anim.back);
+
+  const screenProps = {
+    widths,
+    p,
+    onAction: go,
+    flipped,
+    onFlip: flip,
+    values,
+    onValue: (id: string, v: number) => setValues((m) => ({ ...m, [id]: v })),
+  };
+
+  const barBtn: React.CSSProperties = {
+    height: 40,
+    padding: "0 14px 0 10px",
+    borderRadius: 20,
+    border: "none",
+    background: "transparent",
+    fontSize: 13,
+    fontWeight: 600,
+    cursor: "pointer",
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 6,
+    whiteSpace: "nowrap",
+  };
 
   return (
     <div
-      onClick={onClose}
       style={{
         position: "fixed",
         inset: 0,
@@ -266,14 +572,15 @@ export function Preview({
       }}
     >
       <div
-        onClick={(e) => e.stopPropagation()}
         style={{
           width: (PHONE_W + BEZEL * 2) * scale,
           height: (PHONE_H + BEZEL * 2) * scale,
           position: "relative",
+          marginBottom: 56,
         }}
       >
         <div
+          onPointerDown={onScreenPointerDown}
           style={{
             position: "absolute",
             left: 0,
@@ -281,6 +588,7 @@ export function Preview({
             width: PHONE_W + BEZEL * 2,
             height: PHONE_H + BEZEL * 2,
             transform: `scale(${scale})`,
+            touchAction: "none",
             transformOrigin: "0 0",
             borderRadius: PHONE_R + BEZEL,
             background: p.inverseSurface,
@@ -288,6 +596,12 @@ export function Preview({
           }}
         >
           <div
+            onClickCapture={(e) => {
+              if (swiped.current) {
+                e.stopPropagation();
+                e.preventDefault();
+              }
+            }}
             style={{
               position: "absolute",
               left: BEZEL,
@@ -296,83 +610,178 @@ export function Preview({
               height: PHONE_H,
               borderRadius: PHONE_R,
               overflow: "hidden",
-              background: "#fff",
+              background: p[current.bg ?? "surface"],
+              touchAction: "none",
             }}
           >
-            <AnimatePresence initial={false} mode="popLayout">
+            <motion.div
+              style={{
+                position: "absolute",
+                inset: 0,
+                zIndex: 1,
+                x: curX,
+                y: curY,
+                opacity: curOp,
+              }}
+            >
+              <AnimatePresence initial={false} mode="popLayout" custom={anim}>
+                <motion.div
+                  key={current.id}
+                  custom={anim}
+                  variants={screenVariants}
+                  initial="initial"
+                  animate="animate"
+                  exit="exit"
+                  style={{ position: "absolute", inset: 0 }}
+                >
+                  <Screen frame={current} groups={groups} {...screenProps} />
+                </motion.div>
+              </AnimatePresence>
+            </motion.div>
+            {peek && peekFrame && (
               <motion.div
-                key={current.id}
-                initial={v.initial}
-                animate={v.animate}
-                exit={v.exit}
-                transition={v.transition}
-                style={{ position: "absolute", inset: 0 }}
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  zIndex: 2,
+                  x: peekX,
+                  y: peekY,
+                  pointerEvents: "none",
+                }}
               >
-                <Screen frame={current} groups={groups} widths={widths} p={p} onTap={go} flipped={flipped} onFlip={flip} />
+                <Screen frame={peekFrame} groups={peekGroups} {...screenProps} />
               </motion.div>
-            </AnimatePresence>
+            )}
           </div>
         </div>
       </div>
 
       <div
-        onClick={(e) => e.stopPropagation()}
         style={{
           position: "absolute",
-          right: 18,
-          bottom: 18,
+          left: 0,
+          right: 0,
+          bottom: 14,
           display: "flex",
-          justifyContent: "flex-end",
+          justifyContent: "center",
+          pointerEvents: "none",
         }}
       >
         <div
           style={{
             display: "flex",
-            flexDirection: "column",
-            alignItems: "stretch",
+            alignItems: "center",
             gap: 4,
             padding: 6,
-            borderRadius: 26,
+            borderRadius: 28,
             background: p.surface,
             boxShadow: "0 4px 18px rgba(0,0,0,0.14)",
-            maxHeight: "70vh",
-            overflowY: "auto",
+            pointerEvents: "auto",
+            maxWidth: "calc(100vw - 24px)",
           }}
         >
-          <IconBtn icon="arrow_back" p={p} onClick={back} disabled={stack.length < 2} title={t("back", lang)} size={40} />
-          {frames.map((f) => {
-            const on = f.id === current.id;
-            return (
-              <button
-                key={f.id}
-                onClick={() => {
-                  if (on) return;
-                  setAnim({ t: "fade", back: false });
-                  setStack([f.id]);
-                }}
-                className="m3-press"
-                style={{
-                  height: 40,
-                  padding: "0 16px",
-                  borderRadius: 20,
-                  border: "none",
-                  background: on ? p.primary : "transparent",
-                  color: on ? p.onPrimary : p.onSurfaceVariant,
-                  fontSize: 13,
-                  fontWeight: 600,
-                  cursor: "pointer",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                {f.name || t("screen", lang)}
-              </button>
-            );
-          })}
-          <IconBtn icon="close" p={p} onClick={onClose} title={t("close", lang)} size={40} />
+          <button
+            onClick={back}
+            disabled={stack.length < 2}
+            title={t("back", lang)}
+            className="m3-press"
+            style={{
+              ...barBtn,
+              color: stack.length < 2 ? p.outlineVariant : p.onSurfaceVariant,
+              cursor: stack.length < 2 ? "default" : "pointer",
+            }}
+          >
+            <Icon name="arrow_back" size={20} />
+            {t("back", lang)}
+          </button>
+          <div ref={pickerRef} style={{ position: "relative", minWidth: 0 }}>
+            <button
+              onClick={() => setPicker((v) => !v)}
+              title={t("screens", lang)}
+              aria-expanded={picker}
+              className="m3-press"
+              style={{
+                ...barBtn,
+                background: p.secondaryContainer,
+                color: p.onSecondaryContainer,
+                maxWidth: 200,
+              }}
+            >
+              <Icon name="smartphone" size={20} />
+              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{current.name || t("screen", lang)}</span>
+              <Icon name={picker ? "expand_more" : "expand_less"} size={18} />
+            </button>
+            <AnimatePresence>
+              {picker && (
+                <motion.div
+                  role="menu"
+                  initial={{ opacity: 0, y: 6, scale: 0.96 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 6, scale: 0.96 }}
+                  transition={{ duration: 0.16, ease: EASE }}
+                  style={{
+                    position: "absolute",
+                    bottom: 48,
+                    left: "50%",
+                    x: "-50%",
+                    minWidth: 160,
+                    maxHeight: "50vh",
+                    overflowY: "auto",
+                    padding: 6,
+                    borderRadius: 18,
+                    background: p.surfaceContainerLow,
+                    boxShadow: "0 6px 20px rgba(0,0,0,0.16), 0 0 0 1px rgba(0,0,0,0.04)",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 2,
+                    transformOrigin: "bottom center",
+                  }}
+                >
+                  {frames.map((f) => {
+                    const on = f.id === current.id;
+                    return (
+                      <button
+                        key={f.id}
+                        role="menuitemradio"
+                        aria-checked={on}
+                        onClick={() => {
+                          setPicker(false);
+                          if (on) return;
+                          setAnim({ t: "fade", back: false });
+                          setStack([{ id: f.id, t: "fade" }]);
+                        }}
+                        className="m3-press"
+                        style={{
+                          height: 40,
+                          padding: "0 14px 0 10px",
+                          borderRadius: 12,
+                          border: "none",
+                          background: on ? p.secondaryContainer : "transparent",
+                          color: on ? p.onSecondaryContainer : p.onSurface,
+                          fontSize: 13,
+                          fontWeight: 600,
+                          cursor: "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 10,
+                          whiteSpace: "nowrap",
+                          textAlign: "left",
+                        }}
+                      >
+                        <span style={{ width: 18, display: "inline-flex" }}>{on && <Icon name="check" size={18} />}</span>
+                        {f.name || t("screen", lang)}
+                      </button>
+                    );
+                  })}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+          <button onClick={onClose} title={t("close", lang)} className="m3-press" style={{ ...barBtn, color: p.onSurfaceVariant }}>
+            <Icon name="close" size={20} />
+            {t("closeBtn", lang)}
+          </button>
         </div>
-      </div>
-      <div style={{ position: "absolute", top: 18, right: 22, color: p.outline }}>
-        <Icon name="touch_app" size={22} />
       </div>
     </div>
   );

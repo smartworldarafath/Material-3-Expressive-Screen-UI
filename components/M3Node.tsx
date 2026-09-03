@@ -226,58 +226,6 @@ function TextContent({ item, p }: { item: Item; p: Palette }) {
   );
 }
 
-/** The Android status bar drawn in a top app bar's inset: clock left, status icons right. */
-function StatusBar({ p }: { p: Palette }) {
-  return (
-    <div
-      aria-hidden
-      style={{
-        position: "absolute",
-        left: 0,
-        right: 0,
-        top: 0,
-        height: STATUS_BAR_H,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        padding: "0 24px",
-        fontSize: 13,
-        fontWeight: 500,
-        color: p.onSurface,
-        pointerEvents: "none",
-      }}
-    >
-      <span style={{ fontVariantNumeric: "tabular-nums" }}>9:30</span>
-      <span style={{ display: "inline-flex", gap: 2 }}>
-        <Icon name="signal_wifi_4_bar" size={14} fill />
-        <Icon name="signal_cellular_4_bar" size={14} fill />
-        <Icon name="battery_full" size={14} fill />
-      </span>
-    </div>
-  );
-}
-
-/** The gesture navigation handle drawn in a navigation bar's inset. */
-function GestureHandle({ p }: { p: Palette }) {
-  return (
-    <div
-      aria-hidden
-      style={{
-        position: "absolute",
-        left: "50%",
-        bottom: Math.round((NAV_BAR_H - 4) / 2),
-        width: 108,
-        height: 4,
-        marginLeft: -54,
-        borderRadius: 2,
-        background: p.onSurface,
-        opacity: 0.35,
-        pointerEvents: "none",
-      }}
-    />
-  );
-}
-
 /** Content for kinds that size to their text; rendered again offscreen to measure. */
 export function MeasuredContent({ item, p }: { item: Item; p: Palette }) {
   switch (item.kind) {
@@ -352,7 +300,6 @@ function Body({ item, p }: { item: Item; p: Palette }) {
             position: "relative",
           }}
         >
-          <StatusBar p={p} />
           <div style={{ width: 48, height: 48, display: "grid", placeItems: "center", flex: "0 0 auto" }}>
             {item.icon && <Icon name={item.icon} size={24} color={p.onSurface} />}
           </div>
@@ -414,7 +361,8 @@ function Body({ item, p }: { item: Item; p: Palette }) {
       );
     }
 
-    case "listItem":
+    case "listItem": {
+      const iconBg = item.iconFill === "none" ? null : (item.iconFill ?? "primaryContainer");
       return (
         <div style={{ display: "flex", alignItems: "center", gap: 16, padding: "0 16px", height: "100%" }}>
           {item.icon && (
@@ -423,8 +371,8 @@ function Body({ item, p }: { item: Item; p: Palette }) {
                 width: 40,
                 height: 40,
                 borderRadius: 20,
-                background: p.primaryContainer,
-                color: p.onPrimaryContainer,
+                background: iconBg ? p[iconBg] : "transparent",
+                color: iconBg ? onToken(iconBg, p) : onToken(item.fill ?? "surfaceContainerLow", p),
                 display: "grid",
                 placeItems: "center",
                 flex: "0 0 auto",
@@ -442,6 +390,7 @@ function Body({ item, p }: { item: Item; p: Palette }) {
           {item.icon2 && <Icon name={item.icon2} size={22} color={p.onSurfaceVariant} />}
         </div>
       );
+    }
 
     case "dialog":
       return (
@@ -674,7 +623,6 @@ function Body({ item, p }: { item: Item; p: Palette }) {
             position: "relative",
           }}
         >
-          <GestureHandle p={p} />
           {tabs.map((t, i) => {
             const on = i === 0;
             const withLabel = t.label.trim().length > 0;
@@ -798,8 +746,10 @@ function boxStyle(item: Item, p: Palette): React.CSSProperties {
       return { background: p.inverseSurface, border: "none", color: p.inverseOnSurface };
     case "image":
       return { background: p.surfaceContainerHighest, border: "none" };
-    case "listItem":
-      return { background: p.surfaceContainerLow, border: "none", color: p.onSurface };
+    case "listItem": {
+      const t = item.fill ?? "surfaceContainerLow";
+      return { background: p[t], border: "none", color: onToken(t, p) };
+    }
     default:
       return { background: p.surfaceContainerHigh, border: "none", color: p.onSurface };
   }

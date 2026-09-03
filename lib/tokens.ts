@@ -1,5 +1,5 @@
 import type { CSSProperties } from "react";
-import { KIND_TEXT, NAV_TABS, getLang } from "./i18n";
+import { KIND_TEXT, NAV_TABS, getLang, t } from "./i18n";
 
 /* ---------- geometry ---------- */
 export const H = 56; // M3 medium button height (dp)
@@ -51,6 +51,8 @@ export const uniformRadii = (r: number): Radii => ({ tl: r, tr: r, bl: r, br: r 
 export type Palette = {
   key: string;
   label: string;
+  /** the color a custom scheme was generated from */
+  seed?: string;
   primary: string;
   onPrimary: string;
   primaryContainer: string;
@@ -262,8 +264,8 @@ export const PALETTES: Palette[] = [
   },
 ];
 
-export const paletteOf = (key: string): Palette =>
-  PALETTES.find((p) => p.key === key) ?? PALETTES[0];
+export const paletteOf = (key: string, custom?: Palette | null): Palette =>
+  (key === "custom" && custom) || PALETTES.find((p) => p.key === key) || PALETTES[0];
 
 /* ---------- contrast roles a component can take ---------- */
 export type Variant = "filled" | "tonal" | "elevated" | "outlined" | "text";
@@ -559,6 +561,7 @@ export const KIND_SPEC: Record<Kind, KindSpec> = {
     hasLabel: true,
     hasSupporting: true,
     hasIcon: true,
+    hasFill: true,
     connect: { axis: "y", outer: R_FULL, inner: R_INNER, family: "list" },
     size: { min: 200, max: PHONE_W, step: 4, icon: "width", presets: WIDTH_PRESETS },
     defLabel: "リスト項目",
@@ -829,23 +832,82 @@ export type Item = {
   bold?: boolean;
   /** height for free-form boxes */
   size2?: number;
-  /** palette token used as background (boxes) */
+  /** palette token used as background (boxes, list items) */
   fill?: ColorToken;
+  /** background behind a list item's leading icon; "none" draws the icon bare */
+  iconFill?: ColorToken | "none";
   /** data URL of a user-picked image */
   src?: string;
   /** tap navigation to another frame */
   action?: Action;
+  /** per-slot tap navigation for bars: "icon" / "icon2" on a top app bar, "tab:N" on a navigation bar */
+  actions?: Record<string, Action>;
+  /** the look a toggle button takes once tapped; undefined = not a toggle */
+  toggle?: ToggleLook;
 };
 
-export type Transition = "slide" | "fade" | "expand" | "none";
+export type ToggleLook = { icon?: string | null; variant?: Variant; label?: string };
+
+/** kinds that can act as a toggle button in the preview */
+export const TOGGLEABLE: Kind[] = ["button", "iconButton", "fab", "extendedFab"];
+
+/** target id that pops the preview stack instead of opening a frame */
+export const BACK_TARGET = "back";
+
+/** a swipe on a frame: the finger's direction */
+export type SwipeDir = "left" | "right" | "up" | "down";
+export const SWIPE_DIRS: { key: SwipeDir; icon: string; transition: Transition }[] = [
+  { key: "left", icon: "swipe_left", transition: "slide" },
+  { key: "right", icon: "swipe_right", transition: "slideLeft" },
+  { key: "up", icon: "swipe_up", transition: "slideUp" },
+  { key: "down", icon: "swipe_down", transition: "slideDown" },
+];
+
+/** how a sliding transition moves: the axis, where the new screen enters from and
+ *  where the old one parks, as fractions of the screen */
+export const SLIDE_SPEC: Partial<Record<Transition, { axis: "x" | "y"; enter: number; exit: number }>> = {
+  slide: { axis: "x", enter: 1, exit: -0.3 },
+  slideLeft: { axis: "x", enter: -1, exit: 0.3 },
+  slideUp: { axis: "y", enter: 1, exit: -0.3 },
+  slideDown: { axis: "y", enter: -1, exit: 0.3 },
+};
+
+export type Transition = "slide" | "slideLeft" | "slideUp" | "slideDown" | "fade" | "expand" | "none";
 export type Action = { to: string; transition: Transition };
 
 export const TRANSITIONS: { key: Transition; label: string; icon: string }[] = [
-  { key: "slide", label: "Slide", icon: "arrow_forward" },
+  { key: "slide", label: "Slide from right", icon: "arrow_back" },
+  { key: "slideLeft", label: "Slide from left", icon: "arrow_forward" },
+  { key: "slideUp", label: "Slide from bottom", icon: "arrow_upward" },
+  { key: "slideDown", label: "Slide from top", icon: "arrow_downward" },
   { key: "fade", label: "Fade", icon: "blur_on" },
   { key: "expand", label: "Expand", icon: "open_in_full" },
   { key: "none", label: "None", icon: "block" },
 ];
+
+/** slots on a bar that can each carry their own tap action */
+export function actionSlotsOf(it: Item): IconSlot[] {
+  if (it.kind === "topAppBar" || it.kind === "bottomNav") return iconSlotsOf(it).filter((s) => !!s.value);
+  return [];
+}
+
+/** the icon a toggle button shows when on: an explicit null means none */
+export const toggleIcon = (it: Item): string | null => (it.toggle && it.toggle.icon !== undefined ? it.toggle.icon : it.icon);
+
+/** a free group down to one part is just that part again */
+export function collapseFree(g: Group, widths: Record<string, number>): Group {
+  if (!g.free || g.items.length !== 1) return g;
+  const pl = layoutOf(g, widths)[0];
+  return { id: g.id, x: pl.x, y: pl.y, axis: connectSpecOf(g.items[0])?.axis ?? "x", items: g.items };
+}
+
+/** every navigation an item carries: its own action plus per-slot ones */
+export function actionsOf(it: Item): { slot: string; action: Action }[] {
+  const out: { slot: string; action: Action }[] = [];
+  if (it.action) out.push({ slot: "", action: it.action });
+  for (const [slot, action] of Object.entries(it.actions ?? {})) if (action) out.push({ slot, action });
+  return out;
+}
 
 /** kinds a user can tap in the preview */
 export const TAPPABLE: Kind[] = ["button", "iconButton", "fab", "extendedFab", "chip", "listItem", "card", "image", "text"];
@@ -894,9 +956,37 @@ export function onToken(t: ColorToken, p: Palette): string {
   }
 }
 
-export type Frame = { id: string; name: string; x: number; y: number; bg?: ColorToken };
+export type Frame = {
+  id: string;
+  name: string;
+  x: number;
+  y: number;
+  bg?: ColorToken;
+  /** frame ids reached by swiping in each direction */
+  swipe?: Partial<Record<SwipeDir, string>>;
+};
 
 export const frameRect = (f: Frame) => ({ l: f.x, t: f.y, r: f.x + PHONE_W, b: f.y + PHONE_H });
+
+export type Placed = { item: Item; index: number; x: number; y: number; w: number; h: number };
+
+/** where each part of a run sits in world space: a connected run lays its parts
+ *  out along its axis, a free group keeps the offsets it was grouped with */
+export function layoutOf(g: Group, widths: Record<string, number>): Placed[] {
+  const out: Placed[] = [];
+  let off = 0;
+  g.items.forEach((it, index) => {
+    const sz = sizeOf(it, widths);
+    if (g.free) {
+      const o = g.pos?.[it.id] ?? { x: 0, y: 0 };
+      out.push({ item: it, index, x: g.x + o.x, y: g.y + o.y, w: sz.w, h: sz.h });
+      return;
+    }
+    out.push({ item: it, index, x: g.axis === "x" ? g.x + off : g.x, y: g.axis === "x" ? g.y : g.y + off, w: sz.w, h: sz.h });
+    off += (g.axis === "x" ? sz.w : sz.h) + GAP;
+  });
+  return out;
+}
 
 /** world-space bounds of a whole run */
 export function groupBounds(g: Group, widths: Record<string, number>) {
@@ -904,16 +994,25 @@ export function groupBounds(g: Group, widths: Record<string, number>) {
   let t = g.y;
   let r = g.x;
   let b = g.y;
-  let off = 0;
-  for (const it of g.items) {
-    const sz = sizeOf(it, widths);
-    const x = g.axis === "x" ? g.x + off : g.x;
-    const y = g.axis === "x" ? g.y : g.y + off;
-    r = Math.max(r, x + sz.w);
-    b = Math.max(b, y + sz.h);
-    off += (g.axis === "x" ? sz.w : sz.h) + GAP;
+  for (const pl of layoutOf(g, widths)) {
+    l = Math.min(l, pl.x);
+    t = Math.min(t, pl.y);
+    r = Math.max(r, pl.x + pl.w);
+    b = Math.max(b, pl.y + pl.h);
   }
   return { l, t, r, b };
+}
+
+/** a free group written as one run per part, so layout logic sees the parts themselves */
+export function explodeGroup(g: Group, widths: Record<string, number>): Group[] {
+  if (!g.free) return [g];
+  return layoutOf(g, widths).map((pl) => ({
+    id: `${g.id}:${pl.item.id}`,
+    x: pl.x,
+    y: pl.y,
+    axis: connectSpecOf(pl.item)?.axis ?? "x",
+    items: [pl.item],
+  }));
 }
 
 /** a run belongs to the frame that contains its centre */
@@ -936,6 +1035,9 @@ export type Group = {
   y: number;
   axis: Axis;
   items: Item[];
+  /** a hand-made group: parts keep their own offsets (in `pos`) and move as one layer */
+  free?: boolean;
+  pos?: Record<string, { x: number; y: number }>;
 };
 
 export type FrameMode = "blank" | "phone";
@@ -944,6 +1046,10 @@ export type Doc = {
   groups: Group[];
   frames: Frame[];
   paletteKey: string;
+  /** the author's own scheme, used when paletteKey is "custom" */
+  customPalette?: Palette;
+  /** the app should take its colors from the user's wallpaper (Material You) */
+  dynamicColor?: boolean;
   frame: FrameMode;
   title: string;
   brief: string;
@@ -968,7 +1074,7 @@ export function makeItem(kind: Kind): Item {
   if (kind === "box") {
     it.size2 = 220;
     it.radiusTop = 28;
-    it.radiusBottom = 0;
+    it.radiusBottom = 28;
     it.fill = "surfaceContainerHigh";
   }
   if (kind === "slider") it.value = 40;
@@ -1061,8 +1167,8 @@ export function iconSlotsOf(it: Item): IconSlot[] {
     case "topAppBar":
     case "searchBar":
       return [
-        { key: "icon", label: getLang() === "ja" ? "先頭" : "Leading", value: it.icon },
-        { key: "icon2", label: getLang() === "ja" ? "末尾" : "Trailing", value: it.icon2 ?? null },
+        { key: "icon", label: t("leading"), value: it.icon },
+        { key: "icon2", label: t("trailing"), value: it.icon2 ?? null },
       ];
     case "bottomNav":
       return (it.tabs ?? []).map((t, i) => ({
@@ -1072,7 +1178,7 @@ export function iconSlotsOf(it: Item): IconSlot[] {
       }));
     default:
       return KIND_SPEC[it.kind].hasIcon
-        ? [{ key: "icon", label: getLang() === "ja" ? "アイコン" : "Icon", value: it.icon }]
+        ? [{ key: "icon", label: t("icon"), value: it.icon }]
         : [];
   }
 }
@@ -1080,6 +1186,7 @@ export function iconSlotsOf(it: Item): IconSlot[] {
 export function setIconSlot(it: Item, key: string, v: string | null): Partial<Item> {
   if (key === "icon") return { icon: v };
   if (key === "icon2") return { icon2: v };
+  if (key === "toggle") return { toggle: { ...(it.toggle ?? {}), icon: v } };
   if (key.startsWith("tab:")) {
     const i = Number(key.slice(4));
     const tabs = (it.tabs ?? []).map((t, j) => (j === i ? { ...t, icon: v ?? "" } : t));

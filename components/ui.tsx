@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { COLOR_TOKENS, ColorToken, Palette, R_INNER, clamp } from "@/lib/tokens";
+import { AnimatePresence, motion } from "motion/react";
 import { t, useLang } from "@/lib/i18n";
 import { Icon } from "./M3Node";
 
@@ -57,7 +58,7 @@ export function IconBtn({
   );
 }
 
-export type SegOption<K extends string> = { key: K; icon?: string; label?: string; title?: string };
+export type SegOption<K extends string> = { key: K; icon?: string; label?: string; title?: string; /** small marker: this option carries something */ dot?: boolean };
 
 /** Connected-button group with the same fused corners as the canvas. */
 export function Segmented<K extends string>({
@@ -109,10 +110,25 @@ export function Segmented<K extends string>({
               fontSize: 13,
               fontWeight: on ? 600 : 500,
               transition: "background 120ms, color 120ms, border-radius 160ms",
+              position: "relative",
             }}
           >
             {o.icon && <Icon name={o.icon} size={Math.round(height * 0.5)} fill={on} />}
             {o.label && <span>{o.label}</span>}
+            {o.dot && (
+              <span
+                aria-hidden
+                style={{
+                  position: "absolute",
+                  top: 5,
+                  right: 7,
+                  width: 6,
+                  height: 6,
+                  borderRadius: 3,
+                  background: on ? p.onPrimary : p.primary,
+                }}
+              />
+            )}
           </button>
         );
       })}
@@ -216,8 +232,22 @@ export function Field({
 
 /** Slider with a typed-in number beside it. The slider moves in `step`s; the
  *  field accepts any whole number and is clamped to min..max when it commits. */
+/** A rectangle whose top or bottom corners are rounded: the corner-radius slider icons. */
+export function CornerIcon({ side, size = 20 }: { side: "top" | "bottom"; size?: number }) {
+  const d =
+    side === "top"
+      ? "M4 17 V9 a5 5 0 0 1 5 -5 h6 a5 5 0 0 1 5 5 v8"
+      : "M4 3 v8 a5 5 0 0 0 5 5 h6 a5 5 0 0 0 5 -5 v-8";
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" aria-hidden>
+      <path d={d} />
+    </svg>
+  );
+}
+
 export function Slider({
-  icon,
+  icon = "tune",
+  iconNode,
   value,
   min,
   max,
@@ -227,7 +257,9 @@ export function Slider({
   unit = "",
   title,
 }: {
-  icon: string;
+  icon?: string;
+  /** custom glyph shown instead of the Material Symbol */
+  iconNode?: React.ReactNode;
   value: number;
   min: number;
   max: number;
@@ -250,8 +282,8 @@ export function Slider({
   };
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-      <span title={title} style={{ color: p.onSurfaceVariant, lineHeight: 1, flex: "0 0 auto" }}>
-        <Icon name={icon} size={20} />
+      <span title={title} style={{ color: p.onSurfaceVariant, lineHeight: 1, flex: "0 0 auto", display: "inline-flex" }}>
+        {iconNode ?? <Icon name={icon} size={20} />}
       </span>
       <input
         type="range"
@@ -618,15 +650,48 @@ export function TokenChips({
   value,
   onChange,
   p,
+  none,
+  noneOn,
+  onNone,
 }: {
   value: ColorToken;
   onChange: (t: ColorToken) => void;
   p: Palette;
+  /** offer a "no background" chip */
+  none?: boolean;
+  noneOn?: boolean;
+  onNone?: () => void;
 }) {
+  const lang = useLang();
   return (
     <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+      {none && (
+        <button
+          onClick={onNone}
+          title={t("noBackground", lang)}
+          aria-label={t("noBackground", lang)}
+          aria-pressed={noneOn}
+          className="m3-press"
+          style={{
+            width: 30,
+            height: 30,
+            borderRadius: 15,
+            border: `1px solid ${p.outlineVariant}`,
+            padding: 0,
+            cursor: "pointer",
+            background: "transparent",
+            color: p.onSurfaceVariant,
+            display: "grid",
+            placeItems: "center",
+            outline: noneOn ? `2px solid ${p.primary}` : "2px solid transparent",
+            outlineOffset: 2,
+          }}
+        >
+          <Icon name="block" size={16} />
+        </button>
+      )}
       {COLOR_TOKENS.map((t) => {
-        const on = t.key === value;
+        const on = !noneOn && t.key === value;
         return (
           <button
             key={t.key}
@@ -650,5 +715,115 @@ export function TokenChips({
         );
       })}
     </div>
+  );
+}
+
+/** M3 basic dialog for a destructive confirmation. */
+export function ConfirmDialog({
+  open,
+  title,
+  body,
+  icon = "delete_sweep",
+  p,
+  onCancel,
+  onConfirm,
+}: {
+  open: boolean;
+  title: string;
+  body: string;
+  icon?: string;
+  p: Palette;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const lang = useLang();
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        onCancel();
+      }
+      if (e.key === "Enter") {
+        e.stopPropagation();
+        onConfirm();
+      }
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [open, onCancel, onConfirm]);
+  const btn = (label: string, primary: boolean, onClick: () => void) => (
+    <button
+      onClick={onClick}
+      className="m3-press"
+      style={{
+        height: 40,
+        padding: "0 16px",
+        borderRadius: 20,
+        border: "none",
+        background: primary ? p.primary : "transparent",
+        color: primary ? p.onPrimary : p.primary,
+        fontSize: 14,
+        fontWeight: 600,
+        cursor: "pointer",
+      }}
+    >
+      {label}
+    </button>
+  );
+  return (
+    <AnimatePresence>
+      {open && (
+        <motion.div
+          key="scrim"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.16 }}
+          onClick={onCancel}
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 600,
+            background: "rgba(0,0,0,0.32)",
+            display: "grid",
+            placeItems: "center",
+            padding: 24,
+          }}
+        >
+          <motion.div
+            role="alertdialog"
+            aria-modal
+            aria-label={title}
+            initial={{ scale: 0.92, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0.96, opacity: 0 }}
+            transition={{ type: "spring", stiffness: 520, damping: 34, mass: 0.7 }}
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: "min(100%, 340px)",
+              padding: 24,
+              borderRadius: 28,
+              background: p.surfaceContainerHigh,
+              color: p.onSurface,
+              boxShadow: "0 8px 24px rgba(0,0,0,0.18), 0 2px 6px rgba(0,0,0,0.10)",
+              display: "flex",
+              flexDirection: "column",
+              gap: 16,
+            }}
+          >
+            <div style={{ textAlign: "center", color: p.error }}>
+              <Icon name={icon} size={28} />
+            </div>
+            <div style={{ fontSize: 22, textAlign: "center" }}>{title}</div>
+            <div style={{ fontSize: 14, lineHeight: 1.5, color: p.onSurfaceVariant }}>{body}</div>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+              {btn(t("cancel", lang), false, onCancel)}
+              {btn(t("ok", lang), true, onConfirm)}
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 }

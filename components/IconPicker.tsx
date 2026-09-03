@@ -31,7 +31,9 @@ export function IconPicker({
   const [icons, setIcons] = useState<IconMeta[] | null>(cache);
   const [q, setQ] = useState("");
   const [fontReady, setFontReady] = useState(false);
-  const [, bump] = useState(0);
+  /* bumped after each measuring pass; the visible list depends on it because
+   * glyphOk is a plain map, not React state */
+  const [tick, bump] = useState(0);
 
   const refEl = useRef<HTMLSpanElement>(null);
   const probeEls = useRef<Map<string, HTMLElement>>(new Map());
@@ -95,7 +97,7 @@ export function IconPicker({
   const visible = useMemo(
     () => candidates.filter((c) => glyphOk.get(c.n) === true).slice(0, SHOWN),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [candidates, unknown, fontReady],
+    [candidates, fontReady, tick],
   );
 
   const loading = !icons || !fontReady;

@@ -1,25 +1,34 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { motion } from "motion/react";
+import { motion, useDragControls } from "motion/react";
 import { Item, KIND_SPEC, PALETTES, Palette, iconSlotsOf, setIconSlot } from "@/lib/tokens";
-import { Lang, t, useLang } from "@/lib/i18n";
+import { LANGS, Lang, t, useLang } from "@/lib/i18n";
 import { IconPicker } from "./IconPicker";
 import { Icon } from "./M3Node";
 import { VariantSwatch, variantsOf } from "./Inspector";
-import { Field, IconBtn, Segmented, Toggle } from "./ui";
+import { Field, IconBtn, Toggle } from "./ui";
 
-const REPO_URL = "https://github.com/lnkiai/m3e-canvas";
-
-/** Sheet that slides up from the bottom edge; the canvas above stays usable. */
+/** Sheet that slides up from the bottom edge; the canvas above stays usable.
+ *  Dragging the handle moves the sheet with the finger; a flick or a long pull closes it. */
 export function BottomSheet({ p, onClose, children }: { p: Palette; onClose: () => void; children: React.ReactNode }) {
   const lang = useLang();
+  const controls = useDragControls();
   return (
     <motion.div
       initial={{ y: "100%" }}
       animate={{ y: 0 }}
       exit={{ y: "100%" }}
       transition={{ type: "spring", stiffness: 420, damping: 38, mass: 0.8 }}
+      drag="y"
+      dragListener={false}
+      dragControls={controls}
+      dragConstraints={{ top: 0 }}
+      dragElastic={{ top: 0, bottom: 1 }}
+      dragTransition={{ bounceStiffness: 500, bounceDamping: 40 }}
+      onDragEnd={(_, info) => {
+        if (info.offset.y > 90 || info.velocity.y > 600) onClose();
+      }}
       style={{
         position: "absolute",
         left: 0,
@@ -38,15 +47,17 @@ export function BottomSheet({ p, onClose, children }: { p: Palette; onClose: () 
     >
       <button
         onClick={onClose}
+        onPointerDown={(e) => controls.start(e)}
         aria-label={t("close", lang)}
         style={{
-          height: 26,
+          height: 30,
           border: "none",
           background: "transparent",
           display: "grid",
           placeItems: "center",
-          cursor: "pointer",
+          cursor: "grab",
           flex: "0 0 auto",
+          touchAction: "none",
         }}
       >
         <span style={{ width: 32, height: 4, borderRadius: 2, background: p.outlineVariant }} />
@@ -253,20 +264,56 @@ export function MobileInspector({
   );
 }
 
-/** Theme, language and the project link, in one small sheet. */
+/** The language list, one row per language. */
+export function MobileLang({ palette: p, lang, onLang }: { palette: Palette; lang: Lang; onLang: (l: Lang) => void }) {
+  return (
+    <Row icon="translate" label={t("language", lang)} p={p}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+        {LANGS.map((l) => {
+          const on = l.key === lang;
+          return (
+            <button
+              key={l.key}
+              onClick={() => onLang(l.key)}
+              aria-pressed={on}
+              className="m3-press"
+              style={{
+                height: 52,
+                padding: "0 16px 0 12px",
+                borderRadius: 16,
+                border: "none",
+                background: on ? p.secondaryContainer : p.surfaceContainerHigh,
+                color: on ? p.onSecondaryContainer : p.onSurface,
+                fontSize: 15,
+                fontWeight: 600,
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: 12,
+                textAlign: "left",
+              }}
+            >
+              <span style={{ width: 22, display: "inline-flex" }}>{on && <Icon name="check" size={22} />}</span>
+              {l.label}
+            </button>
+          );
+        })}
+      </div>
+    </Row>
+  );
+}
+
+/** Theme and the project link, in one small sheet. */
 export function MobileSettings({
   palette: p,
   paletteKey,
   onPalette,
-  lang,
-  onLang,
 }: {
   palette: Palette;
   paletteKey: string;
   onPalette: (key: string) => void;
-  lang: Lang;
-  onLang: (l: Lang) => void;
 }) {
+  const lang = useLang();
   return (
     <div>
       <Row icon="palette" label={t("theme", lang)} p={p}>
@@ -301,44 +348,6 @@ export function MobileSettings({
           })}
         </div>
       </Row>
-      <Row icon="translate" label={t("language", lang)} p={p}>
-        <Segmented<Lang>
-          options={[
-            { key: "ja", label: "日本語" },
-            { key: "en", label: "English" },
-          ]}
-          value={lang}
-          onChange={onLang}
-          p={p}
-          height={44}
-        />
-      </Row>
-      <a
-        href={REPO_URL}
-        target="_blank"
-        rel="noreferrer"
-        className="m3-press"
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 10,
-          height: 48,
-          padding: "0 16px",
-          borderRadius: 24,
-          background: p.surfaceContainerHigh,
-          color: p.onSurface,
-          textDecoration: "none",
-          fontSize: 14,
-          fontWeight: 600,
-        }}
-      >
-        <svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-          <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z" />
-        </svg>
-        GitHub
-        <span style={{ flex: 1 }} />
-        <Icon name="open_in_new" size={18} />
-      </a>
     </div>
   );
 }
