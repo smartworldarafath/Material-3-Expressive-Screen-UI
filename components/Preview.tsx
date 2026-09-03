@@ -389,11 +389,16 @@ export function Preview({
   const top = stack[stack.length - 1];
   const current = frames.find((f) => f.id === top?.id) ?? frames[0];
 
+  /* on a wide window the controls stand in a column at the right edge, clear of the phone;
+   * on a phone they stay along the bottom, where the frame fills the width anyway */
+  const [wide, setWide] = useState(false);
   useEffect(() => {
-    const fit = () =>
+    const fit = () => {
+      setWide(window.innerWidth >= 720);
       setScale(
         Math.min(1.4, (window.innerHeight - 32) / (PHONE_H + BEZEL * 2), (window.innerWidth - (window.innerWidth < 720 ? 16 : 240)) / (PHONE_W + BEZEL * 2)),
       );
+    };
     fit();
     window.addEventListener("resize", fit);
     return () => window.removeEventListener("resize", fit);
@@ -576,7 +581,11 @@ export function Preview({
     alignItems: "center",
     gap: 6,
     whiteSpace: "nowrap",
+    /* the column has a fixed width, so labels are cut with an ellipsis instead of widening it */
+    width: wide ? "100%" : undefined,
+    minWidth: 0,
   };
+  const label: React.CSSProperties = { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 };
 
   return (
     <div
@@ -676,26 +685,24 @@ export function Preview({
       </div>
 
       <div
-        style={{
-          position: "absolute",
-          left: 0,
-          right: 0,
-          bottom: 14,
-          display: "flex",
-          justifyContent: "center",
-          pointerEvents: "none",
-        }}
+        style={
+          wide
+            ? { position: "absolute", right: 20, bottom: 20, display: "flex", alignItems: "flex-end", pointerEvents: "none" }
+            : { position: "absolute", left: 0, right: 0, bottom: 14, display: "flex", justifyContent: "center", pointerEvents: "none" }
+        }
       >
         <div
           style={{
             display: "flex",
-            alignItems: "center",
+            flexDirection: wide ? "column" : "row",
+            alignItems: wide ? "stretch" : "center",
             gap: 4,
             padding: 6,
             borderRadius: 28,
             background: p.surface,
             boxShadow: "0 4px 18px rgba(0,0,0,0.14)",
             pointerEvents: "auto",
+            width: wide ? 172 : undefined,
             maxWidth: "calc(100vw - 24px)",
           }}
         >
@@ -711,7 +718,7 @@ export function Preview({
             }}
           >
             <Icon name="arrow_back" size={20} />
-            {t("back", lang)}
+            <span style={label}>{t("back", lang)}</span>
           </button>
           <div ref={pickerRef} style={{ position: "relative", minWidth: 0 }}>
             <button
@@ -723,26 +730,24 @@ export function Preview({
                 ...barBtn,
                 background: p.secondaryContainer,
                 color: p.onSecondaryContainer,
-                maxWidth: 200,
+                maxWidth: wide ? undefined : 200,
               }}
             >
               <Icon name="smartphone" size={20} />
-              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{current.name || t("screen", lang)}</span>
-              <Icon name={picker ? "expand_more" : "expand_less"} size={18} />
+              <span style={{ ...label, flex: wide ? 1 : undefined, textAlign: "left" }}>{current.name || t("screen", lang)}</span>
+              <Icon name={wide ? (picker ? "chevron_right" : "chevron_left") : picker ? "expand_more" : "expand_less"} size={18} />
             </button>
             <AnimatePresence>
               {picker && (
                 <motion.div
                   role="menu"
-                  initial={{ opacity: 0, y: 6, scale: 0.96 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: 6, scale: 0.96 }}
+                  initial={wide ? { opacity: 0, x: 6, scale: 0.96 } : { opacity: 0, y: 6, scale: 0.96 }}
+                  animate={{ opacity: 1, x: wide ? 0 : "-50%", y: 0, scale: 1 }}
+                  exit={wide ? { opacity: 0, x: 6, scale: 0.96 } : { opacity: 0, y: 6, scale: 0.96 }}
                   transition={{ duration: 0.16, ease: EASE }}
                   style={{
                     position: "absolute",
-                    bottom: 48,
-                    left: "50%",
-                    x: "-50%",
+                    ...(wide ? { right: "calc(100% + 14px)", bottom: 0 } : { bottom: 48, left: "50%" }),
                     minWidth: 160,
                     maxHeight: "50vh",
                     overflowY: "auto",
@@ -753,7 +758,7 @@ export function Preview({
                     display: "flex",
                     flexDirection: "column",
                     gap: 2,
-                    transformOrigin: "bottom center",
+                    transformOrigin: wide ? "bottom right" : "bottom center",
                   }}
                 >
                   {frames.map((f) => {
@@ -798,7 +803,7 @@ export function Preview({
           </div>
           <button onClick={onClose} title={t("close", lang)} className="m3-press" style={{ ...barBtn, color: p.onSurfaceVariant }}>
             <Icon name="close" size={20} />
-            {t("closeBtn", lang)}
+            <span style={label}>{t("closeBtn", lang)}</span>
           </button>
         </div>
       </div>
