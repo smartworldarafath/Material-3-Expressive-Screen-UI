@@ -72,6 +72,10 @@ npm run build      # static export to ./out
 
 The app is a static Next.js export. To host it under a sub-path (for example a GitHub Pages project site), set `NEXT_PUBLIC_BASE_PATH=/your-repo` at build time. `.github/workflows/deploy.yml` does this automatically and publishes `out/` to GitHub Pages on every push to `main`.
 
+## Contributing
+
+Bug reports, part requests and pull requests are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) explains the setup, the conventions (English comments, three languages for every string) and where each kind of change lives. Questions go to [Discussions](https://github.com/lnkiai/m3e-canvas/discussions).
+
 ## Credits
 
 - Loading indicator shapes and animation model: [material-components-android](https://github.com/material-components/material-components-android) (Apache-2.0) via [Aler1x/m3-loading-indicator](https://github.com/Aler1x/m3-loading-indicator). See `NOTICE`.
@@ -121,6 +125,10 @@ npm run build      # ./out に静的書き出し
 
 静的サイトとして書き出す構成です。サブパス（GitHub Pages のプロジェクトサイトなど）で配信するときはビルド時に `NEXT_PUBLIC_BASE_PATH=/リポジトリ名` を指定してください。`.github/workflows/deploy.yml` が `main` への push ごとにこれを行い、GitHub Pages に公開します。
 
+### 貢献
+
+バグ報告、部品のリクエスト、PR を歓迎します。手順と約束事は [CONTRIBUTING.md](CONTRIBUTING.md) にまとめています。質問は [Discussions](https://github.com/lnkiai/m3e-canvas/discussions) へどうぞ。
+
 ### ライセンス
 
 MIT © lnkiai
@@ -160,6 +168,10 @@ npm run build      # 静态导出到 ./out
 ```
 
 项目以静态站点方式导出。若要部署在子路径下（例如 GitHub Pages 的项目站点），请在构建时设置 `NEXT_PUBLIC_BASE_PATH=/仓库名`。`.github/workflows/deploy.yml` 会在每次推送到 `main` 时自动完成这一步并发布到 GitHub Pages。
+
+### 参与贡献
+
+欢迎 Bug 报告、组件请求和 PR。步骤和约定见 [CONTRIBUTING.md](CONTRIBUTING.md)。提问请到 [Discussions](https://github.com/lnkiai/m3e-canvas/discussions)。
 
 ### 许可证
 
