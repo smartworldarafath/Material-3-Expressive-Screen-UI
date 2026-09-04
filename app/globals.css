@@ -133,4 +133,30 @@ input.m3-number {
   .m3-tile {
     transition: none;
   }
+  .m3-spin {
+    animation: none;
+  }
+}
+
+/* the AI button while a request is in flight */
+@keyframes m3-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.m3-spin {
+  animation: m3-spin 1.1s linear infinite;
+}
+
+/* buttons inside a run share fused corners, like a connected button group */
+.m3-run > * {
+  border-radius: 8px !important;
+}
+.m3-run > :first-child {
+  border-top-left-radius: 22px !important;
+  border-bottom-left-radius: 22px !important;
+}
+.m3-run > :last-child {
+  border-top-right-radius: 22px !important;
+  border-bottom-right-radius: 22px !important;
 }

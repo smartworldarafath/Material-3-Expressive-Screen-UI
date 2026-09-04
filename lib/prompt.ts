@@ -1006,6 +1006,7 @@ export function buildPrompt(doc: Doc, widths: Record<string, number>, onlyFrameI
     frames.forEach((f, i) => {
       const gs = byFrame.get(f.id) ?? [];
       if (i > 0 || frames.length > 1) lines.push("");
+      if (hasText(f.note)) lines.push(lang === "en" ? `${trimEnd(f.note!)}.` : `${trimEnd(f.note!)}。`);
       lines.push(ph.screenHead(q(f.name || ph.screen), f.bg && f.bg !== "surface" ? f.bg : undefined, gs.length > 0));
       describeScreen(lines, gs, { l: f.x, t: f.y, r: f.x + PHONE_W, b: f.y + PHONE_H }, widths, lang);
     });
@@ -1038,3 +1039,6 @@ export function buildPrompt(doc: Doc, widths: Record<string, number>, onlyFrameI
   for (const s of GENERAL[lang]) lines.push(`- ${s}`);
   return lines.join("\n");
 }
+
+/** the prompt to hand out: the author's edited text when there is one, otherwise the generated one */
+export const effectivePrompt = (doc: Doc, widths: Record<string, number>, lang: Lang = getLang()): string => (doc.promptEdit !== undefined ? doc.promptEdit : buildPrompt(doc, widths, undefined, lang));

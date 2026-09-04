@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { buildPrompt } from "@/lib/prompt";
 import { Doc, KIND_ORDER, Kind, Palette } from "@/lib/tokens";
 import { Icon } from "./M3Node";
-import { Field } from "./ui";
+import { Field, IconBtn } from "./ui";
 import { t, useLang } from "@/lib/i18n";
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -13,6 +13,15 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 const isProject = (value: unknown): value is Doc => {
   if (!isRecord(value) || !Array.isArray(value.groups) || !Array.isArray(value.frames)) return false;
   const kinds = new Set<Kind>(KIND_ORDER);
+  const validTabs = (tabs: unknown) =>
+    tabs === undefined ||
+    (Array.isArray(tabs) &&
+      tabs.every(
+        (tab) =>
+          isRecord(tab) &&
+          typeof tab.label === "string" &&
+          typeof tab.icon === "string",
+      ));
   const validItem = (item: unknown) =>
     isRecord(item) &&
     typeof item.id === "string" &&
@@ -20,7 +29,10 @@ const isProject = (value: unknown): value is Doc => {
     kinds.has(item.kind as Kind) &&
     typeof item.label === "string" &&
     (typeof item.icon === "string" || item.icon === null) &&
-    typeof item.variant === "string";
+    typeof item.variant === "string" &&
+    (item.supporting === undefined || typeof item.supporting === "string") &&
+    (item.note === undefined || typeof item.note === "string") &&
+    validTabs(item.tabs);
   const validGroup = (group: unknown) =>
     isRecord(group) &&
     typeof group.id === "string" &&
@@ -28,13 +40,15 @@ const isProject = (value: unknown): value is Doc => {
     Number.isFinite(group.y) &&
     (group.axis === "x" || group.axis === "y") &&
     Array.isArray(group.items) &&
+    group.items.length > 0 &&
     group.items.every(validItem);
   const validFrame = (frame: unknown) =>
     isRecord(frame) &&
     typeof frame.id === "string" &&
     typeof frame.name === "string" &&
     Number.isFinite(frame.x) &&
-    Number.isFinite(frame.y);
+    Number.isFinite(frame.y) &&
+    (frame.note === undefined || typeof frame.note === "string");
   return value.groups.every(validGroup) && value.frames.every(validFrame);
 };
 
@@ -52,7 +66,9 @@ export function PromptPanel({
   onImport: (doc: Doc) => void;
 }) {
   const lang = useLang();
-  const text = useMemo(() => buildPrompt(doc, widths, undefined, lang), [doc, widths, lang]);
+  const generated = useMemo(() => buildPrompt(doc, widths, undefined, lang), [doc, widths, lang]);
+  const edited = doc.promptEdit !== undefined;
+  const text = edited ? doc.promptEdit! : generated;
   const [copied, setCopied] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -118,7 +134,7 @@ export function PromptPanel({
       <Field
         value={doc.title}
         onChange={(title) => onDoc({ title })}
-        placeholder={t("screenName", lang)}
+        placeholder={t("appName", lang)}
         p={p}
         icon="smartphone"
       />
@@ -146,23 +162,35 @@ export function PromptPanel({
         {projectButton("download", t("saveProject", lang), saveProject)}
         {projectButton("upload", t("openProject", lang), () => fileRef.current?.click())}
       </div>
-      <div
-        className="no-scrollbar"
-        style={{
-          flex: 1,
-          minHeight: 0,
-          overflowY: "auto",
-          borderRadius: 18,
-          background: p.surfaceContainerLow,
-          padding: 14,
-          fontSize: 13,
-          lineHeight: 1.75,
-          color: p.onSurface,
-          whiteSpace: "pre-wrap",
-          wordBreak: "break-word",
-        }}
-      >
-        {text}
+      <div style={{ position: "relative", flex: 1, minHeight: 0, display: "flex" }}>
+        <textarea
+          className="no-scrollbar"
+          value={text}
+          onChange={(e) => onDoc({ promptEdit: e.target.value })}
+          spellCheck={false}
+          aria-label={t("prompt", lang)}
+          style={{
+            flex: 1,
+            minHeight: 0,
+            width: "100%",
+            borderRadius: 18,
+            border: "none",
+            background: p.surfaceContainerLow,
+            padding: edited ? "14px 14px 48px" : 14,
+            fontSize: 13,
+            lineHeight: 1.75,
+            color: p.onSurface,
+            fontFamily: "inherit",
+            resize: "none",
+            outline: "none",
+            boxSizing: "border-box",
+          }}
+        />
+        {edited && (
+          <div style={{ position: "absolute", right: 8, bottom: 8 }}>
+            <IconBtn icon="undo" p={p} size={32} onClick={() => onDoc({ promptEdit: undefined })} title={t("promptReset", lang)} />
+          </div>
+        )}
       </div>
       <button
         onClick={copy}

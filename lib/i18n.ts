@@ -170,7 +170,8 @@ const UI = {
   layerDown: { ja: "背面へ", en: "Send backward", zh: "下移一层" },
   noLayers: { ja: "この画面には部品がありません", en: "Nothing on this screen yet", zh: "此屏幕还没有组件" },
   // prompt panel
-  brief: { ja: "この画面の目的や全体の動き…", en: "Purpose of this screen, overall flow…", zh: "这个屏幕的用途和整体流程…" },
+  brief: { ja: "このアプリの説明…", en: "What this app is…", zh: "这个应用的说明…" },
+  appName: { ja: "アプリの名前", en: "App name", zh: "应用名称" },
   copyPrompt: { ja: "プロンプトをコピー", en: "Copy prompt", zh: "复制提示词" },
   // preview
   back: { ja: "戻る", en: "Back", zh: "返回" },
@@ -227,6 +228,43 @@ const UI = {
     zh: "富有表现力为弹性弹簧动效，作用于预览的屏幕过渡和提示词。",
   },
   tryIt: { ja: "タップして確認", en: "Tap to try", zh: "点击试试" },
+  // tidy
+  tidy: { ja: "整える", en: "Tidy", zh: "整理" },
+  tidyUndo: { ja: "整える前に戻す", en: "Undo tidy", zh: "撤销整理" },
+  tidyDone: { ja: "すでに整っています", en: "Already tidy", zh: "已经整齐" },
+  // screen description
+  description: { ja: "説明", en: "Description", zh: "说明" },
+  screenDescription: { ja: "この画面の目的", en: "What this screen is for", zh: "这个屏幕的用途" },
+  // ai
+  ai: { ja: "AI", en: "AI", zh: "AI" },
+  promptReset: { ja: "生成されたプロンプトに戻す", en: "Back to the generated prompt", zh: "恢复为生成的提示词" },
+  aiWriteShort: { ja: "AI で書く", en: "Write with AI", zh: "AI 撰写" },
+  aiWrite: { ja: "AI に書いてもらう", en: "Let the AI write it", zh: "让 AI 来写" },
+  aiSettings: { ja: "AI の設定", en: "AI settings", zh: "AI 设置" },
+  aiProvider: { ja: "プロバイダ", en: "Provider", zh: "服务商" },
+  aiBaseUrl: { ja: "ベース URL", en: "Base URL", zh: "基础 URL" },
+  aiModel: { ja: "モデル ID", en: "Model ID", zh: "模型 ID" },
+  aiKey: { ja: "API キー", en: "API key", zh: "API 密钥" },
+  aiGetKey: { ja: "キーを取得", en: "Get a key", zh: "获取密钥" },
+  aiKeyHint: {
+    ja: "キーはこのブラウザにだけ保存され、プロバイダへ直接送られます。",
+    en: "Stored only in this browser and sent straight to the provider.",
+    zh: "密钥只保存在此浏览器中，并直接发送给服务商。",
+  },
+  aiRestore: { ja: "AI の前と切り替える", en: "Switch between the AI rewrite and the original", zh: "在 AI 改写与原文之间切换" },
+  aiApplied: { ja: "適用しました", en: "Applied", zh: "已应用" },
+  aiSelectScreen: { ja: "先に画面を選んでください", en: "Select a screen first", zh: "请先选择一个屏幕" },
+  aiNoKey: { ja: "AI タブでキーを入れると使えます", en: "Add a key in the AI tab to use this", zh: "在 AI 标签页中填写密钥后即可使用" },
+  aiError: { ja: "AI の呼び出しに失敗しました", en: "The AI request failed", zh: "AI 请求失败" },
+  aiErrorRefusal: { ja: "モデルが回答を拒否しました", en: "The model declined to answer", zh: "模型拒绝回答" },
+  aiErrorJson: { ja: "モデルの返答を読み取れませんでした", en: "The model's reply could not be read", zh: "无法解析模型的回复" },
+  aiErrorModel: { ja: "モデル ID を入力してください", en: "Enter a model ID", zh: "请输入模型 ID" },
+  aiErrorInsecure: { ja: "ベース URL は https か localhost にしてください", en: "The base URL must use https or point at localhost", zh: "基础 URL 必须使用 https 或指向 localhost" },
+  aiErrorNetwork: {
+    ja: "接続できませんでした。URL、ネットワーク、CORS の設定を確認してください",
+    en: "Could not connect. Check the URL, the network and the server's CORS settings",
+    zh: "无法连接。请检查 URL、网络和服务器的 CORS 设置",
+  },
 } as const satisfies Record<string, Str>;
 
 export type UIKey = keyof typeof UI;

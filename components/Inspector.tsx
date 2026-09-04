@@ -31,7 +31,9 @@ import {
 } from "@/lib/tokens";
 import { IconPicker } from "./IconPicker";
 import { Icon } from "./M3Node";
-import { CornerIcon, Field, IconBtn, Section, Segmented, SizePresets, Slider, Toggle, TokenChips } from "./ui";
+import { ButtonRun, CornerIcon, Field, IconBtn, Section, Segmented, SizePresets, Slider, TidyButton, TidyState, Toggle, TokenChips } from "./ui";
+import { AiWriteBtn } from "./AiPanel";
+import { popHistory } from "@/lib/ai";
 import { SWIPE_TEXT, t, useLang } from "@/lib/i18n";
 
 export function variantsOf(kind: Kind): { key: Variant; label: string }[] {
@@ -246,6 +248,25 @@ function ActionEditor({
   );
 }
 
+/** what a field's AI button needs from the page; `reason` explains a disabled button */
+export type AiHooks = { ready: boolean; reason?: string; busy: boolean; onRun: () => void; onCancel: () => void };
+
+/** a multiline field with the AI button under it, fused with a button that swaps the AI text and the original once the AI has written it */
+function AiField({ ai, history, onRestore, p, value, onChange, placeholder }: { ai: AiHooks; history?: string[]; onRestore: () => void; p: Palette; value: string; onChange: (v: string) => void; placeholder: string }) {
+  const lang = useLang();
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+      <Field value={value} onChange={onChange} placeholder={placeholder} p={p} multiline rows={3} />
+      <div style={{ display: "flex", justifyContent: "flex-end" }}>
+        <ButtonRun>
+          <AiWriteBtn p={p} busy={ai.busy} disabled={!ai.ready} onClick={ai.onRun} onCancel={ai.onCancel} label={t("aiWriteShort", lang)} title={ai.ready ? t("aiWrite", lang) : (ai.reason ?? t("aiNoKey", lang))} />
+          {!!history?.length && <IconBtn icon="undo" p={p} size={40} on onClick={onRestore} title={t("aiRestore", lang)} />}
+        </ButtonRun>
+      </div>
+    </div>
+  );
+}
+
 export function FrameInspector({
   frame,
   palette: p,
@@ -256,6 +277,9 @@ export function FrameInspector({
   prompt,
   onSaveImage,
   frames,
+  tidy,
+  onTidy,
+  ai,
 }: {
   frame: Frame;
   palette: Palette;
@@ -266,6 +290,10 @@ export function FrameInspector({
   prompt: string;
   onSaveImage: () => Promise<void>;
   frames: Frame[];
+  /** what the tidy button offers: tidy the screen, undo the last tidy, or nothing (already tidy) */
+  tidy: TidyState;
+  onTidy: () => void;
+  ai: AiHooks;
 }) {
   const lang = useLang();
   const [copied, setCopied] = useState(false);
@@ -325,8 +353,14 @@ export function FrameInspector({
       <Section id="frame-name" icon="label" title={t("name", lang)} p={p}>
         <Field value={frame.name} onChange={(name) => onChange({ name })} placeholder={t("screenName", lang)} p={p} icon="smartphone" />
       </Section>
+      <Section id="frame-note" icon="notes" title={t("description", lang)} p={p}>
+        <AiField ai={ai} history={frame.noteHistory} onRestore={() => onChange(popHistory(frame.note, frame.noteHistory, "note", "noteHistory"))} p={p} value={frame.note ?? ""} onChange={(note) => onChange({ note: note || undefined })} placeholder={t("screenDescription", lang)} />
+      </Section>
       <Section id="frame-bg" icon="format_color_fill" title={t("background", lang)} p={p}>
         <TokenChips value={frame.bg ?? "surface"} onChange={(bg) => onChange({ bg })} p={p} />
+      </Section>
+      <Section id="frame-tidy" icon="align_space_even" title={t("tidy", lang)} p={p}>
+        <TidyButton state={tidy} onClick={onTidy} p={p} />
       </Section>
       {frames.length > 1 && (
         <Section id="frame-swipe" icon="swipe" title={t("swipeTo", lang)} p={p}>
@@ -354,7 +388,7 @@ export function FrameInspector({
         </Section>
       )}
       <Section id="frame-export" icon="ios_share" title={t("export", lang)} p={p}>
-        <div style={{ display: "flex", gap: 6 }}>
+        <ButtonRun>
           {actionBtn(
             copied ? "check" : "content_copy",
             copied ? t("copied", lang) : t("prompt", lang),
@@ -378,7 +412,7 @@ export function FrameInspector({
             },
             saving,
           )}
-        </div>
+        </ButtonRun>
         <div
           className="no-scrollbar"
           style={{
@@ -403,6 +437,7 @@ export function FrameInspector({
 }
 
 export function Inspector({
+  ai,
   item,
   palette: p,
   frames,
@@ -414,6 +449,8 @@ export function Inspector({
   onGroup,
   onUngroup,
 }: {
+  /** the AI button beside the behavior field */
+  ai: AiHooks;
   item: Item | null;
   palette: Palette;
   frames: Frame[];
@@ -1060,17 +1097,14 @@ export function Inspector({
 
       {!editOn && (
       <Section id="note" icon="bolt" title={t("behavior", lang)} p={p}>
-        <Field
+        <AiField
+          ai={ai}
+          history={item.noteHistory}
+          onRestore={() => onChange(popHistory(item.note, item.noteHistory, "note", "noteHistory"))}
+          p={p}
           value={item.note ?? ""}
           onChange={(note) => onChange({ note })}
-          placeholder={
-            item.kind === "button" || item.kind === "fab" || item.kind === "iconButton" || item.kind === "extendedFab"
-              ? t("whenPressed", lang)
-              : t("whatItDoes", lang)
-          }
-          p={p}
-          multiline
-          rows={3}
+          placeholder={item.kind === "button" || item.kind === "fab" || item.kind === "iconButton" || item.kind === "extendedFab" ? t("whenPressed", lang) : t("whatItDoes", lang)}
         />
       </Section>
       )}

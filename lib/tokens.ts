@@ -1026,6 +1026,8 @@ export type Item = {
   contained?: boolean;
   /** free text the author writes about what this part does */
   note?: string;
+  /** what `note` said before the AI rewrote it, so the rewrite can be undone */
+  noteHistory?: string[];
   bold?: boolean;
   /** height for free-form boxes */
   size2?: number;
@@ -1161,6 +1163,10 @@ export type Frame = {
   x: number;
   y: number;
   bg?: ColorToken;
+  /** what this screen is for, in the author's words; goes into the prompt */
+  note?: string;
+  /** what `note` said before the AI rewrote it */
+  noteHistory?: string[];
   /** frame ids reached by swiping in each direction */
   swipe?: Partial<Record<SwipeDir, string>>;
 };
@@ -1292,6 +1298,8 @@ export type Doc = {
   frame: FrameMode;
   title: string;
   brief: string;
+  /** the prompt as the author rewrote it by hand; undefined means the generated one */
+  promptEdit?: string;
   /** shape, type, motion and the light / dark and contrast switches */
   theme?: Theme;
 };

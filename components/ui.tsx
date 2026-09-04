@@ -58,7 +58,7 @@ export function IconBtn({
   );
 }
 
-export type SegOption<K extends string> = { key: K; icon?: string; label?: string; title?: string; /** small marker: this option carries something */ dot?: boolean };
+export type SegOption<K extends string> = { key: K; icon?: string; label?: string; title?: string; /** small marker: this option carries something */ dot?: boolean; /** this option alone takes the spare width */ grow?: boolean; /** an icon-only option that should not shrink to a square */ wide?: boolean };
 
 /** Connected-button group with the same fused corners as the canvas. */
 export function Segmented<K extends string>({
@@ -91,8 +91,8 @@ export function Segmented<K extends string>({
             aria-label={o.title ?? o.label}
             className="m3-press"
             style={{
-              flex: grow ? 1 : "0 0 auto",
-              minWidth: height,
+              flex: (o.grow ?? grow) ? 1 : "0 0 auto",
+              minWidth: o.wide ? height * 1.4 : height,
               height,
               padding: o.label ? "0 14px" : 0,
               border: "none",
@@ -723,6 +723,51 @@ export function TokenChips({
 }
 
 /** M3 basic dialog for a destructive confirmation. */
+/** A run of buttons fused like the canvas's connected buttons: round outside, small corners where they meet. */
+export function ButtonRun({ children }: { children: React.ReactNode }) {
+  return <div className="m3-run" style={{ display: "flex", gap: 3 }}>{children}</div>;
+}
+
+export type TidyState = "tidy" | "undo" | "done";
+
+/** One button that reads as "Tidy", turns into "Undo tidy" right after, and is
+ *  disabled while the screen is already tidy. */
+export function TidyButton({ state, onClick, p, pill }: { state: TidyState; onClick: () => void; p: Palette; /** the toolbar version next to the zoom pill */ pill?: boolean }) {
+  const lang = useLang();
+  const done = state === "done";
+  const label = state === "undo" ? t("tidyUndo", lang) : state === "done" ? t("tidyDone", lang) : t("tidy", lang);
+  return (
+    <button
+      onClick={onClick}
+      disabled={done}
+      title={label}
+      aria-label={label}
+      className="m3-press"
+      style={{
+        width: pill ? (done ? 40 : undefined) : "100%",
+        height: pill ? 40 : 44,
+        padding: done ? 0 : pill ? "0 16px 0 12px" : "0 16px",
+        borderRadius: pill ? 20 : 22,
+        border: "none",
+        background: done ? "transparent" : state === "undo" ? p.tertiaryContainer : p.secondaryContainer,
+        color: done ? p.onSurfaceVariant : state === "undo" ? p.onTertiaryContainer : p.onSecondaryContainer,
+        fontSize: 13,
+        fontWeight: 600,
+        cursor: done ? "default" : "pointer",
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 8,
+        opacity: done ? 0.7 : 1,
+        whiteSpace: "nowrap",
+      }}
+    >
+      <Icon name={state === "undo" ? "undo" : state === "done" ? "check" : "align_space_even"} size={done ? 22 : 20} />
+      {!done && label}
+    </button>
+  );
+}
+
 export function ConfirmDialog({
   open,
   title,
