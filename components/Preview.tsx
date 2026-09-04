@@ -8,6 +8,7 @@ import {
   Action,
   BACK_TARGET,
   BEZEL,
+  DESKTOP_R,
   Doc,
   Frame,
   GAP,
@@ -27,7 +28,9 @@ import {
   connectSpecOf,
   fontFamilyOf,
   freeRadii,
+  frameSizeOf,
   groupsInFrame,
+  isPhoneFrame,
   normalizeTheme,
   toggleIcon,
   uniformRadii,
@@ -38,6 +41,8 @@ import { t, useLang } from "@/lib/i18n";
 
 const EASE = [0.2, 0, 0, 1] as const;
 const SLIDE_MS = 0.42;
+/** room reserved for the wide preview controls: panel, right margin and breathing space */
+const WIDE_CONTROL_SPACE = 220;
 
 type Anim = { t: Transition; back: boolean; /** the expressive motion scheme: springs instead of eased tweens */ spring?: boolean };
 
@@ -388,21 +393,56 @@ export function Preview({
 
   const top = stack[stack.length - 1];
   const current = frames.find((f) => f.id === top?.id) ?? frames[0];
+  const peekFrame = peek ? frames.find((f) => f.id === peek.frameId) : undefined;
+  const { w: frameW, h: frameH } = current ? frameSizeOf(current) : { w: PHONE_W, h: PHONE_H };
+  const phone = current ? isPhoneFrame(current) : true;
+  const inset = phone ? BEZEL : 0;
+  const radius = phone ? PHONE_R : DESKTOP_R;
+  const outerW = frameW + inset * 2;
+  const outerH = frameH + inset * 2;
+  const targetFrame = peekFrame ?? current;
+  const { w: targetFrameW, h: targetFrameH } = targetFrame ? frameSizeOf(targetFrame) : { w: frameW, h: frameH };
+  const targetPhone = targetFrame ? isPhoneFrame(targetFrame) : phone;
+  const targetInset = targetPhone ? BEZEL : 0;
+  const targetRadius = targetPhone ? PHONE_R : DESKTOP_R;
+  const targetOuterW = targetFrameW + targetInset * 2;
+  const targetOuterH = targetFrameH + targetInset * 2;
+
+  /* A tracked swipe can cross frame sizes. The shell and clipping viewport
+   * follow the gesture so the target is full-sized at the end, without a snap. */
+  const prog = useMotionValue(0);
+  const shellW = useTransform(prog, (v) => outerW + (targetOuterW - outerW) * v);
+  const shellH = useTransform(prog, (v) => outerH + (targetOuterH - outerH) * v);
+  const shellRadius = useTransform(prog, (v) => radius + inset + (targetRadius + targetInset - radius - inset) * v);
+  const screenW = useTransform(prog, (v) => frameW + (targetFrameW - frameW) * v);
+  const screenH = useTransform(prog, (v) => frameH + (targetFrameH - frameH) * v);
+  const screenInset = useTransform(prog, (v) => inset + (targetInset - inset) * v);
+  const screenRadius = useTransform(prog, (v) => radius + (targetRadius - radius) * v);
+  const shellBackground = useTransform(
+    prog,
+    [0, 1],
+    [phone ? p.inverseSurface : p[current?.bg ?? "surface"], targetPhone ? p.inverseSurface : p[targetFrame?.bg ?? "surface"]],
+  );
+  const maxOuterW = Math.max(outerW, targetOuterW);
+  const maxOuterH = Math.max(outerH, targetOuterH);
+  const shellLeft = useTransform(shellW, (v) => ((maxOuterW - v) * scale) / 2);
+  const shellTop = useTransform(shellH, (v) => ((maxOuterH - v) * scale) / 2);
 
   /* on a wide window the controls stand in a column at the right edge, clear of the phone;
    * on a phone they stay along the bottom, where the frame fills the width anyway */
   const [wide, setWide] = useState(false);
   useEffect(() => {
     const fit = () => {
-      setWide(window.innerWidth >= 720);
+      const isWide = window.innerWidth >= 720;
+      setWide(isWide);
       setScale(
-        Math.min(1.4, (window.innerHeight - 32) / (PHONE_H + BEZEL * 2), (window.innerWidth - (window.innerWidth < 720 ? 16 : 240)) / (PHONE_W + BEZEL * 2)),
+        Math.min(1.4, (window.innerHeight - 32) / maxOuterH, (window.innerWidth - (isWide ? WIDE_CONTROL_SPACE + 16 : 16)) / maxOuterW),
       );
     };
     fit();
     window.addEventListener("resize", fit);
     return () => window.removeEventListener("resize", fit);
-  }, []);
+  }, [maxOuterH, maxOuterW]);
 
   const back = useCallback(() => {
     const s = stackRef.current;
@@ -436,11 +476,9 @@ export function Preview({
 
   const groupsFor = useCallback((f: Frame) => groupsInFrame(doc.groups, f, frames, widths), [doc.groups, frames, widths]);
   const groups = useMemo(() => (current ? groupsFor(current) : []), [current, groupsFor]);
-  const peekFrame = peek ? frames.find((f) => f.id === peek.frameId) : undefined;
   const peekGroups = useMemo(() => (peekFrame ? groupsFor(peekFrame) : []), [peekFrame, groupsFor]);
 
   /* ---- finger-tracked swipes: only the swipes the author set on the frame ---- */
-  const prog = useMotionValue(0);
   const axisMV = useMotionValue(0); // 0 = x, 1 = y
   const enterMV = useMotionValue(0);
   const exitMV = useMotionValue(0);
@@ -464,7 +502,7 @@ export function Preview({
 
   const onScreenPointerDown = (e: React.PointerEvent) => {
     if (peekRef.current || e.button !== 0) return;
-    gesture.current = { id: e.pointerId, x0: e.clientX, y0: e.clientY, phase: "idle", size: PHONE_W, last: 0, lastT: e.timeStamp, vel: 0 };
+    gesture.current = { id: e.pointerId, x0: e.clientX, y0: e.clientY, phase: "idle", size: frameW, last: 0, lastT: e.timeStamp, vel: 0 };
     swiped.current = false;
   };
 
@@ -493,7 +531,8 @@ export function Preview({
         const sl = SLIDE_SPEC[pk.t]!;
         g.phase = "drag";
         g.dir = dir;
-        g.size = sl.axis === "x" ? PHONE_W : PHONE_H;
+        const { w, h } = frameSizeOf(cur);
+        g.size = sl.axis === "x" ? w : h;
         swiped.current = true;
         axisMV.set(sl.axis === "x" ? 0 : 1);
         enterMV.set(sl.enter);
@@ -596,33 +635,35 @@ export function Preview({
         background: p.surfaceContainer,
         display: "grid",
         placeItems: "center",
+        boxSizing: "border-box",
+        paddingRight: wide ? WIDE_CONTROL_SPACE : 0,
       }}
     >
       <div
         style={{
-          width: (PHONE_W + BEZEL * 2) * scale,
-          height: (PHONE_H + BEZEL * 2) * scale,
+          width: maxOuterW * scale,
+          height: maxOuterH * scale,
           position: "relative",
-          marginBottom: 56,
+          marginBottom: wide ? 0 : 56,
         }}
       >
-        <div
+        <motion.div
           onPointerDown={onScreenPointerDown}
           style={{
             position: "absolute",
-            left: 0,
-            top: 0,
-            width: PHONE_W + BEZEL * 2,
-            height: PHONE_H + BEZEL * 2,
+            left: shellLeft,
+            top: shellTop,
+            width: shellW,
+            height: shellH,
             transform: `scale(${scale})`,
             touchAction: "none",
             transformOrigin: "0 0",
-            borderRadius: PHONE_R + BEZEL,
-            background: p.inverseSurface,
+            borderRadius: shellRadius,
+            background: shellBackground,
             boxShadow: "0 30px 80px rgba(0,0,0,0.22)",
           }}
         >
-          <div
+          <motion.div
             onClickCapture={(e) => {
               if (swiped.current) {
                 e.stopPropagation();
@@ -631,11 +672,11 @@ export function Preview({
             }}
             style={{
               position: "absolute",
-              left: BEZEL,
-              top: BEZEL,
-              width: PHONE_W,
-              height: PHONE_H,
-              borderRadius: PHONE_R,
+              left: screenInset,
+              top: screenInset,
+              width: screenW,
+              height: screenH,
+              borderRadius: screenRadius,
               overflow: "hidden",
               background: p[current.bg ?? "surface"],
               fontFamily: fontFamilyOf(theme.font),
@@ -680,8 +721,8 @@ export function Preview({
                 <Screen frame={peekFrame} groups={peekGroups} {...screenProps} />
               </motion.div>
             )}
-          </div>
-        </div>
+          </motion.div>
+        </motion.div>
       </div>
 
       <div
@@ -733,7 +774,7 @@ export function Preview({
                 maxWidth: wide ? undefined : 200,
               }}
             >
-              <Icon name="smartphone" size={20} />
+              <Icon name={phone ? "smartphone" : "desktop_windows"} size={20} />
               <span style={{ ...label, flex: wide ? 1 : undefined, textAlign: "left" }}>{current.name || t("screen", lang)}</span>
               <Icon name={wide ? (picker ? "chevron_right" : "chevron_left") : picker ? "expand_more" : "expand_less"} size={18} />
             </button>
@@ -792,7 +833,9 @@ export function Preview({
                           textAlign: "left",
                         }}
                       >
-                        <span style={{ width: 18, display: "inline-flex" }}>{on && <Icon name="check" size={18} />}</span>
+                        <span style={{ width: 18, display: "inline-flex" }}>
+                          {on ? <Icon name="check" size={18} /> : <Icon name={isPhoneFrame(f) ? "smartphone" : "desktop_windows"} size={18} />}
+                        </span>
                         {f.name || t("screen", lang)}
                       </button>
                     );

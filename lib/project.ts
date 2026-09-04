@@ -33,7 +33,14 @@ const validGroup = (group: unknown) =>
   group.items.every(validItem);
 
 const validFrame = (frame: unknown) =>
-  isRecord(frame) && typeof frame.id === "string" && typeof frame.name === "string" && Number.isFinite(frame.x) && Number.isFinite(frame.y) && (frame.note === undefined || typeof frame.note === "string");
+  isRecord(frame) &&
+  typeof frame.id === "string" &&
+  typeof frame.name === "string" &&
+  Number.isFinite(frame.x) &&
+  Number.isFinite(frame.y) &&
+  (frame.w === undefined || (Number.isFinite(frame.w) && (frame.w as number) > 0)) &&
+  (frame.h === undefined || (Number.isFinite(frame.h) && (frame.h as number) > 0)) &&
+  (frame.note === undefined || typeof frame.note === "string");
 
 /** whether a parsed file has the shape of a document the editor can open */
 export const isProject = (value: unknown): value is Doc =>

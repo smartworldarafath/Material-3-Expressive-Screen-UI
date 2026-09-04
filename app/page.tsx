@@ -24,15 +24,19 @@ import {
   clamp,
   connectSpecOf,
   DEFAULT_PLATFORM,
+  DESKTOP_R,
   Doc,
   isPlatform,
   Platform,
   Frame,
+  FramePreset,
   FRAME_GAP,
   FRAME_LABEL_H,
   FrameMode,
   frameOfGroup,
+  framePresetPatch,
   frameRect,
+  frameSizeOf,
   GAP,
   Group,
   groupBounds,
@@ -67,10 +71,11 @@ import {
   TRANSITIONS,
   uid,
   uniformRadii,
+  isPhoneFrame,
 } from "@/lib/tokens";
 import { Icon, M3Node, M3Static, MeasuredContent } from "@/components/M3Node";
 import { LayersPanel } from "@/components/Layers";
-import { FrameInspector, Inspector } from "@/components/Inspector";
+import { FrameInspector, FrameSizePicker, Inspector } from "@/components/Inspector";
 import { Preview } from "@/components/Preview";
 import { Logo } from "@/components/Logo";
 import { PartsPalette } from "@/components/PartsPalette";
@@ -169,8 +174,11 @@ function migrateGroups(groups: Group[], frames: Frame[]): Group[] {
   const oldNavH = KIND_SPEC.bottomNav.h - NAV_BAR_H;
   return groups.map((g) => {
     if (g.items.length !== 1 || g.items[0].kind !== "bottomNav") return g;
-    const f = frames.find((fr) => g.x >= fr.x - 1 && g.x <= fr.x + PHONE_W && g.y === fr.y + PHONE_H - oldNavH);
-    return f ? { ...g, y: f.y + PHONE_H - KIND_SPEC.bottomNav.h } : g;
+    const f = frames.find((fr) => {
+      const r = frameRect(fr);
+      return g.x >= r.l - 1 && g.x <= r.r && g.y === r.b - oldNavH;
+    });
+    return f ? { ...g, y: frameRect(f).b - KIND_SPEC.bottomNav.h } : g;
   });
 }
 
@@ -231,10 +239,12 @@ const mobileSeed = (): Group[] => {
 };
 
 /** While the model works on a screen, the scheme's colors drift through its bezel. */
-function ThinkingRing({ p }: { p: Palette }) {
+function ThinkingRing({ p, frame }: { p: Palette; frame: Frame }) {
   const still = useReducedMotion();
-  const w = PHONE_W + BEZEL * 2;
-  const h = PHONE_H + BEZEL * 2;
+  const { w: frameW, h: frameH } = frameSizeOf(frame);
+  const inset = isPhoneFrame(frame) ? BEZEL : 0;
+  const w = frameW + inset * 2;
+  const h = frameH + inset * 2;
   const d = Math.ceil(Math.hypot(w, h)) + 80;
   const stops = [p.primary, p.tertiaryContainer, p.inversePrimary, p.secondaryContainer, p.primaryContainer, p.primary];
   return (
@@ -680,10 +690,10 @@ export default function Page() {
     let y1 = PHONE_H + BEZEL;
     const fs = framesRef.current;
     if (frameRef.current === "phone" && fs.length > 0) {
-      x0 = Math.min(...fs.map((f) => f.x)) - BEZEL;
-      y0 = Math.min(...fs.map((f) => f.y)) - BEZEL - FRAME_LABEL_H;
-      x1 = Math.max(...fs.map((f) => f.x)) + PHONE_W + BEZEL;
-      y1 = Math.max(...fs.map((f) => f.y)) + PHONE_H + BEZEL;
+      x0 = Math.min(...fs.map((f) => f.x - (isPhoneFrame(f) ? BEZEL : 0)));
+      y0 = Math.min(...fs.map((f) => f.y - (isPhoneFrame(f) ? BEZEL : 0))) - FRAME_LABEL_H;
+      x1 = Math.max(...fs.map((f) => frameRect(f).r + (isPhoneFrame(f) ? BEZEL : 0)));
+      y1 = Math.max(...fs.map((f) => frameRect(f).b + (isPhoneFrame(f) ? BEZEL : 0)));
     }
     if (frameRef.current === "blank") {
       if (gs.length === 0) {
@@ -869,19 +879,20 @@ export default function Page() {
       }
       if (frameRef.current === "phone") {
         for (const f of framesRef.current) {
+          const { w, h } = frameSizeOf(f);
           xs.push(
             f.x,
             f.x + FRAME_MARGIN,
-            f.x + PHONE_W / 2,
-            f.x + PHONE_W - FRAME_MARGIN,
-            f.x + PHONE_W,
+            f.x + w / 2,
+            f.x + w - FRAME_MARGIN,
+            f.x + w,
           );
           ys.push(
             f.y,
             f.y + FRAME_MARGIN,
-            f.y + PHONE_H / 2,
-            f.y + PHONE_H - FRAME_MARGIN,
-            f.y + PHONE_H,
+            f.y + h / 2,
+            f.y + h - FRAME_MARGIN,
+            f.y + h,
           );
         }
       }
@@ -1161,12 +1172,25 @@ export default function Page() {
         return;
       }
       if (d.fromPalette) snapshot();
+      const targetFrame =
+        frameRef.current === "phone"
+          ? framesRef.current.find((f) => {
+              const r = frameRect(f);
+              const cx = rawX + sz.w / 2;
+              const cy = rawY + sz.h / 2;
+              return cx >= r.l && cx <= r.r && cy >= r.t && cy <= r.b;
+            })
+          : undefined;
+      const placedItem =
+        targetFrame && (item.kind === "topAppBar" || item.kind === "bottomNav")
+          ? { ...item, size: frameSizeOf(targetFrame).w }
+          : item;
       const ng: Group = {
         id: uid(),
         x: Math.round(rawX),
         y: Math.round(rawY),
         axis: connectSpecOf(item)?.axis ?? "x",
-        items: [item],
+        items: [placedItem],
       };
       setGroups((prev) =>
         prev.some((g) => g.items.some((it) => it.id === item.id))
@@ -1432,6 +1456,7 @@ export default function Page() {
     if (g.items.length !== 1 || frameRef.current !== "phone") return none;
     const f = frameOfGroup(g, framesRef.current, widthsRef.current);
     if (!f) return none;
+    const { w: frameW, h: frameH } = frameSizeOf(f);
     const a = sizeOf(before, widthsRef.current);
     const b = sizeOf(after, widthsRef.current);
     const shift = (pos: number, len: number, next: number, f0: number, fLen: number) => {
@@ -1443,8 +1468,8 @@ export default function Page() {
       return 0;
     };
     return {
-      dx: shift(g.x, a.w, b.w, f.x, PHONE_W),
-      dy: shift(g.y, a.h, b.h, f.y, PHONE_H),
+      dx: shift(g.x, a.w, b.w, f.x, frameW),
+      dy: shift(g.y, a.h, b.h, f.y, frameH),
     };
   };
 
@@ -1687,6 +1712,11 @@ export default function Page() {
     () => frames.find((f) => f.id === selectedFrameId) ?? null,
     [frames, selectedFrameId],
   );
+  const selectedPartFrame = useMemo(() => {
+    if (!primaryId || frame !== "phone") return null;
+    const g = groups.find((g) => g.items.some((it) => it.id === primaryId));
+    return g ? (frameOfGroup(g, frames, widths) ?? null) : null;
+  }, [primaryId, frame, groups, frames, widths]);
 
   /** the screen the tidy button works on: the selected one, or the one under the selected part */
   const tidyTarget = useMemo((): Frame | null => {
@@ -1699,7 +1729,7 @@ export default function Page() {
 
   const nextFrameX = () =>
     framesRef.current.length
-      ? Math.max(...framesRef.current.map((f) => f.x)) + PHONE_W + FRAME_GAP
+      ? Math.max(...framesRef.current.map((f) => frameRect(f).r)) + FRAME_GAP
       : 0;
 
   /** Entering phone mode with no frames wraps the existing parts in one. */
@@ -1736,14 +1766,15 @@ export default function Page() {
     let x = ((r?.width ?? 0) / 2 - v.x) / v.z - sz.w / 2;
     let y = ((r?.height ?? 0) / 2 - v.y) / v.z - sz.h / 2;
     if (f) {
-      const lx = f.x + Math.min(FRAME_MARGIN, (PHONE_W - sz.w) / 2);
-      const ly = f.y + Math.min(FRAME_MARGIN, (PHONE_H - sz.h) / 2);
-      x = clamp(x, lx, Math.max(lx, f.x + PHONE_W - FRAME_MARGIN - sz.w));
-      y = clamp(y, ly, Math.max(ly, f.y + PHONE_H - FRAME_MARGIN - sz.h));
+      const { w, h } = frameSizeOf(f);
+      const lx = f.x + Math.min(FRAME_MARGIN, (w - sz.w) / 2);
+      const ly = f.y + Math.min(FRAME_MARGIN, (h - sz.h) / 2);
+      x = clamp(x, lx, Math.max(lx, f.x + w - FRAME_MARGIN - sz.w));
+      y = clamp(y, ly, Math.max(ly, f.y + h - FRAME_MARGIN - sz.h));
       const taken = (yy: number) =>
         itemRects().some((o) => o.l < x + sz.w && o.r > x && o.t < yy + sz.h && o.b > yy);
       let tries = 0;
-      while (taken(y) && y + sz.h * 2 < f.y + PHONE_H && tries++ < 12) y += sz.h + 12;
+      while (taken(y) && y + sz.h * 2 < f.y + h && tries++ < 12) y += sz.h + 12;
     }
     snapshot();
     setGroups((gs) => [
@@ -1787,9 +1818,10 @@ export default function Page() {
     const r = canvasRect();
     if (r) {
       const z = viewRef.current.z;
+      const { w, h } = frameSizeOf(f);
       setView({
-        x: r.width / 2 - (f.x + PHONE_W / 2) * z,
-        y: r.height / 2 - (f.y + PHONE_H / 2) * z,
+        x: r.width / 2 - (f.x + w / 2) * z,
+        y: r.height / 2 - (f.y + h / 2) * z,
         z,
       });
     }
@@ -1798,6 +1830,36 @@ export default function Page() {
   const patchFrame = (id: string, patch: Partial<Frame>) => {
     snapshotFor("frame:" + id + ":" + Object.keys(patch).join(","));
     setFrames((fs) => fs.map((f) => (f.id === id ? { ...f, ...patch } : f)));
+  };
+
+  const setFramePreset = (id: string, preset: FramePreset) => {
+    const current = framesRef.current.find((f) => f.id === id);
+    if (!current) return;
+    const next = { ...current, ...framePresetPatch(preset) };
+    const before = frameSizeOf(current);
+    const after = frameSizeOf(next);
+    if (before.w === after.w && before.h === after.h) return;
+    const carried = new Set(
+      groupsRef.current
+        .filter((g) => frameOfGroup(g, framesRef.current, widthsRef.current)?.id === id)
+        .map((g) => g.id),
+    );
+    snapshot();
+    tidyRef.current = null;
+    setFrames((fs) => fs.map((f) => (f.id === id ? next : f)));
+    setGroups((gs) =>
+      gs.map((g) =>
+        carried.has(g.id)
+          ? {
+              ...g,
+              items: g.items.map((it) =>
+                it.kind === "topAppBar" || it.kind === "bottomNav" ? { ...it, size: after.w } : it,
+              ),
+            }
+          : g,
+      ),
+    );
+    queueMicrotask(() => fitRef.current());
   };
 
   /** the tidy button's state for the screen in play; the layout pass runs only when the document changes */
@@ -1996,7 +2058,8 @@ export default function Page() {
       await document.fonts?.ready;
       const el = document.querySelector<HTMLElement>(`[data-export="${f.id}"]`);
       if (!el) return;
-      const url = await toPng(el, { pixelRatio: 2, cacheBust: true, width: PHONE_W, height: PHONE_H });
+      const { w, h } = frameSizeOf(f);
+      const url = await toPng(el, { pixelRatio: 2, cacheBust: true, width: w, height: h });
       const a = document.createElement("a");
       a.href = url;
       a.download = `${f.name || "screen"}.png`;
@@ -2009,13 +2072,14 @@ export default function Page() {
   /** the runs of one screen drawn with plain divs: the export layer */
   const renderExport = (f: Frame) => {
     const gs = groups.filter((g) => frameOfGroup(g, frames, widths)?.id === f.id);
+    const { w, h } = frameSizeOf(f);
     return (
       <div
         data-export={f.id}
         style={{
           position: "relative",
-          width: PHONE_W,
-          height: PHONE_H,
+          width: w,
+          height: h,
           background: p[f.bg ?? "surface"],
           overflow: "hidden",
         }}
@@ -2214,10 +2278,11 @@ export default function Page() {
         const r = rects.find((x) => x.id === it.id);
         if (!f || !r) continue;
         const fr = frameRect(f);
-        const rightward = fr.l + PHONE_W / 2 >= (r.l + r.r) / 2;
+        const inset = isPhoneFrame(f) ? BEZEL : 0;
+        const rightward = (fr.l + fr.r) / 2 >= (r.l + r.r) / 2;
         const sx = rightward ? r.r : r.l;
         const sy = (r.t + r.b) / 2;
-        const tx = rightward ? fr.l - BEZEL : fr.r + BEZEL;
+        const tx = rightward ? fr.l - inset : fr.r + inset;
         const ty = clamp(sy, fr.t + 40, fr.b - 40);
         const dx = Math.max(60, Math.abs(tx - sx) * 0.5);
         const c1x = sx + (rightward ? dx : -dx);
@@ -2735,6 +2800,10 @@ export default function Page() {
                 frames.map((f) => {
                   const on = f.id === selectedFrameId;
                   const bg = p[f.bg ?? "surface"];
+                  const { w, h } = frameSizeOf(f);
+                  const phone = isPhoneFrame(f);
+                  const inset = phone ? BEZEL : 0;
+                  const radius = phone ? PHONE_R : DESKTOP_R;
                   return (
                     <div
                       key={f.id}
@@ -2745,8 +2814,8 @@ export default function Page() {
                         onPointerDown={(e) => onFramePointerDown(e, f)}
                         style={{
                           position: "absolute",
-                          left: -BEZEL,
-                          top: -BEZEL - FRAME_LABEL_H,
+                          left: -inset,
+                          top: -inset - FRAME_LABEL_H,
                           height: FRAME_LABEL_H,
                           display: "flex",
                           alignItems: "center",
@@ -2761,20 +2830,28 @@ export default function Page() {
                           fontFamily: "Roboto, system-ui, sans-serif",
                         }}
                       >
-                        <Icon name="smartphone" size={20} />
+                        <Icon name={phone ? "smartphone" : "desktop_windows"} size={20} />
                         {f.name || t("screen", lang)}
+                        <div onPointerDown={(e) => e.stopPropagation()} style={{ marginLeft: 4 }}>
+                          <FrameSizePicker
+                            frame={f}
+                            onChange={(preset) => setFramePreset(f.id, preset)}
+                            palette={p}
+                            compact
+                          />
+                        </div>
                       </div>
                       <div
                         onPointerDown={(e) => onFramePointerDown(e, f)}
                         style={{
                           position: "absolute",
-                          left: -BEZEL,
-                          top: -BEZEL,
+                          left: -inset,
+                          top: -inset,
                           overflow: "hidden",
-                          width: PHONE_W + BEZEL * 2,
-                          height: PHONE_H + BEZEL * 2,
-                          borderRadius: PHONE_R + BEZEL,
-                          background: p.inverseSurface,
+                          width: w + inset * 2,
+                          height: h + inset * 2,
+                          borderRadius: radius + inset,
+                          background: phone ? p.inverseSurface : bg,
                           boxShadow: on
                             ? `0 0 0 3px ${p.primary}, 0 18px 50px rgba(0,0,0,0.16)`
                             : "0 18px 50px rgba(0,0,0,0.14)",
@@ -2782,16 +2859,16 @@ export default function Page() {
                           transition: "box-shadow 120ms",
                         }}
                       >
-                        <AnimatePresence>{aiFrameId === f.id && <ThinkingRing key="ring" p={p} />}</AnimatePresence>
+                        <AnimatePresence>{aiFrameId === f.id && <ThinkingRing key="ring" p={p} frame={f} />}</AnimatePresence>
                         <div
                           data-screen={f.id}
                           style={{
                             position: "absolute",
-                            left: BEZEL,
-                            top: BEZEL,
-                            width: PHONE_W,
-                            height: PHONE_H,
-                            borderRadius: PHONE_R,
+                            left: inset,
+                            top: inset,
+                            width: w,
+                            height: h,
+                            borderRadius: radius,
                             background: bg,
                             overflow: "hidden",
                           }}
@@ -3220,6 +3297,7 @@ export default function Page() {
                 <FrameInspector
                   frame={selectedFrame}
                   palette={p}
+                  onSize={(preset) => setFramePreset(selectedFrame.id, preset)}
                   onChange={(patch) => patchFrame(selectedFrame.id, patch)}
                   onDelete={() => deleteFrame(selectedFrame.id)}
                   onDuplicate={() => duplicateFrame(selectedFrame.id)}
@@ -3243,6 +3321,7 @@ export default function Page() {
                     onCancel: cancelAi,
                   }}
                   item={selectedIds.length > 1 ? null : selected}
+                  frame={selectedPartFrame}
                   palette={p}
                   frames={frame === "phone" ? frames : []}
                   onChange={patchSelected}

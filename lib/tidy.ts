@@ -1,6 +1,6 @@
-import { Frame, Group, Item, PHONE_H, PHONE_MARGIN, PHONE_W, canJoin, connectSpecOf, frameOfGroup, groupBounds } from "./tokens";
+import { Frame, Group, Item, PHONE_MARGIN, canJoin, connectSpecOf, frameOfGroup, frameRect, groupBounds } from "./tokens";
 
-/* Rule-based layout for one phone screen. Nothing here is guessed by a model.
+/* Rule-based layout for one screen. Nothing here is guessed by a model.
  *
  * 1. Parts of one connectable family that sit next to each other fuse into a
  *    connected run, the same way the magnetic drop does: list items stacked in
@@ -149,7 +149,7 @@ const isAnchored = (u: Unit) => isTop(u) || isBottomBar(u) || isFloatingBottom(u
  *  Judged from the edges, so a part already on the margin reads the same way after tidying. */
 function align(bb: Rect, fr: Rect): "left" | "center" | "right" | "fill" {
   const w = bb.r - bb.l;
-  if (w >= PHONE_W - PHONE_MARGIN * 2 - 8) return "fill";
+  if (w >= fr.r - fr.l - PHONE_MARGIN * 2 - 8) return "fill";
   const near = PHONE_MARGIN + 12;
   const left = bb.l - fr.l <= near;
   const right = fr.r - bb.r <= near;
@@ -173,7 +173,9 @@ function gapBefore(prev: Unit[] | null, row: Unit[]): number {
 
 /** The tidied groups of the document, or null when `frame` is already tidy. */
 export function tidyFrame(groups: Group[], frame: Frame, frames: Frame[], widths: Record<string, number>): Group[] | null {
-  const fr: Rect = { l: frame.x, t: frame.y, r: frame.x + PHONE_W, b: frame.y + PHONE_H };
+  const fr: Rect = frameRect(frame);
+  const frameW = fr.r - fr.l;
+  const frameH = fr.b - fr.t;
   const mineIds = new Set(groups.filter((g) => frameOfGroup(g, frames, widths)?.id === frame.id).map((g) => g.id));
   if (!mineIds.size) return null;
 
@@ -193,13 +195,13 @@ export function tidyFrame(groups: Group[], frame: Frame, frames: Frame[], widths
   let bottom = fr.b;
   for (const u of units.filter(isBottomBar).sort((a, b) => b.bb.t - a.bb.t)) {
     bottom -= u.bb.b - u.bb.t;
-    target.set(u, { l: fr.l + Math.round((PHONE_W - (u.bb.r - u.bb.l)) / 2), t: bottom });
+    target.set(u, { l: fr.l + Math.round((frameW - (u.bb.r - u.bb.l)) / 2), t: bottom });
   }
   for (const u of units.filter(isFloatingBottom).sort((a, b) => b.bb.t - a.bb.t)) {
     const h = u.bb.b - u.bb.t;
     const w = u.bb.r - u.bb.l;
     bottom -= PHONE_MARGIN + h;
-    target.set(u, { l: fr.l + Math.round((PHONE_W - w) / 2), t: bottom });
+    target.set(u, { l: fr.l + Math.round((frameW - w) / 2), t: bottom });
   }
   let fabBottom = bottom;
   for (const u of units.filter(isFab).sort((a, b) => b.bb.t - a.bb.t)) {
@@ -209,7 +211,7 @@ export function tidyFrame(groups: Group[], frame: Frame, frames: Frame[], widths
     target.set(u, { l: fr.r - PHONE_MARGIN - w, t: fabBottom });
   }
   for (const u of units.filter(isOverlay)) {
-    target.set(u, { l: fr.l + Math.round((PHONE_W - (u.bb.r - u.bb.l)) / 2), t: fr.t + Math.round((PHONE_H - (u.bb.b - u.bb.t)) / 2) });
+    target.set(u, { l: fr.l + Math.round((frameW - (u.bb.r - u.bb.l)) / 2), t: fr.t + Math.round((frameH - (u.bb.b - u.bb.t)) / 2) });
   }
 
   /* everything else flows from the top on the layout margins, down to the bottom bars;
@@ -226,7 +228,7 @@ export function tidyFrame(groups: Group[], frame: Frame, frames: Frame[], widths
       const u = row[0];
       const w = u.bb.r - u.bb.l;
       const a = align(u.bb, fr);
-      const l = a === "left" ? fr.l + PHONE_MARGIN : a === "right" ? fr.r - PHONE_MARGIN - w : fr.l + Math.round((PHONE_W - w) / 2);
+      const l = a === "left" ? fr.l + PHONE_MARGIN : a === "right" ? fr.r - PHONE_MARGIN - w : fr.l + Math.round((frameW - w) / 2);
       target.set(u, { l, t: y });
     } else {
       const ws = row.map((u) => u.bb.r - u.bb.l);
@@ -235,12 +237,12 @@ export function tidyFrame(groups: Group[], frame: Frame, frames: Frame[], widths
       const gaps = row.slice(1).map((u, i) => (canJoin(row[i].probe, u.probe) ? APART_GAP_X : ROW_ITEM_GAP));
       const minPacked = total + gaps.reduce((s, g) => s + g, 0);
       const span = row[row.length - 1].bb.r - row[0].bb.l;
-      const inner = PHONE_W - PHONE_MARGIN * 2;
+      const inner = frameW - PHONE_MARGIN * 2;
       const spread = span >= inner * 0.7 && minPacked <= inner;
       const packed = spread ? inner : minPacked;
       const extra = spread ? (inner - minPacked) / gaps.length : 0;
       const a = spread ? "left" : align({ l: row[0].bb.l, t: 0, r: row[row.length - 1].bb.r, b: 0 }, fr);
-      let x = a === "right" ? fr.r - PHONE_MARGIN - packed : a === "center" ? fr.l + (PHONE_W - packed) / 2 : fr.l + PHONE_MARGIN;
+      let x = a === "right" ? fr.r - PHONE_MARGIN - packed : a === "center" ? fr.l + (frameW - packed) / 2 : fr.l + PHONE_MARGIN;
       row.forEach((u, i) => {
         const h = u.bb.b - u.bb.t;
         target.set(u, { l: Math.round(x), t: y + Math.round((rowH - h) / 2) });

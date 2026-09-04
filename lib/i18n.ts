@@ -190,6 +190,9 @@ const UI = {
   home: { ja: "ホーム", en: "Home", zh: "首页" },
   screenN: { ja: "画面", en: "Screen", zh: "屏幕" },
   copySuffix: { ja: " コピー", en: " copy", zh: " 副本" },
+  frameSize: { ja: "画面サイズ", en: "Frame size", zh: "画板尺寸" },
+  phoneFrame: { ja: "スマホ", en: "Phone", zh: "手机" },
+  desktopFrame: { ja: "デスクトップ", en: "Desktop", zh: "桌面" },
   // mobile
   mobileNote: { ja: "フル機能は PC のブラウザで使えます", en: "Full features on a desktop browser", zh: "完整功能请在电脑浏览器中使用" },
   addButton: { ja: "ボタンを追加", en: "Add button", zh: "添加按钮" },
