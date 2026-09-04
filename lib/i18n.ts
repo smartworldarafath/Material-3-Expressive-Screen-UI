@@ -63,10 +63,11 @@ const UI = {
   export: { ja: "書き出し", en: "Export", zh: "导出" },
   saveProject: { ja: "プロジェクトを保存", en: "Save project", zh: "保存项目" },
   openProject: { ja: "プロジェクトを開く", en: "Open project", zh: "打开项目" },
+  replaceProjectTitle: { ja: "プロジェクトを開きますか？", en: "Open this project?", zh: "要打开这个项目吗？" },
   replaceProject: {
-    ja: "このプロジェクトを開きますか？現在のキャンバスは置き換えられます。",
-    en: "Open this project? The current canvas will be replaced.",
-    zh: "要打开这个项目吗？当前画布将被替换。",
+    ja: "現在のキャンバスは置き換えられ、元に戻す (Ctrl+Z) では戻れません。先に保存しておくと安全です。",
+    en: "The current canvas will be replaced, and undo (Ctrl+Z) cannot bring it back. Save it first to be safe.",
+    zh: "当前画布将被替换，且无法用撤销 (Ctrl+Z) 恢复。建议先保存。",
   },
   invalidProject: {
     ja: "プロジェクトファイルを開けませんでした。",

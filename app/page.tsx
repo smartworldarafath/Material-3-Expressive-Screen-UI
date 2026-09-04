@@ -293,6 +293,8 @@ export default function Page() {
   const [title, setTitle] = useState("");
   const [brief, setBrief] = useState("");
   const [promptEdit, setPromptEdit] = useState<string | undefined>(undefined);
+  /** a project file waiting for the author to confirm replacing the canvas */
+  const [pendingImport, setPendingImport] = useState<Doc | null>(null);
 
   /* ---------- editor ui ---------- */
   const [view, setView] = useState<View>({ x: 0, y: 0, z: 1 });
@@ -434,6 +436,28 @@ export default function Page() {
   });
 
   /* ---------- persistence ---------- */
+  /** Puts a stored or opened document into the editor. Fields a partial document
+   *  leaves out keep their current value, or go back to the default when `reset`. */
+  const applyDoc = (doc: Partial<Doc>, reset: boolean) => {
+    const frames = Array.isArray(doc.frames) ? doc.frames : framesRef.current;
+    if (Array.isArray(doc.groups)) setGroups(migrateGroups(doc.groups, frames));
+    if (Array.isArray(doc.frames)) setFrames(doc.frames);
+    if (typeof doc.paletteKey === "string" && doc.paletteKey) setPaletteKey(doc.paletteKey);
+    else if (reset) setPaletteKey("purple");
+    if (doc.customPalette && typeof doc.customPalette.primary === "string") setCustomPalette(doc.customPalette);
+    else if (reset) setCustomPalette(null);
+    if (typeof doc.dynamicColor === "boolean") setDynamicColor(doc.dynamicColor);
+    else if (reset) setDynamicColor(false);
+    if (doc.theme && typeof doc.theme === "object") setTheme(normalizeTheme(doc.theme));
+    else if (reset) setTheme(normalizeTheme(undefined));
+    if (typeof doc.title === "string") setTitle(doc.title);
+    else if (reset) setTitle("");
+    if (typeof doc.brief === "string") setBrief(doc.brief);
+    else if (reset) setBrief("");
+    if (typeof doc.promptEdit === "string") setPromptEdit(doc.promptEdit);
+    else if (reset) setPromptEdit(undefined);
+  };
+
   useEffect(() => {
     // React's development double-run would otherwise read back its own first save
     if (loadedRef.current) return;
@@ -441,18 +465,8 @@ export default function Page() {
       const d = localStorage.getItem(DOC_KEY);
       if (d) {
         hadDocRef.current = true;
-        const doc = JSON.parse(d) as Partial<Doc>;
-        const frames = Array.isArray(doc.frames) ? doc.frames : framesRef.current;
-        if (Array.isArray(doc.groups)) setGroups(migrateGroups(doc.groups, frames));
-        if (Array.isArray(doc.frames)) setFrames(doc.frames);
-        if (doc.paletteKey) setPaletteKey(doc.paletteKey);
-        if (doc.customPalette && typeof doc.customPalette.primary === "string") setCustomPalette(doc.customPalette);
-        if (typeof doc.dynamicColor === "boolean") setDynamicColor(doc.dynamicColor);
-        if (doc.theme && typeof doc.theme === "object") setTheme(normalizeTheme(doc.theme));
+        applyDoc(JSON.parse(d) as Partial<Doc>, false);
         // frame mode is decided by the device (media-query effect), not restored
-        if (typeof doc.title === "string") setTitle(doc.title);
-        if (typeof doc.brief === "string") setBrief(doc.brief);
-        if (typeof doc.promptEdit === "string") setPromptEdit(doc.promptEdit);
       }
       const u = localStorage.getItem(UI_KEY);
       if (u) {
@@ -1640,20 +1654,16 @@ export default function Page() {
     setSelectedFrameId(null);
   };
 
+  /** Opening a project file replaces the canvas with the same restore path the saved
+   *  document goes through, then starts the editor fresh on it. */
   const importDoc = (next: Doc) => {
     hadDocRef.current = true;
-    setGroups(migrateGroups(next.groups, next.frames));
-    setFrames(next.frames);
-    setPaletteKey(typeof next.paletteKey === "string" ? next.paletteKey : "purple");
-    setCustomPalette(next.customPalette?.primary ? next.customPalette : null);
-    setDynamicColor(!!next.dynamicColor);
-    setTheme(normalizeTheme(next.theme));
-    const nextFrame = next.frame === "blank" ? "blank" : "phone";
-    setFrame(nextFrame);
-    frameRef.current = nextFrame;
-    setTitle(typeof next.title === "string" ? next.title : "");
-    setBrief(typeof next.brief === "string" ? next.brief : "");
-    setPromptEdit(typeof next.promptEdit === "string" ? next.promptEdit : undefined);
+    applyDoc(next, true);
+    if (!mobileRef.current) {
+      const nextFrame = next.frame === "blank" ? "blank" : "phone";
+      setFrame(nextFrame);
+      frameRef.current = nextFrame;
+    }
     setSelectedIds([]);
     setSelectedFrameId(null);
     setSelectedLinkId(null);
@@ -3238,12 +3248,25 @@ export default function Page() {
                     if (patch.brief !== undefined) setBrief(patch.brief);
                     if ("promptEdit" in patch) setPromptEdit(patch.promptEdit);
                   }}
-                  onImport={importDoc}
+                  onImport={(next) => (next ? setPendingImport(next) : showToast(t("invalidProject", lang)))}
                 />
               )}
             </div>
           </aside>
         )}
+
+        <ConfirmDialog
+          open={pendingImport !== null}
+          icon="file_open"
+          title={t("replaceProjectTitle", lang)}
+          body={t("replaceProject", lang)}
+          p={p}
+          onCancel={() => setPendingImport(null)}
+          onConfirm={() => {
+            if (pendingImport) importDoc(pendingImport);
+            setPendingImport(null);
+          }}
+        />
 
         <ConfirmDialog
           open={confirmClear}

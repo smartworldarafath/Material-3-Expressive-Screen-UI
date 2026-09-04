@@ -2,55 +2,11 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { buildPrompt } from "@/lib/prompt";
-import { Doc, KIND_ORDER, Kind, Palette } from "@/lib/tokens";
+import { Doc, Palette } from "@/lib/tokens";
+import { readProject, saveProject } from "@/lib/project";
 import { Icon } from "./M3Node";
-import { Field, IconBtn } from "./ui";
+import { ButtonRun, Field, IconBtn } from "./ui";
 import { t, useLang } from "@/lib/i18n";
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null;
-
-const isProject = (value: unknown): value is Doc => {
-  if (!isRecord(value) || !Array.isArray(value.groups) || !Array.isArray(value.frames)) return false;
-  const kinds = new Set<Kind>(KIND_ORDER);
-  const validTabs = (tabs: unknown) =>
-    tabs === undefined ||
-    (Array.isArray(tabs) &&
-      tabs.every(
-        (tab) =>
-          isRecord(tab) &&
-          typeof tab.label === "string" &&
-          typeof tab.icon === "string",
-      ));
-  const validItem = (item: unknown) =>
-    isRecord(item) &&
-    typeof item.id === "string" &&
-    typeof item.kind === "string" &&
-    kinds.has(item.kind as Kind) &&
-    typeof item.label === "string" &&
-    (typeof item.icon === "string" || item.icon === null) &&
-    typeof item.variant === "string" &&
-    (item.supporting === undefined || typeof item.supporting === "string") &&
-    (item.note === undefined || typeof item.note === "string") &&
-    validTabs(item.tabs);
-  const validGroup = (group: unknown) =>
-    isRecord(group) &&
-    typeof group.id === "string" &&
-    Number.isFinite(group.x) &&
-    Number.isFinite(group.y) &&
-    (group.axis === "x" || group.axis === "y") &&
-    Array.isArray(group.items) &&
-    group.items.length > 0 &&
-    group.items.every(validItem);
-  const validFrame = (frame: unknown) =>
-    isRecord(frame) &&
-    typeof frame.id === "string" &&
-    typeof frame.name === "string" &&
-    Number.isFinite(frame.x) &&
-    Number.isFinite(frame.y) &&
-    (frame.note === undefined || typeof frame.note === "string");
-  return value.groups.every(validGroup) && value.frames.every(validFrame);
-};
 
 export function PromptPanel({
   doc,
@@ -63,7 +19,8 @@ export function PromptPanel({
   widths: Record<string, number>;
   palette: Palette;
   onDoc: (patch: Partial<Doc>) => void;
-  onImport: (doc: Doc) => void;
+  /** a project file was chosen; null when it could not be read as one */
+  onImport: (doc: Doc | null) => void;
 }) {
   const lang = useLang();
   const generated = useMemo(() => buildPrompt(doc, widths, undefined, lang), [doc, widths, lang]);
@@ -83,25 +40,6 @@ export function PromptPanel({
       await navigator.clipboard.writeText(text);
       setCopied(true);
     } catch {}
-  };
-
-  const saveProject = () => {
-    const url = URL.createObjectURL(new Blob([JSON.stringify(doc, null, 2)], { type: "application/json" }));
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "m3e-canvas.json";
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 0);
-  };
-
-  const openProject = async (file: File) => {
-    try {
-      const next: unknown = JSON.parse(await file.text());
-      if (!isProject(next)) throw new Error("Invalid project");
-      if (window.confirm(t("replaceProject", lang))) onImport(next);
-    } catch {
-      window.alert(t("invalidProject", lang));
-    }
   };
 
   const projectButton = (icon: string, label: string, onClick: () => void) => (
@@ -155,13 +93,13 @@ export function PromptPanel({
         onChange={(e) => {
           const file = e.target.files?.[0];
           e.target.value = "";
-          if (file) void openProject(file);
+          if (file) void readProject(file).then(onImport);
         }}
       />
-      <div style={{ display: "flex", gap: 6 }}>
-        {projectButton("download", t("saveProject", lang), saveProject)}
+      <ButtonRun>
+        {projectButton("download", t("saveProject", lang), () => saveProject(doc))}
         {projectButton("upload", t("openProject", lang), () => fileRef.current?.click())}
-      </div>
+      </ButtonRun>
       <div style={{ position: "relative", flex: 1, minHeight: 0, display: "flex" }}>
         <textarea
           className="no-scrollbar"
