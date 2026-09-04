@@ -1,11 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { buildPrompt } from "@/lib/prompt";
 import { DEFAULT_PLATFORM, Doc, Palette, Platform } from "@/lib/tokens";
-import { readProject, saveProject } from "@/lib/project";
 import { Icon } from "./M3Node";
-import { ButtonRun, Field, IconBtn, Segmented } from "./ui";
+import { Field, IconBtn, Segmented } from "./ui";
 import { t, useLang } from "@/lib/i18n";
 
 export function PromptPanel({
@@ -13,21 +12,17 @@ export function PromptPanel({
   widths,
   palette: p,
   onDoc,
-  onImport,
 }: {
   doc: Doc;
   widths: Record<string, number>;
   palette: Palette;
   onDoc: (patch: Partial<Doc>) => void;
-  /** a project file was chosen; null when it could not be read as one */
-  onImport: (doc: Doc | null) => void;
 }) {
   const lang = useLang();
   const generated = useMemo(() => buildPrompt(doc, widths, undefined, lang), [doc, widths, lang]);
   const edited = doc.promptEdit !== undefined;
   const text = edited ? doc.promptEdit! : generated;
   const [copied, setCopied] = useState(false);
-  const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!copied) return;
@@ -95,21 +90,6 @@ export function PromptPanel({
         p={p}
         height={40}
       />
-      <input
-        ref={fileRef}
-        type="file"
-        accept="application/json,.json"
-        hidden
-        onChange={(e) => {
-          const file = e.target.files?.[0];
-          e.target.value = "";
-          if (file) void readProject(file).then(onImport);
-        }}
-      />
-      <ButtonRun>
-        {projectButton("download", t("saveProject", lang), () => saveProject(doc))}
-        {projectButton("upload", t("openProject", lang), () => fileRef.current?.click())}
-      </ButtonRun>
       <div style={{ position: "relative", flex: 1, minHeight: 0, display: "flex" }}>
         <textarea
           className="no-scrollbar"

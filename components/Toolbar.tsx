@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { FrameMode, Palette } from "@/lib/tokens";
 import { IconBtn, Segmented, TidyButton, TidyState } from "./ui";
 import { Icon } from "./M3Node";
+import { Popover } from "./Menus";
 import { t, useLang } from "@/lib/i18n";
 
 export type Mode = "select" | "hand";
@@ -79,6 +80,8 @@ export function Toolbar({
   tidy,
   onTidy,
   note,
+  onSaveProject,
+  onOpenProject,
 }: {
   p: Palette;
   mode: Mode;
@@ -105,8 +108,10 @@ export function Toolbar({
   /** the tidy button for the screen being worked on; absent when no screen is in play */
   tidy?: TidyState;
   onTidy?: () => void;
-  /** a short confirmation shown beside the tidy button for a moment */
-  note?: string | null;
+  /** a short message shown beside the tidy button for a moment */
+  note?: { text: string; icon: string } | null;
+  onSaveProject?: () => void;
+  onOpenProject?: () => void;
 }) {
   const lang = useLang();
   if (mobile) {
@@ -197,8 +202,8 @@ export function Toolbar({
                 pointerEvents: "none",
               }}
             >
-              <Icon name="check" size={18} />
-              {note}
+              <Icon name={note.icon} size={18} />
+              {note.text}
             </motion.div>
             )}
           </AnimatePresence>
@@ -322,6 +327,34 @@ export function Toolbar({
             title={t("clearAll", lang)}
             size={40}
           />
+          {onSaveProject && onOpenProject && (
+            <Popover p={p} icon="folder_open" title={t("project", lang)} size={40}>
+              {(close) => (
+                <div style={{ display: "flex", gap: 2 }}>
+                  <IconBtn
+                    icon="download"
+                    p={p}
+                    size={44}
+                    title={t("saveProject", lang)}
+                    onClick={() => {
+                      close();
+                      onSaveProject();
+                    }}
+                  />
+                  <IconBtn
+                    icon="upload"
+                    p={p}
+                    size={44}
+                    title={t("openProject", lang)}
+                    onClick={() => {
+                      close();
+                      onOpenProject();
+                    }}
+                  />
+                </div>
+              )}
+            </Popover>
+          )}
         </Pill>
       </div>
     </>

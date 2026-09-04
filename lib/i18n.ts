@@ -61,6 +61,7 @@ const UI = {
   name: { ja: "名前", en: "Name", zh: "名称" },
   background: { ja: "背景", en: "Background", zh: "背景" },
   export: { ja: "書き出し", en: "Export", zh: "导出" },
+  project: { ja: "プロジェクト", en: "Project", zh: "项目" },
   saveProject: { ja: "プロジェクトを保存", en: "Save project", zh: "保存项目" },
   openProject: { ja: "プロジェクトを開く", en: "Open project", zh: "打开项目" },
   replaceProjectTitle: { ja: "プロジェクトを開きますか？", en: "Open this project?", zh: "要打开这个项目吗？" },

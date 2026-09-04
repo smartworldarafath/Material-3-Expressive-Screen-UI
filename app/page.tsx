@@ -81,6 +81,7 @@ import { AiActionKey, AiPanel, aiErrorText } from "@/components/AiPanel";
 import { TidyState } from "@/components/ui";
 import { AiSettings, DEFAULT_AI, hasKey, isSecureUrl, loadAiSettings, proposeBehavior, proposeDescription, pushHistory, saveAiSettings } from "@/lib/ai";
 import { tidyFrame } from "@/lib/tidy";
+import { readProject, saveProject } from "@/lib/project";
 import { ColorPanel } from "@/components/ColorPanel";
 import { MotionPanel, ShapePanel, TypePanel } from "@/components/ThemePanel";
 import { ThemeContext, ensureFontLoaded } from "@/lib/theme";
@@ -333,7 +334,8 @@ export default function Page() {
   /** the screen the model is working on, which wears the animated ring meanwhile */
   const [aiFrameId, setAiFrameId] = useState<string | null>(null);
   /** the "applied" confirmation beside the tidy button */
-  const [aiNote, setAiNote] = useState<string | null>(null);
+  const [aiNote, setAiNote] = useState<{ text: string; icon: string } | null>(null);
+  const projectFileRef = useRef<HTMLInputElement>(null);
   const aiNoteTimer = useRef<number | null>(null);
   const aiAbortRef = useRef<AbortController | null>(null);
 
@@ -1822,16 +1824,21 @@ export default function Page() {
   };
 
   const toastTimer = useRef<number | null>(null);
-  const showToast = (msg: string, ms = 2200) => {
+  /** the desktop's message pill beside the tidy button; the phone keeps its centered toast */
+  const showAiNote = (text: string, icon = "check", ms = 2200) => {
+    setAiNote({ text, icon });
+    if (aiNoteTimer.current) window.clearTimeout(aiNoteTimer.current);
+    aiNoteTimer.current = window.setTimeout(() => setAiNote(null), ms);
+  };
+
+  const showToast = (msg: string, ms = 2200, icon = "info") => {
+    if (!mobileRef.current) {
+      showAiNote(msg, icon, ms);
+      return;
+    }
     setToast(msg);
     if (toastTimer.current) window.clearTimeout(toastTimer.current);
     toastTimer.current = window.setTimeout(() => setToast(null), ms);
-  };
-
-  const showAiNote = (msg: string) => {
-    setAiNote(msg);
-    if (aiNoteTimer.current) window.clearTimeout(aiNoteTimer.current);
-    aiNoteTimer.current = window.setTimeout(() => setAiNote(null), 2200);
   };
 
   const updateAiSettings = (s: AiSettings) => {
@@ -1875,7 +1882,7 @@ export default function Page() {
       setGroups((gs) => gs.map((g) => (g.items.some((it) => it.id === itemId) ? { ...g, items: g.items.map((it) => (it.id === itemId ? { ...it, note, noteHistory: pushHistory(it.noteHistory, it.note) } : it)) } : g)));
       showAiNote(t("aiApplied", lang));
     } catch (e) {
-      if (!ac.signal.aborted) showToast(aiErrorText(e, lang), 4000);
+      if (!ac.signal.aborted) showToast(aiErrorText(e, lang), 4000, "error");
     } finally {
       if (aiAbortRef.current === ac) {
         aiAbortRef.current = null;
@@ -3022,6 +3029,8 @@ export default function Page() {
             tidy={tidyState ?? undefined}
             onTidy={tidyTarget ? () => tidy(tidyTarget) : undefined}
             note={aiNote}
+            onSaveProject={() => saveProject(doc)}
+            onOpenProject={() => projectFileRef.current?.click()}
             rightInset={showRight ? rightW : 0}
             mobile={isMobile}
             onSettings={() => setSheet(sheet === "settings" ? null : "settings")}
@@ -3029,7 +3038,7 @@ export default function Page() {
             onPrompt={async () => {
               try {
                 await navigator.clipboard.writeText(effectivePrompt(doc, widths, lang));
-                showToast(t("copied", lang), 1400);
+                showToast(t("copied", lang), 1400, "check");
               } catch {}
             }}
           />
@@ -3255,12 +3264,23 @@ export default function Page() {
                     if ("promptEdit" in patch) setPromptEdit(patch.promptEdit);
                     if (isPlatform(patch.platform)) setPlatform(patch.platform);
                   }}
-                  onImport={(next) => (next ? setPendingImport(next) : showToast(t("invalidProject", lang)))}
                 />
               )}
             </div>
           </aside>
         )}
+
+        <input
+          ref={projectFileRef}
+          type="file"
+          accept="application/json,.json"
+          hidden
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            e.target.value = "";
+            if (file) void readProject(file).then((next) => (next ? setPendingImport(next) : showToast(t("invalidProject", lang), 3000, "error")));
+          }}
+        />
 
         <ConfirmDialog
           open={pendingImport !== null}
