@@ -471,10 +471,10 @@ function notes(g: Group, frames: Frame[], lang: Lang): string[] {
         if (variant) changes.push(`样式变为${vt[variant]}`);
         parts.push(`做成每次点击都切换开/关状态的切换按钮${changes.length ? `（开启时${changes.join("、")}）` : ""}`);
       } else if (lang === "ko") {
-        if (label !== undefined) changes.push(`레이블이 ${qe(label)}로 바뀐다`);
-        if (icon) changes.push(`아이콘이 ${icon}(으)로 바뀐다`);
+        if (label !== undefined) changes.push(`변경할 레이블: ${qe(label)}`);
+        if (icon) changes.push(`변경할 아이콘: ${icon}`);
         else if (icon === null) changes.push("아이콘이 사라진다");
-        if (variant) changes.push(`스타일이 ${vt[variant]}(으)로 바뀐다`);
+        if (variant) changes.push(`변경할 스타일: ${vt[variant]}`);
         parts.push(`탭할 때마다 켜짐/꺼짐이 전환되는 토글 버튼으로 만든다${changes.length ? `(켜졌을 때 ${changes.join(", ")})` : ""}`);
       } else {
         if (label !== undefined) changes.push(`the label becomes ${qe(label)}`);
@@ -599,7 +599,7 @@ function zone(bb: Rect, within: Rect, lang: Lang, phone: boolean): string {
 function rowText(row: LNode[], where: string, lang: Lang, within: Rect): string {
   if (row.length === 1) {
     const d = groupText(row[0].g, lang);
-    return lang === "ja" ? `${where}${d}を置きます。` : lang === "zh" ? `${where}放置${d}。` : lang === "ko" ? `${where} ${d}을(를) 배치합니다.` : `${where}: ${d}.`;
+    return lang === "ja" ? `${where}${d}を置きます。` : lang === "zh" ? `${where}放置${d}。` : lang === "ko" ? `${where} 다음 항목을 배치합니다: ${d}.` : `${where}: ${d}.`;
   }
   const last = row[row.length - 1];
   const fillsRight = last.bb.r >= within.r - 24;
@@ -613,8 +613,8 @@ function rowText(row: LNode[], where: string, lang: Lang, within: Rect): string 
     return `${where}，从左到右横向排成一行：${descs.join("、")}（放在同一行并垂直居中，不要竖着堆叠或换行${stretch}）。`;
   }
   if (lang === "ko") {
-    const stretch = fillsRight ? `, 마지막 ${groupName(last.g, "ko")}은(는) 오른쪽 끝까지 남은 너비를 채웁니다` : "";
-    return `${where}, 왼쪽부터 한 행에 ${descs.join(", ")}을(를) 배치합니다(같은 줄에 세로 중앙 정렬하고 쌓거나 줄 바꿈하지 않음${stretch}).`;
+    const stretch = fillsRight ? `, 마지막 항목(${groupName(last.g, "ko")})은 오른쪽 끝까지 남은 너비를 채웁니다` : "";
+    return `${where}, 왼쪽부터 한 행에 다음 항목을 배치합니다: ${descs.join(", ")}(같은 줄에 세로 중앙 정렬하고 쌓거나 줄 바꿈하지 않음${stretch}).`;
   }
   const stretch = fillsRight ? `; ${groupName(last.g, "en")} stretches to fill the remaining width to the right edge` : "";
   return `${where}, in one row from left to right: ${descs.join(", ")} (keep them on the same line, vertically centered; never stack or wrap them${stretch}).`;
@@ -902,7 +902,7 @@ const FONT_NOTE: Record<Lang, (name: string) => string> = {
   ja: (n) => `書体は ${n} を使う。`,
   en: (n) => `Use ${n} as the typeface.`,
   zh: (n) => `字体使用 ${n}。`,
-  ko: (n) => `글꼴은 ${n}을(를) 사용한다.`,
+  ko: (n) => `사용할 글꼴: ${n}.`,
 };
 
 const THEME_NOTES: Record<Lang, { shape: Record<Theme["shape"], string>; emphasized: string; plainType: string; motion: Record<Theme["motion"], string> }> = {

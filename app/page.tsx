@@ -323,6 +323,14 @@ export default function Page() {
     initialLangRef.current = next;
     setLang(next);
     const translated = translateSnapshot({ groups: groupsRef.current, frames: framesRef.current }, next);
+    const tidy = tidyRef.current;
+    if (tidy) {
+      tidyRef.current = tidy.after === groupsRef.current ? {
+        ...tidy,
+        before: translateSnapshot({ groups: tidy.before, frames: framesRef.current }, next).groups,
+        after: translated.groups,
+      } : null;
+    }
     setGroups(translated.groups);
     setFrames(translated.frames);
     pastRef.current = pastRef.current.map((snap) => translateSnapshot(snap, next));
