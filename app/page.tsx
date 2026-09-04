@@ -8,9 +8,9 @@ import {
   useRef,
   useState,
 } from "react";
-import { AnimatePresence, motion, useSpring } from "motion/react";
+import { AnimatePresence, motion, useReducedMotion, useSpring } from "motion/react";
 import { toPng } from "html-to-image";
-import { buildPrompt } from "@/lib/prompt";
+import { buildPrompt, effectivePrompt } from "@/lib/prompt";
 import {
   Action,
   actionsOf,
@@ -74,6 +74,10 @@ import { PartsPalette } from "@/components/PartsPalette";
 import { PromptPanel } from "@/components/PromptPanel";
 import { GitHubLink, Mode, Toolbar } from "@/components/Toolbar";
 import { LangMenu } from "@/components/Menus";
+import { AiActionKey, AiPanel, aiErrorText } from "@/components/AiPanel";
+import { TidyState } from "@/components/ui";
+import { AiSettings, DEFAULT_AI, hasKey, isSecureUrl, loadAiSettings, proposeBehavior, proposeDescription, pushHistory, saveAiSettings } from "@/lib/ai";
+import { tidyFrame } from "@/lib/tidy";
 import { ColorPanel } from "@/components/ColorPanel";
 import { MotionPanel, ShapePanel, TypePanel } from "@/components/ThemePanel";
 import { ThemeContext, ensureFontLoaded } from "@/lib/theme";
@@ -222,15 +226,51 @@ const mobileSeed = (): Group[] => {
   ];
 };
 
-type LeftTab = "parts" | "layers" | "color" | "shape" | "type" | "motion";
+/** While the model works on a screen, the scheme's colors drift through its bezel. */
+function ThinkingRing({ p }: { p: Palette }) {
+  const still = useReducedMotion();
+  const w = PHONE_W + BEZEL * 2;
+  const h = PHONE_H + BEZEL * 2;
+  const d = Math.ceil(Math.hypot(w, h)) + 80;
+  const stops = [p.primary, p.tertiaryContainer, p.inversePrimary, p.secondaryContainer, p.primaryContainer, p.primary];
+  return (
+    <motion.div
+      aria-hidden
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.6, ease: [0.2, 0, 0, 1] }}
+      style={{ position: "absolute", inset: 0, pointerEvents: "none" }}
+    >
+      <motion.div
+        animate={still ? undefined : { rotate: 360 }}
+        transition={{ repeat: Infinity, duration: 3.2, ease: "linear" }}
+        style={{
+          position: "absolute",
+          left: "50%",
+          top: "50%",
+          width: d,
+          height: d,
+          marginLeft: -d / 2,
+          marginTop: -d / 2,
+          background: `conic-gradient(from 0deg, ${stops.join(", ")})`,
+          filter: "blur(22px)",
+        }}
+      />
+    </motion.div>
+  );
+}
+
+type LeftTab = "parts" | "layers" | "color" | "shape" | "type" | "motion" | "ai";
 /** the left rail: parts and layers, then the four theme axes of the whole design */
-const LEFT_TABS: { key: LeftTab; icon: string; title: "parts" | "layers" | "colors" | "shape" | "typography" | "motion" }[] = [
+const LEFT_TABS: { key: LeftTab; icon: string; title: "parts" | "layers" | "colors" | "shape" | "typography" | "motion" | "ai" }[] = [
   { key: "parts", icon: "add_box", title: "parts" },
   { key: "layers", icon: "layers", title: "layers" },
   { key: "color", icon: "palette", title: "colors" },
   { key: "shape", icon: "rounded_corner", title: "shape" },
   { key: "type", icon: "text_fields", title: "typography" },
   { key: "motion", icon: "animation", title: "motion" },
+  { key: "ai", icon: "auto_awesome", title: "ai" },
 ];
 
 export default function Page() {
@@ -252,6 +292,7 @@ export default function Page() {
   const [toast, setToast] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [brief, setBrief] = useState("");
+  const [promptEdit, setPromptEdit] = useState<string | undefined>(undefined);
 
   /* ---------- editor ui ---------- */
   const [view, setView] = useState<View>({ x: 0, y: 0, z: 1 });
@@ -278,6 +319,17 @@ export default function Page() {
   const [widths, setWidths] = useState<Record<string, number>>({});
   const [resizing, setResizing] = useState<"left" | "right" | null>(null);
   const [, bumpHistory] = useState(0);
+  /* ---------- tidy and ai ---------- */
+  /** the groups before and after the last tidy; "undo" is offered only while the after-state is still current */
+  const tidyRef = useRef<{ frameId: string; before: Group[]; after: Group[] } | null>(null);
+  const [aiSettings, setAiSettings] = useState<AiSettings>(DEFAULT_AI);
+  const [aiBusy, setAiBusy] = useState(false);
+  /** the screen the model is working on, which wears the animated ring meanwhile */
+  const [aiFrameId, setAiFrameId] = useState<string | null>(null);
+  /** the "applied" confirmation beside the tidy button */
+  const [aiNote, setAiNote] = useState<string | null>(null);
+  const aiNoteTimer = useRef<number | null>(null);
+  const aiAbortRef = useRef<AbortController | null>(null);
 
   const p = paletteOf(paletteKey, customPalette, theme);
   /* corner helpers read the shape scale outside React; keep it current before anything renders */
@@ -400,6 +452,7 @@ export default function Page() {
         // frame mode is decided by the device (media-query effect), not restored
         if (typeof doc.title === "string") setTitle(doc.title);
         if (typeof doc.brief === "string") setBrief(doc.brief);
+        if (typeof doc.promptEdit === "string") setPromptEdit(doc.promptEdit);
       }
       const u = localStorage.getItem(UI_KEY);
       if (u) {
@@ -419,6 +472,7 @@ export default function Page() {
         queueMicrotask(() => fitRef.current());
       }
     } catch {}
+    setAiSettings(loadAiSettings());
     loadedRef.current = true;
   }, []);
 
@@ -500,10 +554,10 @@ export default function Page() {
     try {
       localStorage.setItem(
         DOC_KEY,
-        JSON.stringify({ groups, frames, paletteKey, frame, title, brief, customPalette: customPalette ?? undefined, dynamicColor, theme }),
+        JSON.stringify({ groups, frames, paletteKey, frame, title, brief, promptEdit, customPalette: customPalette ?? undefined, dynamicColor, theme }),
       );
     } catch {}
-  }, [groups, frames, paletteKey, frame, title, brief, customPalette, dynamicColor, theme]);
+  }, [groups, frames, paletteKey, frame, title, brief, promptEdit, customPalette, dynamicColor, theme]);
 
   useEffect(() => {
     if (!loadedRef.current) return;
@@ -1591,6 +1645,15 @@ export default function Page() {
     [frames, selectedFrameId],
   );
 
+  /** the screen the tidy button works on: the selected one, or the one under the selected part */
+  const tidyTarget = useMemo((): Frame | null => {
+    if (frame !== "phone" || isMobile) return null;
+    if (selectedFrame) return selectedFrame;
+    if (!primaryId) return null;
+    const g = groups.find((g) => g.items.some((it) => it.id === primaryId));
+    return g ? (frameOfGroup(g, frames, widths) ?? null) : null;
+  }, [frame, isMobile, selectedFrame, primaryId, groups, frames, widths]);
+
   const nextFrameX = () =>
     framesRef.current.length
       ? Math.max(...framesRef.current.map((f) => f.x)) + PHONE_W + FRAME_GAP
@@ -1693,6 +1756,109 @@ export default function Page() {
     snapshotFor("frame:" + id + ":" + Object.keys(patch).join(","));
     setFrames((fs) => fs.map((f) => (f.id === id ? { ...f, ...patch } : f)));
   };
+
+  /** the tidy button's state for the screen in play; the layout pass runs only when the document changes */
+  const tidyState = useMemo((): TidyState | null => {
+    if (!tidyTarget) return null;
+    const last = tidyRef.current;
+    if (last && last.frameId === tidyTarget.id && last.after === groups) return "undo";
+    return tidyFrame(groups, tidyTarget, frames, widths) ? "tidy" : "done";
+  }, [tidyTarget, groups, frames, widths]);
+
+  const tidy = (f: Frame) => {
+    const last = tidyRef.current;
+    if (last && last.frameId === f.id && last.after === groupsRef.current) {
+      snapshot();
+      setGroups(last.before);
+      tidyRef.current = null;
+      return;
+    }
+    const after = tidyFrame(groupsRef.current, f, framesRef.current, widthsRef.current);
+    if (!after) return;
+    snapshot();
+    tidyRef.current = { frameId: f.id, before: groupsRef.current, after };
+    setGroups(after);
+  };
+
+  const toastTimer = useRef<number | null>(null);
+  const showToast = (msg: string, ms = 2200) => {
+    setToast(msg);
+    if (toastTimer.current) window.clearTimeout(toastTimer.current);
+    toastTimer.current = window.setTimeout(() => setToast(null), ms);
+  };
+
+  const showAiNote = (msg: string) => {
+    setAiNote(msg);
+    if (aiNoteTimer.current) window.clearTimeout(aiNoteTimer.current);
+    aiNoteTimer.current = window.setTimeout(() => setAiNote(null), 2200);
+  };
+
+  const updateAiSettings = (s: AiSettings) => {
+    setAiSettings(s);
+    saveAiSettings(s);
+  };
+
+  const aiReady = hasKey(aiSettings) && aiSettings.model.trim().length > 0 && isSecureUrl(aiSettings.baseUrl);
+  const aiReason = !aiReady ? t("aiNoKey", lang) : !tidyTarget ? t("aiSelectScreen", lang) : undefined;
+
+  /** Writes one field with the model: a part's behavior note, or a screen's description.
+   *  The result goes straight in; the field remembers what it said so the rewrite can be undone. */
+  const runAi = async (action: AiActionKey, f: Frame, itemId?: string) => {
+    if (!aiReady) {
+      showToast(t("aiNoKey", lang));
+      return;
+    }
+    const curDoc = doc;
+    aiAbortRef.current?.abort();
+    const ac = new AbortController();
+    aiAbortRef.current = ac;
+    setAiBusy(true);
+    setAiFrameId(f.id);
+    try {
+      if (action === "describe") {
+        const r = await proposeDescription(aiSettings, curDoc, widthsRef.current, f, lang, ac.signal);
+        if (ac.signal.aborted) return;
+        snapshot();
+        setFrames((fs) => fs.map((x) => (x.id === f.id ? { ...x, note: r.note, noteHistory: pushHistory(x.noteHistory, x.note), name: r.name ?? x.name } : x)));
+        showAiNote(t("aiApplied", lang));
+        return;
+      }
+      if (!itemId) return;
+      const note = await proposeBehavior(aiSettings, curDoc, widthsRef.current, f, lang, itemId, ac.signal);
+      if (ac.signal.aborted) return;
+      if (!note) {
+        showToast(t("aiErrorJson", lang));
+        return;
+      }
+      snapshot();
+      setGroups((gs) => gs.map((g) => (g.items.some((it) => it.id === itemId) ? { ...g, items: g.items.map((it) => (it.id === itemId ? { ...it, note, noteHistory: pushHistory(it.noteHistory, it.note) } : it)) } : g)));
+      showAiNote(t("aiApplied", lang));
+    } catch (e) {
+      if (!ac.signal.aborted) showToast(aiErrorText(e, lang), 4000);
+    } finally {
+      if (aiAbortRef.current === ac) {
+        aiAbortRef.current = null;
+        setAiBusy(false);
+        setAiFrameId(null);
+      }
+    }
+  };
+
+  const cancelAi = () => {
+    aiAbortRef.current?.abort();
+    aiAbortRef.current = null;
+    setAiBusy(false);
+    setAiFrameId(null);
+  };
+
+  useEffect(
+    () => () => {
+      aiAbortRef.current?.abort();
+      if (aiNoteTimer.current) window.clearTimeout(aiNoteTimer.current);
+      if (toastTimer.current) window.clearTimeout(toastTimer.current);
+    },
+    [],
+  );
 
   /** a screen takes everything on it along, and links into it are dropped */
   const deleteFrame = useCallback(
@@ -1974,8 +2140,8 @@ export default function Page() {
   const dragSize = drag ? sizeOf(drag.item, widths) : { w: 0, h: 0 };
   const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
   const doc: Doc = useMemo(
-    () => ({ groups, frames, paletteKey, frame, title, brief, customPalette: customPalette ?? undefined, dynamicColor, theme }),
-    [groups, frames, paletteKey, frame, title, brief, customPalette, dynamicColor, theme],
+    () => ({ groups, frames, paletteKey, frame, title, brief, promptEdit, customPalette: customPalette ?? undefined, dynamicColor, theme }),
+    [groups, frames, paletteKey, frame, title, brief, promptEdit, customPalette, dynamicColor, theme],
   );
 
   /** arrows from tappable parts to the frames they open */
@@ -2361,7 +2527,7 @@ export default function Page() {
               )}
               <div style={{ height: 6 }} />
               {LEFT_TABS.map((tab, i) => (
-                <div key={tab.key} style={{ marginTop: i === 2 ? 10 : 0 }}>
+                <div key={tab.key} style={{ marginTop: i === 2 || i === 6 ? 10 : 0 }}>
                   <IconBtn
                     icon={tab.icon}
                     p={p}
@@ -2437,6 +2603,8 @@ export default function Page() {
                   <TypePanel p={p} theme={theme} onChange={patchTheme} />
                 ) : leftTab === "motion" ? (
                   <MotionPanel p={p} theme={theme} onChange={patchTheme} />
+                ) : leftTab === "ai" ? (
+                  <AiPanel p={p} settings={aiSettings} onSettings={updateAiSettings} />
                 ) : (
                   <LayersPanel
                     p={p}
@@ -2554,6 +2722,7 @@ export default function Page() {
                           position: "absolute",
                           left: -BEZEL,
                           top: -BEZEL,
+                          overflow: "hidden",
                           width: PHONE_W + BEZEL * 2,
                           height: PHONE_H + BEZEL * 2,
                           borderRadius: PHONE_R + BEZEL,
@@ -2565,6 +2734,7 @@ export default function Page() {
                           transition: "box-shadow 120ms",
                         }}
                       >
+                        <AnimatePresence>{aiFrameId === f.id && <ThinkingRing key="ring" p={p} />}</AnimatePresence>
                         <div
                           data-screen={f.id}
                           style={{
@@ -2808,15 +2978,17 @@ export default function Page() {
             }}
             onAddFrame={addFrame}
             onPreview={() => openPreview()}
+            tidy={tidyState ?? undefined}
+            onTidy={tidyTarget ? () => tidy(tidyTarget) : undefined}
+            note={aiNote}
             rightInset={showRight ? rightW : 0}
             mobile={isMobile}
             onSettings={() => setSheet(sheet === "settings" ? null : "settings")}
             onLangSheet={() => setSheet(sheet === "lang" ? null : "lang")}
             onPrompt={async () => {
               try {
-                await navigator.clipboard.writeText(buildPrompt(doc, widths, undefined, lang));
-                setToast(t("copied", lang));
-                window.setTimeout(() => setToast(null), 1400);
+                await navigator.clipboard.writeText(effectivePrompt(doc, widths, lang));
+                showToast(t("copied", lang), 1400);
               } catch {}
             }}
           />
@@ -2977,8 +3149,8 @@ export default function Page() {
               <div style={{ flex: 1, minWidth: 0 }}>
                 <Segmented<"edit" | "prompt">
                   options={[
-                    { key: "edit", icon: "tune", title: t("edit", lang) },
-                    { key: "prompt", icon: "auto_awesome", title: t("prompt", lang) },
+                    { key: "edit", icon: "tune", title: t("edit", lang), grow: false, wide: true },
+                    { key: "prompt", icon: "auto_awesome", label: t("prompt", lang), title: t("prompt", lang), grow: true },
                   ]}
                   value={rightTab}
                   onChange={setRightTab}
@@ -3005,9 +3177,21 @@ export default function Page() {
                   prompt={buildPrompt(doc, widths, selectedFrame.id, lang)}
                   onSaveImage={() => saveFrameImage(selectedFrame)}
                   frames={frames}
+                  tidy={tidyState ?? "done"}
+                  onTidy={() => tidy(selectedFrame)}
+                  ai={{ ready: aiReady, reason: aiReason, busy: aiBusy && aiFrameId === selectedFrame.id, onRun: () => runAi("describe", selectedFrame), onCancel: cancelAi }}
                 />
               ) : rightTab === "edit" ? (
                 <Inspector
+                  ai={{
+                    ready: aiReady && !!tidyTarget,
+                    reason: aiReason,
+                    busy: aiBusy,
+                    onRun: () => {
+                      if (tidyTarget && selected) runAi("behavior", tidyTarget, selected.id);
+                    },
+                    onCancel: cancelAi,
+                  }}
                   item={selectedIds.length > 1 ? null : selected}
                   palette={p}
                   frames={frame === "phone" ? frames : []}
@@ -3027,6 +3211,7 @@ export default function Page() {
                   onDoc={(patch) => {
                     if (patch.title !== undefined) setTitle(patch.title);
                     if (patch.brief !== undefined) setBrief(patch.brief);
+                    if ("promptEdit" in patch) setPromptEdit(patch.promptEdit);
                   }}
                 />
               )}

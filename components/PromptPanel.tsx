@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { buildPrompt } from "@/lib/prompt";
 import { Doc, Palette } from "@/lib/tokens";
 import { Icon } from "./M3Node";
-import { Field } from "./ui";
+import { Field, IconBtn } from "./ui";
 import { t, useLang } from "@/lib/i18n";
 
 export function PromptPanel({
@@ -19,7 +19,9 @@ export function PromptPanel({
   onDoc: (patch: Partial<Doc>) => void;
 }) {
   const lang = useLang();
-  const text = useMemo(() => buildPrompt(doc, widths, undefined, lang), [doc, widths, lang]);
+  const generated = useMemo(() => buildPrompt(doc, widths, undefined, lang), [doc, widths, lang]);
+  const edited = doc.promptEdit !== undefined;
+  const text = edited ? doc.promptEdit! : generated;
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
@@ -40,7 +42,7 @@ export function PromptPanel({
       <Field
         value={doc.title}
         onChange={(title) => onDoc({ title })}
-        placeholder={t("screenName", lang)}
+        placeholder={t("appName", lang)}
         p={p}
         icon="smartphone"
       />
@@ -53,23 +55,35 @@ export function PromptPanel({
         multiline
         rows={3}
       />
-      <div
-        className="no-scrollbar"
-        style={{
-          flex: 1,
-          minHeight: 0,
-          overflowY: "auto",
-          borderRadius: 18,
-          background: p.surfaceContainerLow,
-          padding: 14,
-          fontSize: 13,
-          lineHeight: 1.75,
-          color: p.onSurface,
-          whiteSpace: "pre-wrap",
-          wordBreak: "break-word",
-        }}
-      >
-        {text}
+      <div style={{ position: "relative", flex: 1, minHeight: 0, display: "flex" }}>
+        <textarea
+          className="no-scrollbar"
+          value={text}
+          onChange={(e) => onDoc({ promptEdit: e.target.value })}
+          spellCheck={false}
+          aria-label={t("prompt", lang)}
+          style={{
+            flex: 1,
+            minHeight: 0,
+            width: "100%",
+            borderRadius: 18,
+            border: "none",
+            background: p.surfaceContainerLow,
+            padding: edited ? "14px 14px 48px" : 14,
+            fontSize: 13,
+            lineHeight: 1.75,
+            color: p.onSurface,
+            fontFamily: "inherit",
+            resize: "none",
+            outline: "none",
+            boxSizing: "border-box",
+          }}
+        />
+        {edited && (
+          <div style={{ position: "absolute", right: 8, bottom: 8 }}>
+            <IconBtn icon="undo" p={p} size={32} onClick={() => onDoc({ promptEdit: undefined })} title={t("promptReset", lang)} />
+          </div>
+        )}
       </div>
       <button
         onClick={copy}

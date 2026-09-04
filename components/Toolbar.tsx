@@ -1,7 +1,8 @@
 "use client";
 
+import { AnimatePresence, motion } from "motion/react";
 import { FrameMode, Palette } from "@/lib/tokens";
-import { IconBtn, Segmented } from "./ui";
+import { IconBtn, Segmented, TidyButton, TidyState } from "./ui";
 import { Icon } from "./M3Node";
 import { t, useLang } from "@/lib/i18n";
 
@@ -75,6 +76,9 @@ export function Toolbar({
   onPrompt,
   onSettings,
   onLangSheet,
+  tidy,
+  onTidy,
+  note,
 }: {
   p: Palette;
   mode: Mode;
@@ -98,6 +102,11 @@ export function Toolbar({
   onSettings?: () => void;
   /** phone: open the language sheet instead of the menu */
   onLangSheet?: () => void;
+  /** the tidy button for the screen being worked on; absent when no screen is in play */
+  tidy?: TidyState;
+  onTidy?: () => void;
+  /** a short confirmation shown beside the tidy button for a moment */
+  note?: string | null;
 }) {
   const lang = useLang();
   if (mobile) {
@@ -158,8 +167,47 @@ export function Toolbar({
           bottom: 22,
           zIndex: 40,
           transition: "right 260ms cubic-bezier(0.2, 0, 0, 1)",
+          display: "flex",
+          gap: 10,
+          alignItems: "center",
         }}
       >
+        <div role="status" aria-live="polite" style={{ display: "contents" }}>
+          <AnimatePresence>
+            {note && (
+            <motion.div
+              key="note"
+              initial={{ opacity: 0, x: 8, scale: 0.96 }}
+              animate={{ opacity: 1, x: 0, scale: 1 }}
+              exit={{ opacity: 0, x: 8, scale: 0.96 }}
+              transition={{ duration: 0.18, ease: [0.2, 0, 0, 1] }}
+              style={{
+                height: 40,
+                padding: "0 16px",
+                borderRadius: 20,
+                background: p.inverseSurface,
+                color: p.inverseOnSurface,
+                fontSize: 13,
+                fontWeight: 600,
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 8,
+                whiteSpace: "nowrap",
+                boxShadow: "0 2px 10px rgba(0,0,0,0.10)",
+                pointerEvents: "none",
+              }}
+            >
+              <Icon name="check" size={18} />
+              {note}
+            </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+        {tidy && onTidy && (
+          <Pill p={p}>
+            <TidyButton state={tidy} onClick={onTidy} p={p} pill />
+          </Pill>
+        )}
         <Pill p={p}>
           <IconBtn
             icon="remove"
