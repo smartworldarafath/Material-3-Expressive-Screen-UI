@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import { Reorder, useDragControls } from "motion/react";
-import { Frame, Group, KIND_SPEC, Palette } from "@/lib/tokens";
+import { Frame, Group, KIND_SPEC, Palette, isPhoneFrame } from "@/lib/tokens";
 import { Icon } from "./M3Node";
 import { IconBtn } from "./ui";
 import { t, useLang } from "@/lib/i18n";
@@ -154,7 +154,7 @@ export function LayersPanel({
                   flex: "0 0 auto",
                 }}
               >
-                <Icon name="smartphone" size={16} />
+                <Icon name={isPhoneFrame(f) ? "smartphone" : "desktop_windows"} size={16} />
                 {f.name || t("screen", lang)}
               </button>
             );
