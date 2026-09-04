@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { buildPrompt } from "@/lib/prompt";
-import { Doc, KIND_ORDER, Kind, Palette } from "@/lib/tokens";
+import { Doc, KIND_ORDER, Kind, Palette, VARIANTS } from "@/lib/tokens";
 import { Icon } from "./M3Node";
 import { Field, IconBtn } from "./ui";
 import { t, useLang } from "@/lib/i18n";
@@ -29,7 +29,7 @@ const isProject = (value: unknown): value is Doc => {
     kinds.has(item.kind as Kind) &&
     typeof item.label === "string" &&
     (typeof item.icon === "string" || item.icon === null) &&
-    typeof item.variant === "string" &&
+    VARIANTS.some((variant) => variant.key === item.variant) &&
     (item.supporting === undefined || typeof item.supporting === "string") &&
     (item.note === undefined || typeof item.note === "string") &&
     validTabs(item.tabs);
