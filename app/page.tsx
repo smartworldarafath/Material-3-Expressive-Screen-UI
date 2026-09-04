@@ -1172,12 +1172,15 @@ export default function Page() {
         return;
       }
       if (d.fromPalette) snapshot();
-      const targetFrame = framesRef.current.find((f) => {
-        const r = frameRect(f);
-        const cx = rawX + sz.w / 2;
-        const cy = rawY + sz.h / 2;
-        return cx >= r.l && cx <= r.r && cy >= r.t && cy <= r.b;
-      });
+      const targetFrame =
+        frameRef.current === "phone"
+          ? framesRef.current.find((f) => {
+              const r = frameRect(f);
+              const cx = rawX + sz.w / 2;
+              const cy = rawY + sz.h / 2;
+              return cx >= r.l && cx <= r.r && cy >= r.t && cy <= r.b;
+            })
+          : undefined;
       const placedItem =
         targetFrame && (item.kind === "topAppBar" || item.kind === "bottomNav")
           ? { ...item, size: frameSizeOf(targetFrame).w }

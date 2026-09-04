@@ -594,7 +594,8 @@ export function Inspector({
   const mapWidthPreset = (v: number) =>
     v === PHONE_W ? frameSize.w : v === CONTENT_W ? contentWidth(frameSize.w) : v === HALF_W ? halfWidth(frameSize.w) : v;
   const mapHeightPreset = (v: number) => (v === PHONE_H ? frameSize.h : v === PHONE_H / 2 ? frameSize.h / 2 : v);
-  const widthMax = (max: number) => (max === PHONE_W ? frameSize.w : max);
+  const widthMax = (max: number) =>
+    max === PHONE_W ? frameSize.w : max === CONTENT_W ? contentWidth(frameSize.w) : max;
   const heightMax = (max: number) => (max === PHONE_H ? frameSize.h : max);
   const editOn = !!item.toggle && onTab;
   /* the on-state is edited through the same text / icon / style controls:
