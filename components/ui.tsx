@@ -233,11 +233,15 @@ export function Field({
 /** Slider with a typed-in number beside it. The slider moves in `step`s; the
  *  field accepts any whole number and is clamped to min..max when it commits. */
 /** A rectangle whose top or bottom corners are rounded: the corner-radius slider icons. */
-export function CornerIcon({ side, size = 20 }: { side: "top" | "bottom"; size?: number }) {
+export function CornerIcon({ side, size = 20 }: { side: "top" | "bottom" | "left" | "right"; size?: number }) {
   const d =
     side === "top"
       ? "M4 17 V9 a5 5 0 0 1 5 -5 h6 a5 5 0 0 1 5 5 v8"
-      : "M4 3 v8 a5 5 0 0 0 5 5 h6 a5 5 0 0 0 5 -5 v-8";
+      : side === "bottom"
+        ? "M4 3 v8 a5 5 0 0 0 5 5 h6 a5 5 0 0 0 5 -5 v-8"
+        : side === "left"
+          ? "M17 4 H9 a5 5 0 0 0 -5 5 v6 a5 5 0 0 0 5 5 h8"
+          : "M7 4 h8 a5 5 0 0 1 5 5 v6 a5 5 0 0 1 -5 5 h-8";
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" aria-hidden>
       <path d={d} />

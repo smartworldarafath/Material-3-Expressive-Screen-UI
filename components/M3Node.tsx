@@ -19,6 +19,10 @@ import {
   variantShadow,
   variantStyle,
   SETTLE_MS,
+  RAIL_W,
+  RAIL_TOP,
+  RAIL_ITEM_H,
+  RAIL_GAP,
 } from "@/lib/tokens";
 import { CircularProgress, LinearProgress, LoadingIndicator } from "./Loading";
 import { t, useLang } from "@/lib/i18n";
@@ -427,7 +431,8 @@ function Body({ item, p }: { item: Item; p: Palette }) {
             display: "flex",
             alignItems: "center",
             gap: 4,
-            padding: `${STATUS_BAR_H}px 4px 0`,
+            /* the inset the bar has, if any (see sizeOf) */
+            padding: `${sizeOf(item, {}).h - 64}px 4px 0`,
             height: "100%",
             boxSizing: "border-box",
             position: "relative",
@@ -743,6 +748,70 @@ function Body({ item, p }: { item: Item; p: Palette }) {
         </div>
       );
 
+    case "navRail": {
+      const tabs = item.tabs ?? [];
+      return (
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            gap: RAIL_GAP,
+            height: "100%",
+            padding: `${RAIL_TOP}px 0`,
+            boxSizing: "border-box",
+            position: "relative",
+          }}
+        >
+          {tabs.map((t, i) => {
+            const on = i === 0;
+            const withLabel = t.label.trim().length > 0;
+            return (
+              <div
+                key={i}
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  gap: 4,
+                  width: RAIL_W - 12,
+                  height: RAIL_ITEM_H,
+                  flex: "0 0 auto",
+                }}
+              >
+                <div
+                  style={{
+                    width: 56,
+                    height: 32,
+                    borderRadius: scaleR(16),
+                    display: "grid",
+                    placeItems: "center",
+                    background: on ? p.secondaryContainer : "transparent",
+                    color: on ? p.onSecondaryContainer : p.onSurfaceVariant,
+                  }}
+                >
+                  {t.icon && <Icon name={t.icon} size={22} fill={on} />}
+                </div>
+                {withLabel && (
+                  <span
+                    style={{
+                      fontSize: 11,
+                      fontWeight: on ? w(600, 700) : w(400, 500),
+                      color: on ? p.onSurface : p.onSurfaceVariant,
+                      maxWidth: "100%",
+                      ...ellipsis,
+                    }}
+                  >
+                    {t.label}
+                  </span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      );
+    }
+
     case "bottomNav": {
       const tabs = item.tabs ?? [];
       return (
@@ -1001,6 +1070,7 @@ function boxStyle(item: Item, p: Palette): React.CSSProperties {
         : { background: p.surface, border: `1px solid ${p.outline}`, color: p.onSurface };
     case "topAppBar":
     case "bottomNav":
+    case "navRail":
       return { background: p.surfaceContainer, border: "none", color: p.onSurface };
     case "toolbar":
       return item.variant === "filled"

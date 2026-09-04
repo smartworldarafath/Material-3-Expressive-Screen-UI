@@ -132,7 +132,15 @@ const MAX_IMAGE_PX = 1200;
 
 /** hover text for a width preset derived from the selected frame */
 export const widthPresetLabel = (v: number, frameWidth = PHONE_W): string | undefined =>
-  v === frameWidth ? t("screenWidth") : v === contentWidth(frameWidth) ? t("contentWidth") : v === halfWidth(frameWidth) ? t("halfWidth") : undefined;
+  v === frameWidth
+    ? t("screenWidth")
+    : v === contentWidth(frameWidth)
+      ? t("contentWidth")
+      : v === halfWidth(frameWidth)
+        ? t("halfWidth")
+        : frameWidth !== PHONE_W && v === CONTENT_W
+          ? t("columnWidth")
+          : undefined;
 
 const heightPresetLabel = (v: number, frameHeight = PHONE_H): string | undefined =>
   v === frameHeight ? t("screenHeight") : v === frameHeight / 2 ? t("halfHeight") : undefined;
@@ -670,6 +678,7 @@ export function Inspector({
 
   const hasRadius =
     item.kind === "bottomNav" ||
+    item.kind === "navRail" ||
     item.kind === "topAppBar" ||
     item.kind === "card" ||
     item.kind === "image" ||
@@ -1027,7 +1036,7 @@ export function Inspector({
                 />
                 {spec.size.presets && (
                   <SizePresets
-                    values={[...new Set(spec.size.presets.map(mapWidthPreset))]}
+                    values={[...new Set([...(frameSize.w !== PHONE_W && spec.size.icon === "width" && spec.size.presets.includes(CONTENT_W) ? [CONTENT_W] : []), ...spec.size.presets.map(mapWidthPreset)])].sort((a, b) => a - b)}
                     value={item.size ?? spec.defSize ?? spec.w}
                     min={spec.size.min}
                     max={widthMax(spec.size.max)}
@@ -1075,11 +1084,12 @@ export function Inspector({
                 p={p}
               />
             )}
-            {hasRadius && (item.kind === "bottomNav" || item.kind === "topAppBar" || item.kind === "box") && (
+            {hasRadius && (item.kind === "bottomNav" || item.kind === "navRail" || item.kind === "topAppBar" || item.kind === "box") && (
               <>
+                {/* a rail's two sliders are its left and right sides; the fields are shared with the bars */}
                 <Slider
-                  iconNode={<CornerIcon side="top" />}
-                  title={t("cornerTop", lang)}
+                  iconNode={<CornerIcon side={item.kind === "navRail" ? "left" : "top"} />}
+                  title={t(item.kind === "navRail" ? "cornerLeft" : "cornerTop", lang)}
                   value={item.radiusTop ?? 0}
                   min={0}
                   max={40}
@@ -1088,8 +1098,8 @@ export function Inspector({
                   p={p}
                 />
                 <Slider
-                  iconNode={<CornerIcon side="bottom" />}
-                  title={t("cornerBottom", lang)}
+                  iconNode={<CornerIcon side={item.kind === "navRail" ? "right" : "bottom"} />}
+                  title={t(item.kind === "navRail" ? "cornerRight" : "cornerBottom", lang)}
                   value={item.radiusBottom ?? 0}
                   min={0}
                   max={40}

@@ -34,6 +34,11 @@ import {
   normalizeTheme,
   toggleIcon,
   uniformRadii,
+  RAIL_W,
+  RAIL_TOP,
+  RAIL_ITEM_H,
+  RAIL_GAP,
+  sizeOf,
 } from "@/lib/tokens";
 import { Icon, M3Node } from "./M3Node";
 import { IconBtn } from "./ui";
@@ -165,13 +170,20 @@ function Tappable({
   /** hit areas for the icons on a top app bar and the destinations on a navigation bar */
   const slots: { key: string; style: React.CSSProperties }[] = [];
   if (onSlot && item.kind === "topAppBar") {
-    if (item.icon) slots.push({ key: "icon", style: { left: 4, top: STATUS_BAR_H + 8, width: 48, height: 48, borderRadius: 24 } });
-    if (item.icon2) slots.push({ key: "icon2", style: { right: 4, top: STATUS_BAR_H + 8, width: 48, height: 48, borderRadius: 24 } });
+    /* the icons sit below the status-bar inset only where the bar has one (see sizeOf) */
+    const inset = sizeOf(item, {}).h - 64;
+    if (item.icon) slots.push({ key: "icon", style: { left: 4, top: inset + 8, width: 48, height: 48, borderRadius: 24 } });
+    if (item.icon2) slots.push({ key: "icon2", style: { right: 4, top: inset + 8, width: 48, height: 48, borderRadius: 24 } });
   }
   if (onSlot && (item.kind === "bottomNav" || item.kind === "tabs")) {
     const n = item.tabs?.length ?? 0;
     for (let i = 0; i < n; i++)
       slots.push({ key: `tab:${i}`, style: { left: `${(i / n) * 100}%`, width: `${100 / n}%`, top: 0, bottom: item.kind === "bottomNav" ? NAV_BAR_H : 0, borderRadius: 16 } });
+  }
+  if (onSlot && item.kind === "navRail") {
+    const n = item.tabs?.length ?? 0;
+    for (let i = 0; i < n; i++)
+      slots.push({ key: `tab:${i}`, style: { left: 6, width: RAIL_W - 12, top: RAIL_TOP + i * (RAIL_ITEM_H + RAIL_GAP), height: RAIL_ITEM_H, borderRadius: 16 } });
   }
   if (onSlot && item.kind === "toolbar") {
     const n = item.tabs?.length ?? 0;

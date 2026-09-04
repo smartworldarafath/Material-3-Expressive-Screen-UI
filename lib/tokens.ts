@@ -24,6 +24,14 @@ export const PHONE_R = 40;
 export const DESKTOP_W = 1280;
 export const DESKTOP_H = 800;
 export const DESKTOP_R = 28;
+/** M3 window size classes: a screen this wide is "expanded", where the navigation bar becomes a rail */
+export const EXPANDED_W = 840;
+export const isExpanded = (w: number) => w >= EXPANDED_W;
+/** navigation rail: width, top inset and the pitch of one destination (56×32 indicator, label, gap) */
+export const RAIL_W = 80;
+export const RAIL_TOP = 44;
+export const RAIL_ITEM_H = 52;
+export const RAIL_GAP = 12;
 /** system insets: the status bar above a top app bar and the gesture area below a navigation bar.
  *  Both bars carry their inset as extra height so their background reaches the rounded screen edge. */
 export const STATUS_BAR_H = 24;
@@ -392,6 +400,7 @@ export type Kind =
   | "chip"
   | "topAppBar"
   | "bottomNav"
+  | "navRail"
   | "searchBar"
   | "card"
   | "listItem"
@@ -608,6 +617,23 @@ export const KIND_SPEC: Record<Kind, KindSpec> = {
     defLabel: "",
     defIcon: null,
     defSize: PHONE_W,
+  },
+  navRail: {
+    label: "Navigation Rail",
+    noun: "ナビゲーションレール",
+    category: "navigation",
+    paletteIcon: "side_navigation",
+    w: RAIL_W,
+    h: PHONE_H,
+    radius: 0,
+    hasVariant: false,
+    hasLabel: false,
+    hasSupporting: false,
+    hasIcon: false,
+    hasTabs: true,
+    size2: { min: 200, max: PHONE_H, step: 4, icon: "height", presets: HEIGHT_PRESETS },
+    defLabel: "",
+    defIcon: null,
   },
   searchBar: {
     label: "Search Bar",
@@ -988,6 +1014,7 @@ export const KIND_ORDER: Kind[] = [
   "chip",
   "topAppBar",
   "bottomNav",
+  "navRail",
   "toolbar",
   "tabs",
   "searchBar",
@@ -1095,7 +1122,7 @@ export const TRANSITIONS: { key: Transition; label: string; icon: string }[] = [
 
 /** slots on a bar that can each carry their own tap action */
 export function actionSlotsOf(it: Item): IconSlot[] {
-  if (it.kind === "topAppBar" || it.kind === "bottomNav" || it.kind === "toolbar") return iconSlotsOf(it).filter((s) => !!s.value);
+  if (it.kind === "topAppBar" || it.kind === "bottomNav" || it.kind === "navRail" || it.kind === "toolbar") return iconSlotsOf(it).filter((s) => !!s.value);
   if (it.kind === "fabMenu") return (it.tabs ?? []).map((t, i) => ({ key: `tab:${i}`, label: t.label || `${i + 1}`, value: t.icon || null }));
   if (it.kind === "tabs") return (it.tabs ?? []).map((t, i) => ({ key: `tab:${i}`, label: t.label || `${i + 1}`, value: null }));
   return [];
@@ -1202,6 +1229,14 @@ export const frameRadius = (f: Frame) => (isPhoneFrame(f) ? PHONE_R : DESKTOP_R)
 /** parts that span the screen edge to edge and follow its width when it changes */
 export const FULL_WIDTH: Kind[] = ["topAppBar", "bottomNav", "tabs"];
 
+/** a part no taller than the screen it is placed on: a box or a rail sized to a phone shrinks to a shorter screen */
+export function fitHeight(it: Item, screenH: number): Item {
+  const spec = KIND_SPEC[it.kind];
+  if (!spec.size2 && it.kind !== "navRail") return it;
+  const h = it.size2 ?? spec.h;
+  return h > screenH ? { ...it, size2: screenH } : it;
+}
+
 /** A part carried from one screen size to another: edge-to-edge parts take the new
  *  width, a part sized to the old content or screen width takes the new one, and a
  *  box as tall as the old screen takes the new height. A card or an image keeps its
@@ -1225,7 +1260,7 @@ export function carryItemSize(it: Item, from: { w: number; h: number }, to: { w:
     else if (cur > to.w) patch.size = to.w;
     else if (cur > contentWidth(to.w) && it.kind !== "box") patch.size = contentWidth(to.w);
   }
-  if (it.kind === "box" && (it.size2 ?? spec.h) === from.h) patch.size2 = to.h;
+  if ((it.kind === "box" || it.kind === "navRail") && (it.size2 ?? spec.h) === from.h) patch.size2 = to.h;
   return Object.keys(patch).length ? { ...it, ...patch } : it;
 }
 
@@ -1414,6 +1449,7 @@ export function makeItem(kind: Kind): Item {
     it.radiusTop = 0;
     it.radiusBottom = 0;
   }
+  if (kind === "navRail") it.tabs = defaultTabs();
   if (kind === "tabs" || kind === "fabMenu") it.tabs = defaultTabsFor(kind);
   if (kind === "toolbar") it.tabs = defaultTabsFor(kind).slice(0, 4);
   return it;
@@ -1450,8 +1486,11 @@ export function sizeOf(it: Item, widths: Record<string, number>) {
     case "loadingIndicator":
     case "image":
       return { w: n, h: n };
-    case "searchBar":
     case "topAppBar":
+      /* the status-bar inset belongs to a phone: a bar wider than one has no status bar above it.
+       * (An Android tablet does; the canvas leaves that to the prompt.) */
+      return { w: n, h: 64 + (n > PHONE_W ? 0 : STATUS_BAR_H) };
+    case "searchBar":
     case "bottomNav":
     case "listItem":
     case "textField":
@@ -1463,6 +1502,8 @@ export function sizeOf(it: Item, widths: Record<string, number>) {
       return { w: n, h: Math.round(n * 0.5875) };
     case "box":
       return { w: n, h: it.size2 ?? s.h };
+    case "navRail":
+      return { w: s.w, h: it.size2 ?? s.h };
     default:
       return { w: s.w, h: s.h };
   }
@@ -1480,6 +1521,12 @@ export function baseRadii(it: Item): Radii {
       const t = it.radiusTop ?? 0;
       const b = it.radiusBottom ?? 0;
       return { tl: t, tr: t, bl: b, br: b };
+    }
+    case "navRail": {
+      /* a rail's corners are its left and right sides: radiusTop is the left pair, radiusBottom the right */
+      const l = it.radiusTop ?? 0;
+      const r = it.radiusBottom ?? 0;
+      return { tl: l, bl: l, tr: r, br: r };
     }
     case "fab":
       return uniformRadii(scaleR(Math.round((it.size ?? 56) * 0.28)));
@@ -1535,6 +1582,7 @@ export function iconSlotsOf(it: Item): IconSlot[] {
         { key: "icon2", label: t("trailing"), value: it.icon2 ?? null },
       ];
     case "bottomNav":
+    case "navRail":
     case "toolbar":
       return (it.tabs ?? []).map((t, i) => ({
         key: `tab:${i}`,

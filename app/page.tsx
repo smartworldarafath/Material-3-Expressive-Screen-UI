@@ -71,6 +71,8 @@ import {
   TRANSITIONS,
   uid,
   uniformRadii,
+  FULL_WIDTH,
+  fitHeight,
 } from "@/lib/tokens";
 import { Icon, M3Node, M3Static, MeasuredContent } from "@/components/M3Node";
 import { LayersPanel } from "@/components/Layers";
@@ -84,7 +86,7 @@ import { LangMenu } from "@/components/Menus";
 import { AiActionKey, AiPanel, aiErrorText } from "@/components/AiPanel";
 import { TidyState } from "@/components/ui";
 import { AiSettings, DEFAULT_AI, hasKey, isSecureUrl, loadAiSettings, proposeBehavior, proposeDescription, pushHistory, saveAiSettings } from "@/lib/ai";
-import { carryFrame, pullInto, tidyFrame } from "@/lib/tidy";
+import { barSlotOf, carryFrame, pullInto, tidyFrame } from "@/lib/tidy";
 import { readProject, saveProject } from "@/lib/project";
 import { ColorPanel } from "@/components/ColorPanel";
 import { MotionPanel, ShapePanel, TypePanel } from "@/components/ThemePanel";
@@ -1187,10 +1189,15 @@ export default function Page() {
               return cx >= r.l && cx <= r.r && cy >= r.t && cy <= r.b;
             })
           : undefined;
-      const placedItem = targetFrame ? carryItemSize(item, { w: PHONE_W, h: PHONE_H }, frameSizeOf(targetFrame)) : item;
+      /* a bar spans the screen it lands on, beside its rail; any other part keeps its phone-sized
+       * default (a list or a field as wide as a desktop is rarely what the author means), but no
+       * taller than the screen */
+      const slot = targetFrame ? barSlotOf(groupsRef.current, targetFrame, framesRef.current, widthsRef.current) : null;
+      const isBar = FULL_WIDTH.includes(item.kind);
+      const placedItem = targetFrame && slot ? (isBar ? carryItemSize(item, { w: PHONE_W, h: PHONE_H }, { w: slot.w, h: frameSizeOf(targetFrame).h }) : fitHeight(item, frameSizeOf(targetFrame).h)) : item;
       const dropped: Group = {
         id: uid(),
-        x: Math.round(rawX),
+        x: Math.round(isBar && slot ? slot.x : rawX),
         y: Math.round(rawY),
         axis: connectSpecOf(item)?.axis ?? "x",
         items: [placedItem],
