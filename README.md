@@ -11,6 +11,7 @@
 <p align="center">
   <a href="https://lnkiai.github.io/m3e-canvas/"><img alt="Live demo" src="https://img.shields.io/badge/demo-lnkiai.github.io%2Fm3e--canvas-6750A4?logo=googlechrome&logoColor=white" /></a>
   <a href="https://github.com/lnkiai/m3e-canvas/actions/workflows/deploy.yml"><img alt="Deploy" src="https://github.com/lnkiai/m3e-canvas/actions/workflows/deploy.yml/badge.svg" /></a>
+  <a href="https://github.com/lnkiai/m3e-canvas/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/lnkiai/m3e-canvas?style=flat&logo=github&color=6750A4" /></a>
   <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/license-MIT-blue.svg" /></a>
   <img alt="Next.js" src="https://img.shields.io/badge/Next.js-16-black?logo=nextdotjs" />
   <img alt="React" src="https://img.shields.io/badge/React-19-20232a?logo=react&logoColor=61DAFB" />
@@ -22,9 +23,11 @@
   <a href="#日本語">日本語</a> · <a href="#中文">中文</a> · <a href="https://lnkiai.github.io/m3e-canvas/">Open the app</a>
 </p>
 
-![A habit-tracker sketched in M3E Canvas on the left, and the same app running on Android on the right](docs/editor-to-android.gif)
+![Sketching a recipes app in M3E Canvas, changing its theme, copying the prompt, an AI coding tool building it, and the app running on Android](docs/story.gif)
 
-<p align="center"><sub>Left: the sketch in the editor. Right: the app an AI coding tool built from the generated prompt, running on Android. (<a href="docs/editor-to-android.mp4">mp4</a>)</sub></p>
+<p align="center"><sub>Sketch a recipes app, retheme it, copy the prompt, hand it to an AI coding tool, and run the result on Android. (<a href="docs/story.mp4">mp4</a>)</sub></p>
+
+Works with any AI coding tool that takes a prompt, such as Claude Code, Codex, Gemini CLI or Cursor: copy the prompt, paste it into the tool, and ask for the app.
 
 ## What it does
 
@@ -86,6 +89,7 @@ Bug reports, part requests and pull requests are welcome. [CONTRIBUTING.md](CONT
 ## See also
 
 - [matraic/m3e](https://github.com/matraic/m3e) – Material 3 Expressive as Lit web components (MIT), with React bindings and an icon package. A good home for the screens you sketch here.
+- [Beer CSS](https://www.beercss.com/) – Material Design 3 as a plain CSS framework (MIT). Another way to build the web version of a screen you sketch here.
 
 ## License
 
@@ -99,9 +103,11 @@ MIT © lnkiai
 
 公開版: https://lnkiai.github.io/m3e-canvas/
 
-![左は M3E Canvas で組んだ習慣トラッカー、右は同じアプリが Android で動いている様子](docs/editor-to-android.gif)
+![M3E Canvas でレシピアプリを組み、テーマを変え、プロンプトをコピーして AI コーディングツールに渡し、Android で動かすまで](docs/story.gif)
 
-<p align="center"><sub>左: エディタ上のスケッチ。右: 生成したプロンプトから AI コーディングツールが作ったアプリを Android で動かしたもの。（<a href="docs/editor-to-android.mp4">mp4</a>）</sub></p>
+<p align="center"><sub>レシピアプリを組み、テーマを変え、プロンプトをコピーして AI コーディングツールに渡し、できたアプリを Android で動かすまで。（<a href="docs/story.mp4">mp4</a>）</sub></p>
+
+Claude Code、Codex、Gemini CLI、Cursor など、プロンプトを受け取れる AI コーディングツールならどれでも使えます。プロンプトをコピーしてツールに貼り、アプリを作ってと頼むだけです。
 
 ### できること
 
@@ -145,9 +151,11 @@ MIT © lnkiai
 
 在线版本：https://lnkiai.github.io/m3e-canvas/
 
-![左侧是在 M3E Canvas 中拼装的习惯追踪应用，右侧是同一应用在 Android 上运行](docs/editor-to-android.gif)
+![在 M3E Canvas 中拼装食谱应用、更换主题、复制提示词、交给 AI 编程工具构建，最后在 Android 上运行](docs/story.gif)
 
-<p align="center"><sub>左：编辑器中的草图。右：AI 编程工具根据生成的提示词做出的应用，在 Android 上运行。（<a href="docs/editor-to-android.mp4">mp4</a>）</sub></p>
+<p align="center"><sub>拼装一个食谱应用、更换主题、复制提示词、交给 AI 编程工具，然后在 Android 上运行成品。（<a href="docs/story.mp4">mp4</a>）</sub></p>
+
+可配合任何接受提示词的 AI 编程工具使用，例如 Claude Code、Codex、Gemini CLI 或 Cursor：复制提示词，粘贴到工具里，让它把应用做出来。
 
 ### 功能
 
