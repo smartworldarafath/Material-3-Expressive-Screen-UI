@@ -1287,6 +1287,11 @@ export type Group = {
 
 export type FrameMode = "blank" | "phone";
 
+/** where the generated prompt asks for the app to be built */
+export type Platform = "android" | "web";
+export const DEFAULT_PLATFORM: Platform = "android";
+export const isPlatform = (v: unknown): v is Platform => v === "android" || v === "web";
+
 export type Doc = {
   groups: Group[];
   frames: Frame[];
@@ -1296,6 +1301,8 @@ export type Doc = {
   /** the app should take its colors from the user's wallpaper (Material You) */
   dynamicColor?: boolean;
   frame: FrameMode;
+  /** the implementation target the prompt names; Android unless the author picks the web */
+  platform?: Platform;
   title: string;
   brief: string;
   /** the prompt as the author rewrote it by hand; undefined means the generated one */

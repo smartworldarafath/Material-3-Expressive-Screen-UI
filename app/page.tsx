@@ -23,7 +23,10 @@ import {
   canJoin,
   clamp,
   connectSpecOf,
+  DEFAULT_PLATFORM,
   Doc,
+  isPlatform,
+  Platform,
   Frame,
   FRAME_GAP,
   FRAME_LABEL_H,
@@ -293,6 +296,7 @@ export default function Page() {
   const [title, setTitle] = useState("");
   const [brief, setBrief] = useState("");
   const [promptEdit, setPromptEdit] = useState<string | undefined>(undefined);
+  const [platform, setPlatform] = useState<Platform>(DEFAULT_PLATFORM);
   /** a project file waiting for the author to confirm replacing the canvas */
   const [pendingImport, setPendingImport] = useState<Doc | null>(null);
 
@@ -456,6 +460,8 @@ export default function Page() {
     else if (reset) setBrief("");
     if (typeof doc.promptEdit === "string") setPromptEdit(doc.promptEdit);
     else if (reset) setPromptEdit(undefined);
+    if (isPlatform(doc.platform)) setPlatform(doc.platform);
+    else if (reset) setPlatform(DEFAULT_PLATFORM);
   };
 
   useEffect(() => {
@@ -568,10 +574,10 @@ export default function Page() {
     try {
       localStorage.setItem(
         DOC_KEY,
-        JSON.stringify({ groups, frames, paletteKey, frame, title, brief, promptEdit, customPalette: customPalette ?? undefined, dynamicColor, theme }),
+        JSON.stringify({ groups, frames, paletteKey, frame, title, brief, promptEdit, platform, customPalette: customPalette ?? undefined, dynamicColor, theme }),
       );
     } catch {}
-  }, [groups, frames, paletteKey, frame, title, brief, promptEdit, customPalette, dynamicColor, theme]);
+  }, [groups, frames, paletteKey, frame, title, brief, promptEdit, platform, customPalette, dynamicColor, theme]);
 
   useEffect(() => {
     if (!loadedRef.current) return;
@@ -2175,8 +2181,8 @@ export default function Page() {
   const dragSize = drag ? sizeOf(drag.item, widths) : { w: 0, h: 0 };
   const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
   const doc: Doc = useMemo(
-    () => ({ groups, frames, paletteKey, frame, title, brief, promptEdit, customPalette: customPalette ?? undefined, dynamicColor, theme }),
-    [groups, frames, paletteKey, frame, title, brief, promptEdit, customPalette, dynamicColor, theme],
+    () => ({ groups, frames, paletteKey, frame, title, brief, promptEdit, platform, customPalette: customPalette ?? undefined, dynamicColor, theme }),
+    [groups, frames, paletteKey, frame, title, brief, promptEdit, platform, customPalette, dynamicColor, theme],
   );
 
   /** arrows from tappable parts to the frames they open */
@@ -3247,6 +3253,7 @@ export default function Page() {
                     if (patch.title !== undefined) setTitle(patch.title);
                     if (patch.brief !== undefined) setBrief(patch.brief);
                     if ("promptEdit" in patch) setPromptEdit(patch.promptEdit);
+                    if (isPlatform(patch.platform)) setPlatform(patch.platform);
                   }}
                   onImport={(next) => (next ? setPendingImport(next) : showToast(t("invalidProject", lang)))}
                 />

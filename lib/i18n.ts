@@ -173,6 +173,9 @@ const UI = {
   // prompt panel
   brief: { ja: "このアプリの説明…", en: "What this app is…", zh: "这个应用的说明…" },
   appName: { ja: "アプリの名前", en: "App name", zh: "应用名称" },
+  targetPlatform: { ja: "実装先", en: "Target", zh: "目标平台" },
+  targetAndroid: { ja: "Android のネイティブアプリとして作る", en: "Build as a native Android app", zh: "作为 Android 原生应用构建" },
+  targetWeb: { ja: "ブラウザで動く Web アプリとして作る", en: "Build as a web app that runs in the browser", zh: "作为在浏览器中运行的 Web 应用构建" },
   copyPrompt: { ja: "プロンプトをコピー", en: "Copy prompt", zh: "复制提示词" },
   // preview
   back: { ja: "戻る", en: "Back", zh: "返回" },

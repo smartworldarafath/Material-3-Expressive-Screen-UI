@@ -2,10 +2,10 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { buildPrompt } from "@/lib/prompt";
-import { Doc, Palette } from "@/lib/tokens";
+import { DEFAULT_PLATFORM, Doc, Palette, Platform } from "@/lib/tokens";
 import { readProject, saveProject } from "@/lib/project";
 import { Icon } from "./M3Node";
-import { ButtonRun, Field, IconBtn } from "./ui";
+import { ButtonRun, Field, IconBtn, Segmented } from "./ui";
 import { t, useLang } from "@/lib/i18n";
 
 export function PromptPanel({
@@ -84,6 +84,16 @@ export function PromptPanel({
         icon="lightbulb"
         multiline
         rows={3}
+      />
+      <Segmented<Platform>
+        options={[
+          { key: "android", icon: "android", label: "Android", title: t("targetAndroid", lang) },
+          { key: "web", icon: "language", label: "Web", title: t("targetWeb", lang) },
+        ]}
+        value={doc.platform ?? DEFAULT_PLATFORM}
+        onChange={(platform) => onDoc({ platform })}
+        p={p}
+        height={40}
       />
       <input
         ref={fileRef}

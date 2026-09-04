@@ -1,4 +1,4 @@
-import { Doc, KIND_ORDER, Kind } from "./tokens";
+import { Doc, KIND_ORDER, Kind, isPlatform } from "./tokens";
 
 /* A project file is the Doc as JSON, nothing more. Reading one back only checks
  * the shape the editor relies on; the same migrations that run on a saved
@@ -36,7 +36,8 @@ const validFrame = (frame: unknown) =>
   isRecord(frame) && typeof frame.id === "string" && typeof frame.name === "string" && Number.isFinite(frame.x) && Number.isFinite(frame.y) && (frame.note === undefined || typeof frame.note === "string");
 
 /** whether a parsed file has the shape of a document the editor can open */
-export const isProject = (value: unknown): value is Doc => isRecord(value) && Array.isArray(value.groups) && Array.isArray(value.frames) && value.groups.every(validGroup) && value.frames.every(validFrame);
+export const isProject = (value: unknown): value is Doc =>
+  isRecord(value) && Array.isArray(value.groups) && Array.isArray(value.frames) && value.groups.every(validGroup) && value.frames.every(validFrame) && (value.platform === undefined || isPlatform(value.platform));
 
 /** the file name a project is saved under: the app's title, or a fallback */
 export const projectFileName = (doc: Doc) => {
