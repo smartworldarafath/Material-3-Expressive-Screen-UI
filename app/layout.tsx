@@ -33,14 +33,14 @@ export default function RootLayout({
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link
           rel="stylesheet"
-          href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;600;700&display=swap"
+          href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700;800&family=Roboto:wght@400;500;600;700&display=swap"
         />
         <link
           rel="stylesheet"
           href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400..700,0..1,0&display=block"
         />
       </head>
-      <body style={{ fontFamily: "Roboto, system-ui, sans-serif" }}>{children}</body>
+      <body style={{ fontFamily: "Roboto, 'Noto Sans KR', system-ui, sans-serif" }}>{children}</body>
     </html>
   );
 }

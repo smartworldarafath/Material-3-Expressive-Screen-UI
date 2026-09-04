@@ -320,9 +320,9 @@ export const SHAPES: { key: ShapeScale; label: string; icon: string }[] = [
 ];
 
 export const FONTS: { key: FontKey; label: string; family: string; /** Google Fonts family to fetch, if any */ google?: string }[] = [
-  { key: "roboto", label: "Roboto", family: "Roboto, system-ui, sans-serif" },
-  { key: "robotoFlex", label: "Roboto Flex", family: "'Roboto Flex', Roboto, system-ui, sans-serif", google: "Roboto+Flex:wght@400;500;600;700" },
-  { key: "robotoSerif", label: "Roboto Serif", family: "'Roboto Serif', Georgia, serif", google: "Roboto+Serif:wght@400;500;600;700" },
+  { key: "roboto", label: "Roboto", family: "Roboto, 'Noto Sans KR', system-ui, sans-serif" },
+  { key: "robotoFlex", label: "Roboto Flex", family: "'Roboto Flex', Roboto, 'Noto Sans KR', system-ui, sans-serif", google: "Roboto+Flex:wght@400;500;600;700" },
+  { key: "robotoSerif", label: "Roboto Serif", family: "'Roboto Serif', Georgia, 'Noto Sans KR', serif", google: "Roboto+Serif:wght@400;500;600;700" },
   { key: "system", label: "System", family: "system-ui, -apple-system, 'Segoe UI', sans-serif" },
 ];
 

@@ -5,7 +5,7 @@ import { Reorder, useDragControls } from "motion/react";
 import { Frame, Group, KIND_SPEC, Palette, isPhoneFrame } from "@/lib/tokens";
 import { Icon } from "./M3Node";
 import { IconBtn } from "./ui";
-import { t, useLang } from "@/lib/i18n";
+import { KIND_TEXT, t, useLang } from "@/lib/i18n";
 
 function Row({
   g,
@@ -30,12 +30,13 @@ function Row({
   const controls = useDragControls();
   const first = g.items[0];
   const spec = KIND_SPEC[first.kind];
+  const noun = KIND_TEXT[lang][first.kind]?.noun ?? spec.label;
   const label =
     g.free
       ? `${t("group", lang)} × ${g.items.length}`
       : g.items.length > 1
-      ? `${spec.label} × ${g.items.length}`
-      : first.label.trim() || (first.kind === "iconButton" || first.kind === "fab" ? (first.icon ?? spec.label) : spec.label);
+      ? `${noun} × ${g.items.length}`
+      : first.label.trim() || (first.kind === "iconButton" || first.kind === "fab" ? (first.icon ?? noun) : noun);
   return (
     <Reorder.Item
       value={g.id}

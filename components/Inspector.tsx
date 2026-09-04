@@ -40,44 +40,45 @@ import { Icon } from "./M3Node";
 import { ButtonRun, CornerIcon, Field, IconBtn, Section, Segmented, SizePresets, Slider, TidyButton, TidyState, Toggle, TokenChips } from "./ui";
 import { AiWriteBtn } from "./AiPanel";
 import { popHistory } from "@/lib/ai";
-import { SWIPE_TEXT, t, useLang } from "@/lib/i18n";
+import { KIND_TEXT, SWIPE_TEXT, TRANSITION_TEXT, t, useLang } from "@/lib/i18n";
 
 export function variantsOf(kind: Kind): { key: Variant; label: string }[] {
+  const variants = VARIANTS.map((v) => ({ ...v, label: t(v.key) }));
   switch (kind) {
     case "card":
       return [
-        { key: "tonal", label: "Filled" },
-        { key: "elevated", label: "Elevated" },
-        { key: "outlined", label: "Outlined" },
+        { key: "tonal", label: t("filled") },
+        { key: "elevated", label: t("elevated") },
+        { key: "outlined", label: t("outlined") },
       ];
     case "textField":
       return [
-        { key: "outlined", label: "Outlined" },
-        { key: "filled", label: "Filled" },
+        { key: "outlined", label: t("outlined") },
+        { key: "filled", label: t("filled") },
       ];
     case "chip":
       return [
-        { key: "outlined", label: "Outlined" },
-        { key: "tonal", label: "Elevated" },
+        { key: "outlined", label: t("outlined") },
+        { key: "tonal", label: t("elevated") },
       ];
     case "fab":
     case "extendedFab":
     case "fabMenu":
-      return VARIANTS.filter((v) => v.key !== "text" && v.key !== "elevated" && v.key !== "outlined");
+      return variants.filter((v) => v.key !== "text" && v.key !== "elevated" && v.key !== "outlined");
     case "splitButton":
-      return VARIANTS.filter((v) => v.key !== "text");
+      return variants.filter((v) => v.key !== "text");
     case "toolbar":
       return [
-        { key: "tonal", label: "Standard" },
-        { key: "filled", label: "Vibrant" },
+        { key: "tonal", label: t("standard") },
+        { key: "filled", label: t("vibrant") },
       ];
     case "iconButton":
-      return VARIANTS.filter((v) => v.key !== "elevated" && v.key !== "text").concat({
+      return variants.filter((v) => v.key !== "elevated" && v.key !== "text").concat({
         key: "text",
-        label: "Standard",
+        label: t("standard"),
       });
     default:
-      return VARIANTS;
+      return variants;
   }
 }
 
@@ -250,9 +251,10 @@ function FrameChips({
 }
 
 function TransitionPicker({ value, onChange, p }: { value: Transition; onChange: (t: Transition) => void; p: Palette }) {
+  const lang = useLang();
   return (
     <Segmented<Transition>
-      options={TRANSITIONS.map((tr) => ({ key: tr.key, icon: tr.icon, title: tr.label }))}
+      options={TRANSITIONS.map((tr) => ({ key: tr.key, icon: tr.icon, title: TRANSITION_TEXT[lang][tr.key] }))}
       value={value}
       onChange={onChange}
       p={p}
@@ -699,7 +701,7 @@ export function Inspector({
         }}
       >
         <Icon name={spec.paletteIcon} size={20} />
-        <span style={{ fontSize: 14, fontWeight: 600, flex: 1, minWidth: 0 }}>{spec.label}</span>
+        <span style={{ fontSize: 14, fontWeight: 600, flex: 1, minWidth: 0 }}>{KIND_TEXT[lang][item.kind]?.noun ?? spec.label}</span>
         <IconBtn icon="content_copy" p={p} onClick={onDuplicate} title={t("duplicateKey", lang)} size={32} />
         <IconBtn icon="delete" p={p} danger onClick={onDelete} title={t("delete", lang)} size={32} />
       </div>

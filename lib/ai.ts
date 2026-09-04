@@ -135,7 +135,7 @@ function parseJsonObject(text: string): Record<string, unknown> {
 
 /* ---------- actions ---------- */
 
-const LANG_NAME: Record<Lang, string> = { ja: "Japanese", en: "English", zh: "Simplified Chinese" };
+const LANG_NAME: Record<Lang, string> = { ja: "Japanese", en: "English", zh: "Simplified Chinese", ko: "Korean" };
 
 const hasText = (v?: string | null) => !!v && v.trim().length > 0;
 

@@ -2,13 +2,14 @@
 
 import { createContext, useContext } from "react";
 
-export type Lang = "ja" | "en" | "zh";
+export type Lang = "ja" | "en" | "zh" | "ko";
 export const LANGS: { key: Lang; label: string }[] = [
   { key: "ja", label: "日本語" },
   { key: "en", label: "English" },
   { key: "zh", label: "中文" },
+  { key: "ko", label: "한국어" },
 ];
-export const isLang = (v: unknown): v is Lang => v === "ja" || v === "en" || v === "zh";
+export const isLang = (v: unknown): v is Lang => v === "ja" || v === "en" || v === "zh" || v === "ko";
 
 /* A module-level copy lets non-React helpers (item defaults, prompt text)
  * follow the language without threading it through every call. */
@@ -21,7 +22,49 @@ export const setGlobalLang = (l: Lang) => {
 export const LangContext = createContext<Lang>("ja");
 export const useLang = () => useContext(LangContext);
 
+export const SEED_TEXT: Record<Lang, { favorite: string; share: string; inbox: string; starred: string; archive: string; supporting: string; start: string }> = {
+  ja: { favorite: "お気に入り", share: "共有", inbox: "受信トレイ", starred: "スター付き", archive: "アーカイブ", supporting: "サブテキスト", start: "はじめる" },
+  en: { favorite: "Favorite", share: "Share", inbox: "Inbox", starred: "Starred", archive: "Archive", supporting: "Supporting text", start: "Get started" },
+  zh: { favorite: "收藏", share: "分享", inbox: "收件箱", starred: "已加星标", archive: "归档", supporting: "辅助文本", start: "开始" },
+  ko: { favorite: "즐겨찾기", share: "공유", inbox: "받은편지함", starred: "별표 표시", archive: "보관함", supporting: "보조 텍스트", start: "시작하기" },
+};
+
+/** ponytail: matches defaults by text; add provenance if authored copies must be distinguished. */
+export function translateDefaultText(value: string, kind: string, field: "label" | "supporting" | "tab", lang: Lang): string {
+  for (const { key: from } of LANGS) {
+    if (field === "tab") {
+      const labels = (l: Lang) => kind === "tabs" ? TAB_LABELS[l] : (kind === "fabMenu" ? FAB_MENU_TABS[l] : NAV_TABS[l]).map((tab) => tab.label);
+      const index = labels(from).indexOf(value);
+      if (index >= 0) return labels(lang)[index] ?? value;
+    } else {
+      if (value && value === KIND_TEXT[from][kind]?.[field]) return KIND_TEXT[lang][kind]?.[field] ?? value;
+      const keys: (keyof typeof SEED_TEXT.en)[] = field === "supporting" ? ["supporting"] : kind === "button" ? ["favorite", "share", "start"] : kind === "listItem" ? ["inbox", "starred", "archive"] : [];
+      for (const key of keys) {
+        if (value === SEED_TEXT[from][key]) return SEED_TEXT[lang][key];
+      }
+    }
+  }
+  return value;
+}
+
 type Str = { ja: string; en: string; zh: string };
+
+export function translateDefaultFrameName(name: string, lang: Lang): string {
+  for (const { key } of LANGS) {
+    if (name === t("home", key)) return t("home", lang);
+    const prefix = `${t("screenN", key)} `;
+    if (name.startsWith(prefix) && /^\d+$/.test(name.slice(prefix.length))) {
+      return `${t("screenN", lang)} ${name.slice(prefix.length)}`;
+    }
+  }
+  return name;
+}
+
+export const COLOR_TOKEN_TEXT = {
+  ja: { surface: "サーフェス", surfaceContainerLow: "コンテナ（低）", surfaceContainer: "コンテナ", surfaceContainerHigh: "コンテナ（高）", surfaceContainerHighest: "コンテナ（最高）", primaryContainer: "プライマリコンテナ", secondaryContainer: "セカンダリコンテナ", tertiaryContainer: "ターシャリコンテナ", primary: "プライマリ", inverseSurface: "反転サーフェス" },
+  zh: { surface: "表面", surfaceContainerLow: "低层容器", surfaceContainer: "容器", surfaceContainerHigh: "高层容器", surfaceContainerHighest: "最高层容器", primaryContainer: "主色容器", secondaryContainer: "次色容器", tertiaryContainer: "第三色容器", primary: "主色", inverseSurface: "反色表面" },
+  ko: { surface: "표면", surfaceContainerLow: "낮은 컨테이너", surfaceContainer: "컨테이너", surfaceContainerHigh: "높은 컨테이너", surfaceContainerHighest: "가장 높은 컨테이너", primaryContainer: "주 색상 컨테이너", secondaryContainer: "보조 색상 컨테이너", tertiaryContainer: "세 번째 색상 컨테이너", primary: "주 색상", inverseSurface: "반전 표면" },
+};
 
 const UI = {
   // panels
@@ -97,6 +140,12 @@ const UI = {
   noIcon: { ja: "アイコンなし", en: "No icon", zh: "无图标" },
   searchIcons: { ja: "アイコンを検索", en: "Search icons", zh: "搜索图标" },
   style: { ja: "スタイル", en: "Style", zh: "样式" },
+  filled: { ja: "塗りつぶし", en: "Filled", zh: "填充" },
+  tonal: { ja: "トーナル", en: "Tonal", zh: "色调" },
+  elevated: { ja: "浮き上がり", en: "Elevated", zh: "凸起" },
+  outlined: { ja: "枠線", en: "Outlined", zh: "描边" },
+  standard: { ja: "標準", en: "Standard", zh: "标准" },
+  vibrant: { ja: "鮮やか", en: "Vibrant", zh: "鲜艳" },
   state: { ja: "状態", en: "State", zh: "状态" },
   selected: { ja: "選択", en: "Selected", zh: "已选中" },
   handle: { ja: "ハンドル（ボトムシート）", en: "Handle (bottom sheet)", zh: "拖动条（底部面板）" },
@@ -280,7 +329,53 @@ const UI = {
 
 export type UIKey = keyof typeof UI;
 
-export const t = (key: UIKey, lang: Lang = current): string => UI[key][lang];
+const KO: Record<UIKey, string> = {
+  frameSize: "화면 크기", phoneFrame: "휴대전화", desktopFrame: "데스크톱", columnWidth: "휴대전화 한 화면 너비", cornerLeft: "왼쪽 모서리", cornerRight: "오른쪽 모서리",
+  filled: "채움", tonal: "색조", elevated: "그림자", outlined: "윤곽선", standard: "표준", vibrant: "선명함",
+  parts: "부품", layers: "레이어", edit: "편집", prompt: "프롬프트", closePanel: "패널 닫기",
+  search: "검색", favorites: "즐겨찾기", addFavorite: "즐겨찾기에 추가", removeFavorite: "즐겨찾기에서 제거", clear: "지우기", language: "언어",
+  select: "선택 (V)", hand: "손 도구 (H / Space)", blank: "빈 캔버스", phone: "휴대전화 화면", addFrame: "화면 추가", preview: "미리보기 (P)",
+  zoomIn: "확대 (+)", zoomOut: "축소 (-)", fit: "전체 맞춤 (0)", undo: "실행 취소 (Ctrl+Z)", redo: "다시 실행 (Ctrl+Shift+Z)",
+  clearAll: "모두 지우기", clearAllTitle: "캔버스를 비울까요?", clearAllBody: "모든 화면과 부품을 삭제합니다. 실행 취소(Ctrl+Z)로 복원할 수 있습니다.",
+  screen: "화면", screenName: "화면 이름", name: "이름", background: "배경", export: "내보내기", project: "프로젝트",
+  saveProject: "프로젝트 저장", openProject: "프로젝트 열기", replaceProjectTitle: "이 프로젝트를 열까요?",
+  replaceProject: "현재 캔버스가 교체되며 실행 취소(Ctrl+Z)로 되돌릴 수 없습니다. 먼저 저장하는 것이 안전합니다.",
+  invalidProject: "프로젝트 파일을 열 수 없습니다.", copied: "복사됨", saveImage: "이미지로 저장", saving: "저장 중…", previewFrom: "이 화면부터 미리보기",
+  duplicate: "복제", duplicateKey: "복제 (Ctrl+D)", delete: "삭제 (Delete)", deleteSelection: "선택 항목 삭제",
+  text: "텍스트", label: "레이블", bold: "굵게", action: "동작", supporting: "보조 텍스트", tabs: "항목", changeIcon: "아이콘 변경",
+  image: "이미지", pickImage: "이미지 선택", removeImage: "이미지 제거", icon: "아이콘", noIcon: "아이콘 없음", searchIcons: "아이콘 검색",
+  style: "스타일", state: "상태", selected: "선택됨", handle: "핸들(하단 시트)", on: "켜짐", container: "컨테이너", wavy: "물결 모양", determinate: "확정형",
+  size: "크기", width: "너비", height: "높이", fontSize: "글자 크기", cornerRadius: "모서리 둥글기", cornerTop: "위쪽 모서리", cornerBottom: "아래쪽 모서리",
+  screenWidth: "화면 너비", contentWidth: "좌우 16dp 여백", halfWidth: "한 행의 절반(2열)", screenHeight: "화면 높이", halfHeight: "화면의 절반",
+  tapTo: "탭하여 이동", none: "없음", goBack: "뒤로", swipeTo: "스와이프하여 이동", toggle: "토글 버튼", toggleHint: "탭할 때 켜짐/꺼짐 전환",
+  thumbCheck: "켜졌을 때 체크 아이콘 표시", behavior: "동작", whenPressed: "눌렀을 때…", whatItDoes: "이 부품의 동작…", removeLink: "링크 제거",
+  group: "그룹", makeGroup: "그룹화", ungroup: "그룹 해제", selectedParts: "개 선택됨", groupHint: "겹침을 유지한 채 하나의 레이어처럼 함께 이동합니다",
+  iconBackground: "아이콘 배경", noBackground: "배경 없음", normalState: "기본", onState: "켜짐", onStateHint: "켜졌을 때의 텍스트, 아이콘, 스타일",
+  groupEditNote: "안쪽 부품을 편집하려면 그룹을 해제하세요", openPanel: "패널 열기", colors: "색상", templates: "팔레트", customColor: "사용자 지정",
+  seedColor: "기준 색상", seedHint: "색상 하나로 전체 Material 3 색상 구성을 만듭니다. 세부 조정에서 개별 색상도 바꿀 수 있습니다.",
+  useThis: "이 색상 사용", fineTune: "세부 조정", dynamicColor: "동적 색상",
+  dynamicOnHint: "여기 표시된 색상은 편집기 전용입니다. 실제 기기에서는 배경화면 색상을 사용합니다.",
+  dynamicOffHint: "켜면 실제 기기는 배경화면 색상을 사용하고 여기의 색상은 대체 색상이 됩니다.", closeBtn: "닫기", screens: "화면 선택",
+  layerUp: "앞으로 가져오기", layerDown: "뒤로 보내기", noLayers: "이 화면에는 아직 부품이 없습니다",
+  brief: "이 앱에 대한 설명…", appName: "앱 이름", targetPlatform: "구현 대상", targetAndroid: "Android 네이티브 앱으로 만들기",
+  targetWeb: "브라우저에서 실행되는 웹 앱으로 만들기", copyPrompt: "프롬프트 복사", back: "뒤로", close: "닫기 (Esc)", cancel: "취소", ok: "확인",
+  leading: "앞쪽", trailing: "뒤쪽", home: "홈", screenN: "화면", copySuffix: " 복사본", mobileNote: "전체 기능은 데스크톱 브라우저에서 사용할 수 있습니다",
+  addButton: "버튼 추가", done: "완료", theme: "테마", settings: "테마 및 설정", shape: "모양", typography: "글꼴", motion: "모션",
+  brightness: "밝기", light: "라이트", dark: "다크", contrast: "대비", bothModes: "둘 다", contrastStandard: "표준", contrastMedium: "중간", contrastHigh: "높음",
+  shapeScale: "모서리 둥글기", shapeSquare: "사각형", shapeRounded: "둥근형", shapeFull: "완전 둥근형",
+  shapeHint: "모든 부품의 기본 모서리를 한 번에 바꿉니다. 부품에 직접 입력한 반경은 유지됩니다.", fontFamily: "글꼴", emphasized: "강조 스타일",
+  emphasizedHint: "제목과 레이블에 더 굵은 M3 Expressive 스타일을 사용합니다.", motionScheme: "모션 방식", motionStandard: "표준", motionExpressive: "익스프레시브",
+  motionHint: "익스프레시브는 통통 튀는 스프링 효과입니다. 미리보기 화면 전환과 프롬프트에 반영됩니다.", tryIt: "탭하여 확인",
+  tidy: "정리", tidyUndo: "정리 실행 취소", tidyDone: "이미 정돈되어 있습니다", description: "설명", screenDescription: "이 화면의 용도",
+  ai: "AI", promptReset: "생성된 프롬프트로 되돌리기", aiWriteShort: "AI로 작성", aiWrite: "AI에게 작성 맡기기", aiSettings: "AI 설정",
+  aiProvider: "제공업체", aiBaseUrl: "기본 URL", aiModel: "모델 ID", aiKey: "API 키", aiGetKey: "키 받기",
+  aiKeyHint: "키는 이 브라우저에만 저장되며 제공업체로 직접 전송됩니다.", aiRestore: "AI 수정본과 원본 전환", aiApplied: "적용됨",
+  aiSelectScreen: "먼저 화면을 선택하세요", aiNoKey: "AI 탭에 키를 입력하면 사용할 수 있습니다", aiError: "AI 요청에 실패했습니다",
+  aiErrorRefusal: "모델이 답변을 거부했습니다", aiErrorJson: "모델의 응답을 읽을 수 없습니다", aiErrorModel: "모델 ID를 입력하세요",
+  aiErrorInsecure: "기본 URL은 https를 사용하거나 localhost를 가리켜야 합니다", aiErrorNetwork: "연결할 수 없습니다. URL, 네트워크 및 서버의 CORS 설정을 확인하세요",
+};
+
+export const t = (key: UIKey, lang: Lang = current): string => (lang === "ko" ? KO[key] : UI[key][lang]);
 
 /* ---- part defaults and nouns ---- */
 
@@ -384,6 +479,38 @@ export const KIND_TEXT: Record<
     radio: { noun: "单选按钮", label: "选项" },
     badge: { noun: "徽标", label: "3" },
   },
+  ko: {
+    box: { noun: "상자" },
+    button: { noun: "버튼", label: "버튼" },
+    iconButton: { noun: "아이콘 버튼" },
+    fab: { noun: "FAB" },
+    extendedFab: { noun: "확장 FAB", label: "만들기" },
+    chip: { noun: "칩", label: "칩" },
+    topAppBar: { noun: "상단 앱 바", label: "제목" },
+    bottomNav: { noun: "내비게이션 바" },
+    navRail: { noun: "내비게이션 레일" },
+    searchBar: { noun: "검색창", label: "검색" },
+    card: { noun: "카드", label: "카드 제목", supporting: "보조 텍스트가 여기에 표시됩니다." },
+    listItem: { noun: "목록 항목", label: "목록 항목", supporting: "보조 텍스트" },
+    dialog: { noun: "대화상자", label: "확인", supporting: "계속하시겠습니까?" },
+    snackbar: { noun: "스낵바", label: "저장됨", supporting: "실행 취소" },
+    textField: { noun: "텍스트 입력란", label: "레이블" },
+    switch: { noun: "스위치", label: "알림" },
+    checkbox: { noun: "체크박스", label: "동의합니다" },
+    slider: { noun: "슬라이더" },
+    text: { noun: "텍스트", label: "제목" },
+    image: { noun: "이미지" },
+    divider: { noun: "구분선" },
+    loadingIndicator: { noun: "로딩 표시기" },
+    linearProgress: { noun: "선형 진행 표시기" },
+    circularProgress: { noun: "원형 진행 표시기" },
+    splitButton: { noun: "분할 버튼", label: "보내기" },
+    fabMenu: { noun: "FAB 메뉴" },
+    toolbar: { noun: "도구 모음" },
+    tabs: { noun: "탭" },
+    radio: { noun: "라디오 버튼", label: "옵션" },
+    badge: { noun: "배지", label: "3" },
+  },
 };
 
 /** default labels of a tab row */
@@ -391,6 +518,7 @@ export const TAB_LABELS: Record<Lang, string[]> = {
   ja: ["おすすめ", "フォロー中", "人気", "新着", "保存済み"],
   en: ["For you", "Following", "Trending", "New", "Saved"],
   zh: ["推荐", "关注", "热门", "最新", "已保存"],
+  ko: ["추천", "팔로잉", "인기", "새 항목", "저장됨"],
 };
 
 /** default entries of a FAB menu */
@@ -416,6 +544,13 @@ export const FAB_MENU_TABS: Record<Lang, { icon: string; label: string }[]> = {
     { icon: "attach_file", label: "文件" },
     { icon: "event", label: "日程" },
   ],
+  ko: [
+    { icon: "edit", label: "메모" },
+    { icon: "photo_camera", label: "사진" },
+    { icon: "mic", label: "오디오" },
+    { icon: "attach_file", label: "파일" },
+    { icon: "event", label: "일정" },
+  ],
 };
 
 export const NAV_TABS: Record<Lang, { icon: string; label: string }[]> = {
@@ -436,6 +571,12 @@ export const NAV_TABS: Record<Lang, { icon: string; label: string }[]> = {
     { icon: "search", label: "搜索" },
     { icon: "favorite", label: "收藏" },
     { icon: "settings", label: "设置" },
+  ],
+  ko: [
+    { icon: "home", label: "홈" },
+    { icon: "search", label: "검색" },
+    { icon: "favorite", label: "저장됨" },
+    { icon: "settings", label: "설정" },
   ],
 };
 
@@ -467,10 +608,20 @@ export const TRANSITION_TEXT: Record<Lang, Record<string, string>> = {
     expand: "放大",
     none: "无动画",
   },
+  ko: {
+    slide: "오른쪽에서 슬라이드",
+    slideLeft: "왼쪽에서 슬라이드",
+    slideUp: "아래에서 슬라이드",
+    slideDown: "위에서 슬라이드",
+    fade: "페이드",
+    expand: "확대",
+    none: "애니메이션 없음",
+  },
 };
 
 export const SWIPE_TEXT: Record<Lang, Record<string, string>> = {
   ja: { left: "左へスワイプ", right: "右へスワイプ", up: "上へスワイプ", down: "下へスワイプ" },
   en: { left: "swiping left", right: "swiping right", up: "swiping up", down: "swiping down" },
   zh: { left: "向左滑动", right: "向右滑动", up: "向上滑动", down: "向下滑动" },
+  ko: { left: "왼쪽으로 스와이프", right: "오른쪽으로 스와이프", up: "위로 스와이프", down: "아래로 스와이프" },
 };

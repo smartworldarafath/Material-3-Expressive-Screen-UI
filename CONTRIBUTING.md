@@ -29,11 +29,11 @@ is stored in the browser.
 | Area | Files |
 |---|---|
 | Part definitions, sizes, corners, theme | `lib/tokens.ts` |
-| UI strings and part defaults (ja / en / zh) | `lib/i18n.ts` |
+| UI strings and part defaults (ja / en / zh / ko) | `lib/i18n.ts` |
 | Drawing a part | `components/M3Node.tsx` |
 | Editing a part (desktop / phone) | `components/Inspector.tsx`, `components/Mobile.tsx` |
 | Tap-through preview | `components/Preview.tsx` |
-| Prompt text (ja / en / zh) | `lib/prompt.ts` |
+| Prompt text (ja / en / zh / ko) | `lib/prompt.ts` |
 | Color schemes | `lib/color.ts`, `components/ColorPanel.tsx` |
 | Shape / type / motion panels | `components/ThemePanel.tsx` |
 | The editor itself | `app/page.tsx` |
@@ -43,15 +43,15 @@ is stored in the browser.
 A new kind touches all of these; the existing kinds are the reference:
 
 1. `Kind`, `KIND_SPEC`, `KIND_ORDER` and, if needed, `sizeOf` / `baseRadii` / `iconSlotsOf` in `lib/tokens.ts`
-2. `KIND_TEXT` for all three languages in `lib/i18n.ts`
+2. `KIND_TEXT` for all four languages in `lib/i18n.ts`
 3. Rendering in `components/M3Node.tsx` (and `MEASURED` / `NO_BOX` when it applies)
-4. The item sentence in `itemJa`, `itemEn`, `itemZh` and a `STYLE_NOTES` entry per language in `lib/prompt.ts`
+4. The item sentence in `itemJa`, `itemEn`, `itemZh`, `itemKo` and a `STYLE_NOTES` entry per language in `lib/prompt.ts`
 5. Any special editor in `components/Inspector.tsx`; tap targets in `components/Preview.tsx` if it is tappable
 
 ## Conventions
 
 - Code comments are in English. UI strings and prompt text exist in Japanese,
-  English and Chinese; a string added in one language must be added in all three.
+  English, Chinese and Korean; a string added in one language must be added in all four.
 - Use the standard Material 3 Expressive values (sizes, corners, tokens) and name
   them the way Material does. When in doubt, link the Material page in your PR.
 - Keep the editor chrome and the parts on separate paths: parts are drawn from the
@@ -73,7 +73,7 @@ A new kind touches all of these; the existing kinds are the reference:
 - バグ報告や小さな修正は Issue または PR を直接どうぞ。
 - 新しい部品やパネル、プロンプトの文言など大きめの変更は、先に Issue で相談してください。
 - 質問やアイデアは Discussions へ。
-- コードのコメントは英語で書きます。UI の文言とプロンプト文は日本語・英語・中国語の 3 言語すべてに追加してください。
+- コードのコメントは英語で書きます。UI の文言とプロンプト文は日本語・英語・中国語・韓国語の 4 言語すべてに追加してください。
 - PR の前に `npm run typecheck` と `npm run build` を通してください。CI でも同じものが走ります。
 - 貢献したコードは MIT ライセンスで公開されます。
 
@@ -82,6 +82,6 @@ A new kind touches all of these; the existing kinds are the reference:
 - Bug 报告和小修改可以直接提 Issue 或 PR。
 - 新组件、新面板、提示词措辞等较大的改动，请先开 Issue 讨论。
 - 提问和想法请到 Discussions。
-- 代码注释用英文。UI 文字和提示词需同时提供日文、英文、中文三种语言。
+- 代码注释用英文。UI 文字和提示词需同时提供日文、英文、中文、韩文四种语言。
 - 提交 PR 前请运行 `npm run typecheck` 和 `npm run build`，CI 会执行同样的检查。
 - 贡献的代码以 MIT 许可证发布。
