@@ -21,16 +21,21 @@ export const SETTLE_MS = 340;
 export const PHONE_W = 412;
 export const PHONE_H = 892;
 export const PHONE_R = 40;
+export const DESKTOP_W = 1280;
+export const DESKTOP_H = 800;
+export const DESKTOP_R = 28;
 /** system insets: the status bar above a top app bar and the gesture area below a navigation bar.
  *  Both bars carry their inset as extra height so their background reaches the rounded screen edge. */
 export const STATUS_BAR_H = 24;
 export const NAV_BAR_H = 24;
 /** M3 layout margin: parts that are not edge-to-edge sit this far from the screen edge */
 export const PHONE_MARGIN = 16;
+export const contentWidth = (width: number) => width - PHONE_MARGIN * 2;
+export const halfWidth = (width: number) => (contentWidth(width) - PHONE_MARGIN) / 2;
 /** width of a part that spans the screen with a margin on both sides */
-export const CONTENT_W = PHONE_W - PHONE_MARGIN * 2;
+export const CONTENT_W = contentWidth(PHONE_W);
 /** width of one of two parts sharing a row, with a margin-sized gutter between them */
-export const HALF_W = (CONTENT_W - PHONE_MARGIN) / 2;
+export const HALF_W = halfWidth(PHONE_W);
 /** width presets offered in the inspector: two columns, with margins, edge-to-edge */
 export const WIDTH_PRESETS = [HALF_W, CONTENT_W, PHONE_W];
 /** height presets for free-form boxes: half the screen, the whole screen */
@@ -573,23 +578,25 @@ export const KIND_SPEC: Record<Kind, KindSpec> = {
     noun: "トップアプリバー",
     category: "navigation",
     paletteIcon: "toolbar",
-    w: 412,
+    w: PHONE_W,
     h: 64 + STATUS_BAR_H,
     radius: 0,
     hasVariant: false,
     hasLabel: true,
     hasSupporting: false,
     hasIcon: true,
+    size: { min: 200, max: PHONE_W, step: 4, icon: "width", presets: WIDTH_PRESETS },
     defLabel: "タイトル",
     defIcon: "menu",
     defIcon2: "more_vert",
+    defSize: PHONE_W,
   },
   bottomNav: {
     label: "Navigation Bar",
     noun: "ナビゲーションバー",
     category: "navigation",
     paletteIcon: "bottom_navigation",
-    w: 412,
+    w: PHONE_W,
     h: 80 + NAV_BAR_H,
     radius: 0,
     hasVariant: false,
@@ -597,8 +604,10 @@ export const KIND_SPEC: Record<Kind, KindSpec> = {
     hasSupporting: false,
     hasIcon: false,
     hasTabs: true,
+    size: { min: 200, max: PHONE_W, step: 4, icon: "width", presets: WIDTH_PRESETS },
     defLabel: "",
     defIcon: null,
+    defSize: PHONE_W,
   },
   searchBar: {
     label: "Search Bar",
@@ -1162,6 +1171,9 @@ export type Frame = {
   name: string;
   x: number;
   y: number;
+  /** dimensions are optional so documents saved before desktop frames remain phone-sized */
+  w?: number;
+  h?: number;
   bg?: ColorToken;
   /** what this screen is for, in the author's words; goes into the prompt */
   note?: string;
@@ -1171,7 +1183,19 @@ export type Frame = {
   swipe?: Partial<Record<SwipeDir, string>>;
 };
 
-export const frameRect = (f: Frame) => ({ l: f.x, t: f.y, r: f.x + PHONE_W, b: f.y + PHONE_H });
+export type FramePreset = "phone" | "desktop";
+export const frameSizeOf = (f: Frame) => ({ w: f.w ?? PHONE_W, h: f.h ?? PHONE_H });
+export const isPhoneFrame = (f: Frame) => {
+  const { w, h } = frameSizeOf(f);
+  return w === PHONE_W && h === PHONE_H;
+};
+export const framePresetOf = (f: Frame): FramePreset => (isPhoneFrame(f) ? "phone" : "desktop");
+export const framePresetPatch = (preset: FramePreset): Pick<Frame, "w" | "h"> =>
+  preset === "desktop" ? { w: DESKTOP_W, h: DESKTOP_H } : { w: undefined, h: undefined };
+export const frameRect = (f: Frame) => {
+  const { w, h } = frameSizeOf(f);
+  return { l: f.x, t: f.y, r: f.x + w, b: f.y + h };
+};
 
 export type Placed = { item: Item; index: number; x: number; y: number; w: number; h: number };
 
@@ -1392,6 +1416,8 @@ export function sizeOf(it: Item, widths: Record<string, number>) {
     case "image":
       return { w: n, h: n };
     case "searchBar":
+    case "topAppBar":
+    case "bottomNav":
     case "listItem":
     case "textField":
     case "slider":
