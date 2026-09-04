@@ -11,13 +11,13 @@ import {
   Item,
   Kind,
   Palette,
-  PHONE_H,
   PHONE_W,
   SWIPE_DIRS,
   Theme,
   Variant,
   explodeGroup,
   frameOfGroup,
+  frameRect,
   groupBounds,
   normalizeTheme,
   paletteOf,
@@ -1016,7 +1016,7 @@ export function buildPrompt(doc: Doc, widths: Record<string, number>, onlyFrameI
       if (i > 0 || frames.length > 1) lines.push("");
       if (hasText(f.note)) lines.push(lang === "en" ? `${trimEnd(f.note!)}.` : `${trimEnd(f.note!)}。`);
       lines.push(ph.screenHead(q(f.name || ph.screen), f.bg && f.bg !== "surface" ? f.bg : undefined, gs.length > 0));
-      describeScreen(lines, gs, { l: f.x, t: f.y, r: f.x + PHONE_W, b: f.y + PHONE_H }, widths, lang);
+      describeScreen(lines, gs, frameRect(f), widths, lang);
     });
     if (loose.length && !only) {
       lines.push("");
