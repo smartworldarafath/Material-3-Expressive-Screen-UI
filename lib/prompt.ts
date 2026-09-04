@@ -1,6 +1,5 @@
 import { KIND_TEXT, Lang, SWIPE_TEXT, TRANSITION_TEXT, getLang } from "./i18n";
 import {
-  DEFAULT_PLATFORM,
   Platform,
   Action,
   BACK_TARGET,
@@ -15,10 +14,13 @@ import {
   SWIPE_DIRS,
   Theme,
   Variant,
+  defaultPlatformOf,
   explodeGroup,
   frameOfGroup,
   frameRect,
+  frameSizeOf,
   groupBounds,
+  isPhoneFrame,
   normalizeTheme,
   paletteOf,
 } from "./tokens";
@@ -854,13 +856,39 @@ const GENERAL: Record<Lang, (string | ((pl: Platform) => string))[]> = {
 
 /* ---------- fixed phrases ---------- */
 
+/** what the screens are drawn for: phones only, desktops only, both, or no screens at all */
+type Viewport = "phone" | "desktop" | "mixed" | "free";
+const viewportOf = (frames: Frame[], phone: boolean): Viewport => {
+  if (!phone || frames.length === 0) return "free";
+  const phones = frames.filter(isPhoneFrame).length;
+  return phones === frames.length ? "phone" : phones === 0 ? "desktop" : "mixed";
+};
+/** a screen's size, written only when the document mixes sizes */
+const sizeLabel = (f: Frame, vp: Viewport, lang: Lang): string | undefined => {
+  if (vp !== "mixed") return undefined;
+  const { w, h } = frameSizeOf(f);
+  const kind = isPhoneFrame(f) ? { ja: "スマホ", en: "phone", zh: "手机" } : { ja: "デスクトップ", en: "desktop", zh: "桌面" };
+  return `${kind[lang]} ${w}×${h}`;
+};
+
 const PH = {
   ja: {
     screen: "画面",
     intro: (title: string, brief: string) => `${title}を Material 3 Expressive のデザインで実装してください。${brief ? trimEnd(brief) + "。" : ""}`,
     titleOnly: (name: string) => `${name}画面`,
     titleAll: (n: number) => (n > 1 ? "このアプリ" : "この画面"),
-    target: (phone: boolean, dark: boolean, both: boolean) => `${phone ? "想定はスマホの縦画面で、" : "レイアウトは自由配置で、"}${both ? "ライトモードとダークモードの両方に対応し、端末のシステム設定に従って切り替えます。" : dark ? "ダークモード固定です。" : "ライトモード固定です。"}`,
+    target: (vp: Viewport, pl: Platform, dark: boolean, both: boolean) =>
+      `${
+        vp === "phone"
+          ? "想定はスマホの縦画面（412×892dp）で、"
+          : vp === "desktop"
+            ? pl === "web"
+              ? "想定はデスクトップのブラウザ画面（基準 1280×800）で、"
+              : "想定は横向きのタブレット画面（基準 1280×800dp）で、"
+            : vp === "mixed"
+              ? `スマホの縦画面（412×892）と${pl === "web" ? "デスクトップのブラウザ画面" : "横向きのタブレット画面"}（1280×800）の両方を想定し、同じ名前の画面は 1 つの画面の 2 つの幅として、レスポンシブに実装します。`
+              : "レイアウトは自由配置で、"
+      }${both ? "ライトモードとダークモードの両方に対応し、端末のシステム設定に従って切り替えます。" : dark ? "ダークモード固定です。" : "ライトモード固定です。"}`,
     platform: (pl: Platform) => (pl === "web" ? "実装先は Web（ブラウザで動くアプリ）です。" : "実装先は Android（ネイティブアプリ）です。"),
     schemeHead: (dark: boolean) => (dark ? "ダークスキーム:" : "ライトスキーム:"),
     sketch:
@@ -876,7 +904,7 @@ const PH = {
     hLayout: "## 画面構成",
     empty: "画面にはまだ部品が置かれていません。",
     screens: (names: string[]) => `画面は ${names.length} つあり、${names.join("、")}です。`,
-    screenHead: (name: string, bg: string | undefined, has: boolean) => `${name}画面${bg ? `（背景は ${bg}）` : ""}${has ? "は上から順に次の通りです。重なっている部品はその旨を書いています。" : "はまだ空です。"}`,
+    screenHead: (name: string, bg: string | undefined, has: boolean, size?: string) => `${name}画面${size || bg ? `（${[size, bg ? `背景は ${bg}` : ""].filter(Boolean).join("、")}）` : ""}${has ? "は上から順に次の通りです。重なっている部品はその旨を書いています。" : "はまだ空です。"}`,
     loose: "画面の外に置かれている部品（共通パーツや参考）:",
     freeform: "画面を上から順に説明します。",
     hBehavior: "## 振る舞いと画面遷移",
@@ -889,7 +917,18 @@ const PH = {
     intro: (title: string, brief: string) => `Please implement ${title} in the Material 3 Expressive design language.${brief ? ` ${trimEnd(brief)}.` : ""}`,
     titleOnly: (name: string) => `the ${name} screen`,
     titleAll: (n: number) => (n > 1 ? "this app" : "this screen"),
-    target: (phone: boolean, dark: boolean, both: boolean) => `${phone ? "Target a portrait phone screen" : "The layout is free-form"}, ${both ? "supporting both light and dark mode and following the device's system setting" : `${dark ? "dark" : "light"} mode only`}.`,
+    target: (vp: Viewport, pl: Platform, dark: boolean, both: boolean) =>
+      `${
+        vp === "phone"
+          ? "Target a portrait phone screen (412×892dp)"
+          : vp === "desktop"
+            ? pl === "web"
+              ? "Target a desktop browser viewport (1280×800 reference)"
+              : "Target a landscape tablet screen (1280×800dp reference)"
+            : vp === "mixed"
+              ? `Target both a portrait phone (412×892) and a ${pl === "web" ? "desktop browser viewport" : "landscape tablet"} (1280×800); screens that share a name are one screen at two widths, so build them responsively`
+              : "The layout is free-form"
+      }, ${both ? "supporting both light and dark mode and following the device's system setting" : `${dark ? "dark" : "light"} mode only`}.`,
     platform: (pl: Platform) => (pl === "web" ? "Build it for the web, as an app that runs in the browser." : "Build it for Android, as a native app."),
     schemeHead: (dark: boolean) => (dark ? "Dark scheme:" : "Light scheme:"),
     sketch:
@@ -905,7 +944,7 @@ const PH = {
     hLayout: "## Layout",
     empty: "Nothing has been placed on the screen yet.",
     screens: (names: string[]) => `There are ${names.length} screens: ${names.join(", ")}.`,
-    screenHead: (name: string, bg: string | undefined, has: boolean) => `The ${name} screen${bg ? ` (background ${bg})` : ""}${has ? ", from top to bottom (overlapping parts are called out as such):" : " is still empty."}`,
+    screenHead: (name: string, bg: string | undefined, has: boolean, size?: string) => `The ${name} screen${size || bg ? ` (${[size, bg ? `background ${bg}` : ""].filter(Boolean).join(", ")})` : ""}${has ? ", from top to bottom (overlapping parts are called out as such):" : " is still empty."}`,
     loose: "Parts placed outside the screens (shared parts or references):",
     freeform: "The screen, from top to bottom:",
     hBehavior: "## Behavior and navigation",
@@ -918,7 +957,18 @@ const PH = {
     intro: (title: string, brief: string) => `请用 Material 3 Expressive 的设计实现${title}。${brief ? trimEnd(brief) + "。" : ""}`,
     titleOnly: (name: string) => `${name}屏幕`,
     titleAll: (n: number) => (n > 1 ? "这个应用" : "这个屏幕"),
-    target: (phone: boolean, dark: boolean, both: boolean) => `${phone ? "目标为竖屏手机" : "布局为自由排布"}，${both ? "同时支持浅色和深色模式，并跟随设备的系统设置切换" : `只做${dark ? "深色" : "浅色"}模式`}。`,
+    target: (vp: Viewport, pl: Platform, dark: boolean, both: boolean) =>
+      `${
+        vp === "phone"
+          ? "目标为竖屏手机（412×892dp）"
+          : vp === "desktop"
+            ? pl === "web"
+              ? "目标为桌面浏览器视口（以 1280×800 为基准）"
+              : "目标为横屏平板（以 1280×800dp 为基准）"
+            : vp === "mixed"
+              ? `同时面向竖屏手机（412×892）和${pl === "web" ? "桌面浏览器视口" : "横屏平板"}（1280×800）；同名的屏幕是同一个屏幕的两种宽度，请做成响应式`
+              : "布局为自由排布"
+      }，${both ? "同时支持浅色和深色模式，并跟随设备的系统设置切换" : `只做${dark ? "深色" : "浅色"}模式`}。`,
     platform: (pl: Platform) => (pl === "web" ? "实现目标是 Web（在浏览器中运行的应用）。" : "实现目标是 Android（原生应用）。"),
     schemeHead: (dark: boolean) => (dark ? "深色配色：" : "浅色配色："),
     sketch:
@@ -934,7 +984,7 @@ const PH = {
     hLayout: "## 屏幕结构",
     empty: "屏幕上还没有放置任何组件。",
     screens: (names: string[]) => `共有 ${names.length} 个屏幕：${names.join("、")}。`,
-    screenHead: (name: string, bg: string | undefined, has: boolean) => `${name}屏幕${bg ? `（背景为 ${bg}）` : ""}${has ? "从上到下依次如下（重叠的组件会特别说明）：" : "目前为空。"}`,
+    screenHead: (name: string, bg: string | undefined, has: boolean, size?: string) => `${name}屏幕${size || bg ? `（${[size, bg ? `背景为 ${bg}` : ""].filter(Boolean).join("，")}）` : ""}${has ? "从上到下依次如下（重叠的组件会特别说明）：" : "目前为空。"}`,
     loose: "放在屏幕之外的组件（公共部件或参考）：",
     freeform: "从上到下说明屏幕内容：",
     hBehavior: "## 行为与屏幕跳转",
@@ -948,10 +998,11 @@ export function buildPrompt(doc: Doc, widths: Record<string, number>, onlyFrameI
   const th = normalizeTheme(doc.theme);
   const pal = paletteOf(doc.paletteKey, doc.customPalette, th);
   const phone = doc.frame === "phone";
-  const platform: Platform = doc.platform ?? DEFAULT_PLATFORM;
+  const platform: Platform = doc.platform ?? defaultPlatformOf(doc.frames, doc.frame);
   const allFrames = phone ? doc.frames : [];
   const only = onlyFrameId ? allFrames.find((f) => f.id === onlyFrameId) : undefined;
   const frames = only ? [only] : allFrames;
+  const viewport = viewportOf(frames, phone);
   /* canvas order is the layer order; rows are worked out per screen. A hand-made
    * group is written part by part, since it exists only to move things together. */
   const groups = doc.groups
@@ -982,7 +1033,7 @@ export function buildPrompt(doc: Doc, widths: Record<string, number>, onlyFrameI
 
   const title = only ? ph.titleOnly(q(only.name || ph.screen)) : doc.title.trim() || ph.titleAll(frames.length);
   lines.push(ph.intro(title, doc.brief.trim()));
-  lines.push(ph.target(phone, th.dark, th.bothModes));
+  lines.push(ph.target(viewport, platform, th.dark, th.bothModes));
   lines.push(ph.platform(platform));
   lines.push(ph.sketch);
 
@@ -1015,7 +1066,7 @@ export function buildPrompt(doc: Doc, widths: Record<string, number>, onlyFrameI
       const gs = byFrame.get(f.id) ?? [];
       if (i > 0 || frames.length > 1) lines.push("");
       if (hasText(f.note)) lines.push(lang === "en" ? `${trimEnd(f.note!)}.` : `${trimEnd(f.note!)}。`);
-      lines.push(ph.screenHead(q(f.name || ph.screen), f.bg && f.bg !== "surface" ? f.bg : undefined, gs.length > 0));
+      lines.push(ph.screenHead(q(f.name || ph.screen), f.bg && f.bg !== "surface" ? f.bg : undefined, gs.length > 0, sizeLabel(f, viewport, lang)));
       describeScreen(lines, gs, frameRect(f), widths, lang);
     });
     if (loose.length && !only) {

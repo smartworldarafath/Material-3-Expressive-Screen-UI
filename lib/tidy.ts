@@ -1,4 +1,4 @@
-import { Frame, Group, Item, PHONE_MARGIN, canJoin, connectSpecOf, frameOfGroup, frameRect, groupBounds } from "./tokens";
+import { FULL_WIDTH, Frame, Group, Item, PHONE_MARGIN, canJoin, carryItemSize, connectSpecOf, frameOfGroup, frameRect, frameSizeOf, groupBounds } from "./tokens";
 
 /* Rule-based layout for one screen. Nothing here is guessed by a model.
  *
@@ -169,6 +169,38 @@ function gapBefore(prev: Unit[] | null, row: Unit[]): number {
   if (pk === "divider" || k === "divider") return TIGHT_GAP;
   if (pk && k && pk === k && LIST_KINDS.has(k)) return TIGHT_GAP;
   return ROW_GAP;
+}
+
+/** A group moved the least distance that puts it inside a screen; an edge-to-edge
+ *  part sits on the left edge. A group that fits already is returned as is. */
+export function pullInto(g: Group, frame: Frame, widths: Record<string, number>): Group {
+  const fr = frameRect(frame);
+  const bb = groupBounds(g, widths);
+  let dx = bb.r > fr.r ? Math.max(fr.l - bb.l, fr.r - bb.r) : bb.l < fr.l ? fr.l - bb.l : 0;
+  const dy = bb.b > fr.b ? Math.max(fr.t - bb.t, fr.b - bb.b) : bb.t < fr.t ? fr.t - bb.t : 0;
+  if (g.items.length === 1 && FULL_WIDTH.includes(g.items[0].kind)) dx = fr.l - bb.l;
+  return dx || dy ? { ...g, x: g.x + Math.round(dx), y: g.y + Math.round(dy) } : g;
+}
+
+/** A screen changing size, and everything that follows from it: the screens to its
+ *  right move over with their parts so nothing overlaps, the parts of the screen
+ *  take the sizes the new screen calls for, anything that fell outside is pulled
+ *  back in, and the screen is laid out again by the rules above. */
+export function carryFrame(groups: Group[], frame: Frame, to: Frame, frames: Frame[], widths: Record<string, number>): { frames: Frame[]; groups: Group[] } {
+  const from = frameSizeOf(frame);
+  const after = frameSizeOf(to);
+  const owner = new Map(groups.map((g) => [g.id, frameOfGroup(g, frames, widths)?.id] as const));
+  /* screens whose left edge is past the old right edge keep their distance from it */
+  const shift = after.w - from.w;
+  const moved = new Map(frames.filter((f) => f.id !== frame.id && f.x >= frame.x + from.w).map((f) => [f.id, shift] as const));
+  const nextFrames = frames.map((f) => (f.id === to.id ? to : moved.has(f.id) ? { ...f, x: f.x + shift } : f));
+  const resized = groups.map((g) => {
+    const o = owner.get(g.id);
+    if (o === frame.id) return pullInto({ ...g, items: g.items.map((it) => carryItemSize(it, from, after)) }, to, widths);
+    const dx = o ? moved.get(o) : undefined;
+    return dx ? { ...g, x: g.x + dx } : g;
+  });
+  return { frames: nextFrames, groups: tidyFrame(resized, to, nextFrames, widths) ?? resized };
 }
 
 /** The tidied groups of the document, or null when `frame` is already tidy. */

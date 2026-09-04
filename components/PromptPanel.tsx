@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { buildPrompt } from "@/lib/prompt";
-import { DEFAULT_PLATFORM, Doc, Palette, Platform } from "@/lib/tokens";
+import { Doc, Palette, Platform, defaultPlatformOf } from "@/lib/tokens";
 import { Icon } from "./M3Node";
 import { Field, IconBtn, Segmented } from "./ui";
 import { t, useLang } from "@/lib/i18n";
@@ -85,7 +85,7 @@ export function PromptPanel({
           { key: "android", icon: "android", label: "Android", title: t("targetAndroid", lang) },
           { key: "web", icon: "language", label: "Web", title: t("targetWeb", lang) },
         ]}
-        value={doc.platform ?? DEFAULT_PLATFORM}
+        value={doc.platform ?? defaultPlatformOf(doc.frames, doc.frame)}
         onChange={(platform) => onDoc({ platform })}
         p={p}
         height={40}

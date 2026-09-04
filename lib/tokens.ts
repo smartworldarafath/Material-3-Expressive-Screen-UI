@@ -1196,6 +1196,38 @@ export const frameRect = (f: Frame) => {
   const { w, h } = frameSizeOf(f);
   return { l: f.x, t: f.y, r: f.x + w, b: f.y + h };
 };
+/** the corner radius of a screen: a phone's rounded glass, a flatter window for the desktop */
+export const frameRadius = (f: Frame) => (isPhoneFrame(f) ? PHONE_R : DESKTOP_R);
+
+/** parts that span the screen edge to edge and follow its width when it changes */
+export const FULL_WIDTH: Kind[] = ["topAppBar", "bottomNav", "tabs"];
+
+/** A part carried from one screen size to another: edge-to-edge parts take the new
+ *  width, a part sized to the old content or screen width takes the new one, and a
+ *  box as tall as the old screen takes the new height. A card or an image keeps its
+ *  size, since its height follows its width. Nothing ends up wider than the new
+ *  content area. */
+export function carryItemSize(it: Item, from: { w: number; h: number }, to: { w: number; h: number }): Item {
+  const spec = KIND_SPEC[it.kind];
+  const patch: Partial<Item> = {};
+  const keepsShape = it.kind === "card" || it.kind === "image";
+  if (spec.size && (spec.size.icon === "width" || keepsShape)) {
+    /* only a size that is a width; a text size or an icon button's square are left alone */
+    const cur = it.size ?? spec.defSize ?? spec.w;
+    if (FULL_WIDTH.includes(it.kind)) {
+      /* a bar the author narrowed on purpose stays narrow; one that spanned the screen still does */
+      if (cur === from.w || cur > to.w) patch.size = to.w;
+    } else if (keepsShape) {
+      if (cur > contentWidth(to.w)) patch.size = contentWidth(to.w);
+    } else if (cur === from.w) patch.size = to.w;
+    else if (cur === contentWidth(from.w)) patch.size = contentWidth(to.w);
+    else if (cur === halfWidth(from.w)) patch.size = halfWidth(to.w);
+    else if (cur > to.w) patch.size = to.w;
+    else if (cur > contentWidth(to.w) && it.kind !== "box") patch.size = contentWidth(to.w);
+  }
+  if (it.kind === "box" && (it.size2 ?? spec.h) === from.h) patch.size2 = to.h;
+  return Object.keys(patch).length ? { ...it, ...patch } : it;
+}
 
 export type Placed = { item: Item; index: number; x: number; y: number; w: number; h: number };
 
@@ -1315,6 +1347,9 @@ export type FrameMode = "blank" | "phone";
 export type Platform = "android" | "web";
 export const DEFAULT_PLATFORM: Platform = "android";
 export const isPlatform = (v: unknown): v is Platform => v === "android" || v === "web";
+/** The target the prompt assumes when the author has not picked one: the web as
+ *  soon as a desktop screen exists, Android otherwise. */
+export const defaultPlatformOf = (frames: Frame[], mode: FrameMode): Platform => (mode === "phone" && frames.some((f) => !isPhoneFrame(f)) ? "web" : DEFAULT_PLATFORM);
 
 export type Doc = {
   groups: Group[];

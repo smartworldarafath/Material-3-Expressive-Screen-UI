@@ -18,6 +18,7 @@ import {
   sizeOf,
   variantShadow,
   variantStyle,
+  SETTLE_MS,
 } from "@/lib/tokens";
 import { CircularProgress, LinearProgress, LoadingIndicator } from "./Loading";
 import { t, useLang } from "@/lib/i18n";
@@ -1111,7 +1112,8 @@ export function M3Node({
         boxShadow: shadowOf(item),
         outline: selected ? `2px solid ${palette.primary}` : "2px solid transparent",
         outlineOffset: 3,
-        transition: "outline-color 120ms",
+        /* a part that changes width with its screen eases the way the screen does */
+        transition: measured ? "outline-color 120ms" : `outline-color 120ms, width ${SETTLE_MS}ms cubic-bezier(0.2, 0, 0, 1)`,
         flex: "0 0 auto",
       }}
     >

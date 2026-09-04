@@ -158,7 +158,7 @@ export function FrameSizePicker({
       value={framePresetOf(frame)}
       onChange={onChange}
       p={p}
-      height={compact ? 32 : 40}
+      height={compact ? 36 : 40}
       grow={!compact}
     />
   );

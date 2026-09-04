@@ -8,7 +8,6 @@ import {
   Action,
   BACK_TARGET,
   BEZEL,
-  DESKTOP_R,
   Doc,
   Frame,
   GAP,
@@ -28,6 +27,7 @@ import {
   connectSpecOf,
   fontFamilyOf,
   freeRadii,
+  frameRadius,
   frameSizeOf,
   groupsInFrame,
   isPhoneFrame,
@@ -396,35 +396,45 @@ export function Preview({
   const peekFrame = peek ? frames.find((f) => f.id === peek.frameId) : undefined;
   const { w: frameW, h: frameH } = current ? frameSizeOf(current) : { w: PHONE_W, h: PHONE_H };
   const phone = current ? isPhoneFrame(current) : true;
-  const inset = phone ? BEZEL : 0;
-  const radius = phone ? PHONE_R : DESKTOP_R;
-  const outerW = frameW + inset * 2;
-  const outerH = frameH + inset * 2;
+  /* every screen sits in the same bezel; only the corners tell a phone from a window */
+  const radius = current ? frameRadius(current) : PHONE_R;
+  const outerW = frameW + BEZEL * 2;
+  const outerH = frameH + BEZEL * 2;
   const targetFrame = peekFrame ?? current;
   const { w: targetFrameW, h: targetFrameH } = targetFrame ? frameSizeOf(targetFrame) : { w: frameW, h: frameH };
-  const targetPhone = targetFrame ? isPhoneFrame(targetFrame) : phone;
-  const targetInset = targetPhone ? BEZEL : 0;
-  const targetRadius = targetPhone ? PHONE_R : DESKTOP_R;
-  const targetOuterW = targetFrameW + targetInset * 2;
-  const targetOuterH = targetFrameH + targetInset * 2;
+  const targetRadius = targetFrame ? frameRadius(targetFrame) : radius;
+  const targetOuterW = targetFrameW + BEZEL * 2;
+  const targetOuterH = targetFrameH + BEZEL * 2;
 
-  /* A tracked swipe can cross frame sizes. The shell and clipping viewport
-   * follow the gesture so the target is full-sized at the end, without a snap. */
+  /* The shell is the size of the screen on show. When the screen changes it eases to
+   * the new size in step with the slide; a tracked swipe steers it toward the target
+   * with the finger, so a phone and a desktop screen hand over without a snap. */
   const prog = useMotionValue(0);
-  const shellW = useTransform(prog, (v) => outerW + (targetOuterW - outerW) * v);
-  const shellH = useTransform(prog, (v) => outerH + (targetOuterH - outerH) * v);
-  const shellRadius = useTransform(prog, (v) => radius + inset + (targetRadius + targetInset - radius - inset) * v);
-  const screenW = useTransform(prog, (v) => frameW + (targetFrameW - frameW) * v);
-  const screenH = useTransform(prog, (v) => frameH + (targetFrameH - frameH) * v);
-  const screenInset = useTransform(prog, (v) => inset + (targetInset - inset) * v);
-  const screenRadius = useTransform(prog, (v) => radius + (targetRadius - radius) * v);
-  const shellBackground = useTransform(
-    prog,
-    [0, 1],
-    [phone ? p.inverseSurface : p[current?.bg ?? "surface"], targetPhone ? p.inverseSurface : p[targetFrame?.bg ?? "surface"]],
+  const shellW = useMotionValue(outerW);
+  const shellH = useMotionValue(outerH);
+  const screenRadius = useMotionValue(radius);
+  useEffect(() => {
+    const opts = { duration: SLIDE_MS, ease: EASE };
+    const runs = [animate(shellW, outerW, opts), animate(shellH, outerH, opts), animate(screenRadius, radius, opts)];
+    return () => runs.forEach((r) => r.stop());
+  }, [outerW, outerH, radius, shellW, shellH, screenRadius]);
+  useEffect(
+    () =>
+      prog.on("change", (v) => {
+        if (!peekRef.current) return;
+        shellW.set(outerW + (targetOuterW - outerW) * v);
+        shellH.set(outerH + (targetOuterH - outerH) * v);
+        screenRadius.set(radius + (targetRadius - radius) * v);
+      }),
+    [prog, outerW, outerH, radius, targetOuterW, targetOuterH, targetRadius, shellW, shellH, screenRadius],
   );
-  const maxOuterW = Math.max(outerW, targetOuterW);
-  const maxOuterH = Math.max(outerH, targetOuterH);
+  const screenW = useTransform(shellW, (v) => v - BEZEL * 2);
+  const screenH = useTransform(shellH, (v) => v - BEZEL * 2);
+  const shellRadius = useTransform(screenRadius, (v) => v + BEZEL);
+  /* the stage is sized for the largest screen in the document, so the scale never
+   * changes while a swipe crosses sizes or a screen is opened from the picker */
+  const maxOuterW = Math.max(outerW, ...frames.map((f) => frameSizeOf(f).w + BEZEL * 2));
+  const maxOuterH = Math.max(outerH, ...frames.map((f) => frameSizeOf(f).h + BEZEL * 2));
   const shellLeft = useTransform(shellW, (v) => ((maxOuterW - v) * scale) / 2);
   const shellTop = useTransform(shellH, (v) => ((maxOuterH - v) * scale) / 2);
 
@@ -444,12 +454,28 @@ export function Preview({
     return () => window.removeEventListener("resize", fit);
   }, [maxOuterH, maxOuterW]);
 
+  /* a slide between a phone and a desktop screen would drag one shape through the
+   * other; screens of different sizes cross-fade while the shell changes size */
+  const sameSize = useCallback(
+    (fromId: string, toId: string) => {
+      const a = frames.find((f) => f.id === fromId);
+      const b = frames.find((f) => f.id === toId);
+      if (!a || !b) return true;
+      const sa = frameSizeOf(a);
+      const sb = frameSizeOf(b);
+      return sa.w === sb.w && sa.h === sb.h;
+    },
+    [frames],
+  );
+
   const back = useCallback(() => {
     const s = stackRef.current;
     if (s.length < 2 || peekRef.current) return;
-    setAnim({ t: s[s.length - 1].t, back: true, spring });
+    const from = s[s.length - 1];
+    const to = s[s.length - 2];
+    setAnim({ t: sameSize(from.id, to.id) ? from.t : "fade", back: true, spring });
     setStack(s.slice(0, -1));
-  }, [spring]);
+  }, [spring, sameSize]);
 
   const go = useCallback(
     (a: Action) => {
@@ -459,10 +485,12 @@ export function Preview({
         return;
       }
       if (!frames.some((f) => f.id === a.to)) return;
-      setAnim({ t: a.transition, back: false, spring });
-      setStack((s) => [...s, { id: a.to, t: a.transition }]);
+      const s = stackRef.current;
+      const t = sameSize(s[s.length - 1].id, a.to) ? a.transition : "fade";
+      setAnim({ t, back: false, spring });
+      setStack((cur) => [...cur, { id: a.to, t }]);
     },
-    [frames, back, spring],
+    [frames, back, spring, sameSize],
   );
 
   useEffect(() => {
@@ -627,7 +655,11 @@ export function Preview({
   const label: React.CSSProperties = { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 };
 
   return (
-    <div
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.22, ease: EASE }}
       style={{
         position: "fixed",
         inset: 0,
@@ -659,7 +691,7 @@ export function Preview({
             touchAction: "none",
             transformOrigin: "0 0",
             borderRadius: shellRadius,
-            background: shellBackground,
+            background: p.inverseSurface,
             boxShadow: "0 30px 80px rgba(0,0,0,0.22)",
           }}
         >
@@ -672,8 +704,8 @@ export function Preview({
             }}
             style={{
               position: "absolute",
-              left: screenInset,
-              top: screenInset,
+              left: BEZEL,
+              top: BEZEL,
               width: screenW,
               height: screenH,
               borderRadius: screenRadius,
@@ -850,6 +882,6 @@ export function Preview({
           </button>
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 }
