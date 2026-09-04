@@ -1587,7 +1587,8 @@ export default function Page() {
   };
 
   const importDoc = (next: Doc) => {
-    setGroups(next.groups);
+    hadDocRef.current = true;
+    setGroups(migrateGroups(next.groups, next.frames));
     setFrames(next.frames);
     setPaletteKey(typeof next.paletteKey === "string" ? next.paletteKey : "purple");
     setCustomPalette(next.customPalette?.primary ? next.customPalette : null);
@@ -1604,6 +1605,7 @@ export default function Page() {
     setWidths({});
     pastRef.current = [];
     futureRef.current = [];
+    lastPatchRef.current = { key: "", at: 0 };
     bumpHistory((v) => v + 1);
     queueMicrotask(() => fitRef.current());
   };

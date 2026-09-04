@@ -2,10 +2,41 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { buildPrompt } from "@/lib/prompt";
-import { Doc, Palette } from "@/lib/tokens";
+import { Doc, KIND_ORDER, Kind, Palette } from "@/lib/tokens";
 import { Icon } from "./M3Node";
 import { Field } from "./ui";
 import { t, useLang } from "@/lib/i18n";
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;
+
+const isProject = (value: unknown): value is Doc => {
+  if (!isRecord(value) || !Array.isArray(value.groups) || !Array.isArray(value.frames)) return false;
+  const kinds = new Set<Kind>(KIND_ORDER);
+  const validItem = (item: unknown) =>
+    isRecord(item) &&
+    typeof item.id === "string" &&
+    typeof item.kind === "string" &&
+    kinds.has(item.kind as Kind) &&
+    typeof item.label === "string" &&
+    (typeof item.icon === "string" || item.icon === null) &&
+    typeof item.variant === "string";
+  const validGroup = (group: unknown) =>
+    isRecord(group) &&
+    typeof group.id === "string" &&
+    Number.isFinite(group.x) &&
+    Number.isFinite(group.y) &&
+    (group.axis === "x" || group.axis === "y") &&
+    Array.isArray(group.items) &&
+    group.items.every(validItem);
+  const validFrame = (frame: unknown) =>
+    isRecord(frame) &&
+    typeof frame.id === "string" &&
+    typeof frame.name === "string" &&
+    Number.isFinite(frame.x) &&
+    Number.isFinite(frame.y);
+  return value.groups.every(validGroup) && value.frames.every(validFrame);
+};
 
 export function PromptPanel({
   doc,
@@ -44,13 +75,13 @@ export function PromptPanel({
     a.href = url;
     a.download = "m3e-canvas.json";
     a.click();
-    URL.revokeObjectURL(url);
+    setTimeout(() => URL.revokeObjectURL(url), 0);
   };
 
   const openProject = async (file: File) => {
     try {
-      const next = JSON.parse(await file.text()) as Doc;
-      if (!next || !Array.isArray(next.groups) || !Array.isArray(next.frames)) throw new Error("Invalid project");
+      const next: unknown = JSON.parse(await file.text());
+      if (!isProject(next)) throw new Error("Invalid project");
       if (window.confirm(t("replaceProject", lang))) onImport(next);
     } catch {
       window.alert(t("invalidProject", lang));
