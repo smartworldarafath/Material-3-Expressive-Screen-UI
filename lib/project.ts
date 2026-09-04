@@ -1,4 +1,4 @@
-import { Doc, KIND_ORDER, Kind, isPlatform } from "./tokens";
+import { Doc, KIND_ORDER, Kind, VARIANTS, isPlatform } from "./tokens";
 
 /* A project file is the Doc as JSON, nothing more. Reading one back only checks
  * the shape the editor relies on; the same migrations that run on a saved
@@ -17,7 +17,7 @@ const validItem = (item: unknown) =>
   KINDS.has(item.kind as Kind) &&
   typeof item.label === "string" &&
   (typeof item.icon === "string" || item.icon === null) &&
-  typeof item.variant === "string" &&
+  VARIANTS.some((variant) => variant.key === item.variant) &&
   (item.supporting === undefined || typeof item.supporting === "string") &&
   (item.note === undefined || typeof item.note === "string") &&
   validTabs(item.tabs);
