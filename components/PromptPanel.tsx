@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { buildPrompt } from "@/lib/prompt";
 import { Doc, Palette } from "@/lib/tokens";
 import { Icon } from "./M3Node";
@@ -12,15 +12,18 @@ export function PromptPanel({
   widths,
   palette: p,
   onDoc,
+  onImport,
 }: {
   doc: Doc;
   widths: Record<string, number>;
   palette: Palette;
   onDoc: (patch: Partial<Doc>) => void;
+  onImport: (doc: Doc) => void;
 }) {
   const lang = useLang();
   const text = useMemo(() => buildPrompt(doc, widths, undefined, lang), [doc, widths, lang]);
   const [copied, setCopied] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!copied) return;
@@ -34,6 +37,50 @@ export function PromptPanel({
       setCopied(true);
     } catch {}
   };
+
+  const saveProject = () => {
+    const url = URL.createObjectURL(new Blob([JSON.stringify(doc, null, 2)], { type: "application/json" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "m3e-canvas.json";
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const openProject = async (file: File) => {
+    try {
+      const next = JSON.parse(await file.text()) as Doc;
+      if (!next || !Array.isArray(next.groups) || !Array.isArray(next.frames)) throw new Error("Invalid project");
+      if (window.confirm(t("replaceProject", lang))) onImport(next);
+    } catch {
+      window.alert(t("invalidProject", lang));
+    }
+  };
+
+  const projectButton = (icon: string, label: string, onClick: () => void) => (
+    <button
+      onClick={onClick}
+      className="m3-press"
+      style={{
+        flex: 1,
+        height: 42,
+        borderRadius: 21,
+        border: "none",
+        background: p.secondaryContainer,
+        color: p.onSecondaryContainer,
+        fontSize: 13,
+        fontWeight: 600,
+        cursor: "pointer",
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 7,
+      }}
+    >
+      <Icon name={icon} size={19} />
+      {label}
+    </button>
+  );
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", padding: 12, gap: 10 }}>
@@ -53,6 +100,21 @@ export function PromptPanel({
         multiline
         rows={3}
       />
+      <input
+        ref={fileRef}
+        type="file"
+        accept="application/json,.json"
+        hidden
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          e.target.value = "";
+          if (file) void openProject(file);
+        }}
+      />
+      <div style={{ display: "flex", gap: 6 }}>
+        {projectButton("download", t("saveProject", lang), saveProject)}
+        {projectButton("upload", t("openProject", lang), () => fileRef.current?.click())}
+      </div>
       <div
         className="no-scrollbar"
         style={{

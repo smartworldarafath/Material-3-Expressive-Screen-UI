@@ -1586,6 +1586,28 @@ export default function Page() {
     setSelectedFrameId(null);
   };
 
+  const importDoc = (next: Doc) => {
+    setGroups(next.groups);
+    setFrames(next.frames);
+    setPaletteKey(typeof next.paletteKey === "string" ? next.paletteKey : "purple");
+    setCustomPalette(next.customPalette?.primary ? next.customPalette : null);
+    setDynamicColor(!!next.dynamicColor);
+    setTheme(normalizeTheme(next.theme));
+    const nextFrame = next.frame === "blank" ? "blank" : "phone";
+    setFrame(nextFrame);
+    frameRef.current = nextFrame;
+    setTitle(typeof next.title === "string" ? next.title : "");
+    setBrief(typeof next.brief === "string" ? next.brief : "");
+    setSelectedIds([]);
+    setSelectedFrameId(null);
+    setSelectedLinkId(null);
+    setWidths({});
+    pastRef.current = [];
+    futureRef.current = [];
+    bumpHistory((v) => v + 1);
+    queueMicrotask(() => fitRef.current());
+  };
+
   const selectedFrame = useMemo(
     () => frames.find((f) => f.id === selectedFrameId) ?? null,
     [frames, selectedFrameId],
@@ -3028,6 +3050,7 @@ export default function Page() {
                     if (patch.title !== undefined) setTitle(patch.title);
                     if (patch.brief !== undefined) setBrief(patch.brief);
                   }}
+                  onImport={importDoc}
                 />
               )}
             </div>

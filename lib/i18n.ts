@@ -61,6 +61,18 @@ const UI = {
   name: { ja: "名前", en: "Name", zh: "名称" },
   background: { ja: "背景", en: "Background", zh: "背景" },
   export: { ja: "書き出し", en: "Export", zh: "导出" },
+  saveProject: { ja: "プロジェクトを保存", en: "Save project", zh: "保存项目" },
+  openProject: { ja: "プロジェクトを開く", en: "Open project", zh: "打开项目" },
+  replaceProject: {
+    ja: "このプロジェクトを開きますか？現在のキャンバスは置き換えられます。",
+    en: "Open this project? The current canvas will be replaced.",
+    zh: "要打开这个项目吗？当前画布将被替换。",
+  },
+  invalidProject: {
+    ja: "プロジェクトファイルを開けませんでした。",
+    en: "Could not open the project file.",
+    zh: "无法打开项目文件。",
+  },
   copied: { ja: "コピーしました", en: "Copied", zh: "已复制" },
   saveImage: { ja: "画像で保存", en: "Save as image", zh: "保存为图片" },
   saving: { ja: "保存中…", en: "Saving…", zh: "保存中…" },
