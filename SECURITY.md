@@ -1,6 +1,6 @@
 # Security
 
-M3E Canvas is a static site. It has no server and no accounts; everything you draw
+Material 3 Expressive Screen UI is a static site. It has no server and no accounts; everything you draw
 stays in your browser's local storage. The only network calls are loading fonts
 and, if you turn it on, the optional AI helper: with your own API key entered in
 the AI tab, the browser sends the generated description of your whole design

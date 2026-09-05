@@ -1,5 +1,5 @@
 {
-  "name": "m3e-canvas",
+  "name": "material-3-expressive-screen-ui",
   "version": "0.1.0",
   "private": true,
   "engines": {
@@ -28,11 +28,12 @@
     "typescript": "^7",
     "vitest": "^5.0.0"
   },
-  "description": "Sketch Material 3 Expressive screens in the browser and turn them into vibe-coding prompts.",
+  "description": "Design interactive Material 3 Expressive screens in the browser and transform them into prompts for AI-assisted engineering.",
+  "author": "Arafath Rahman",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/lnkiai/m3e-canvas.git"
+    "url": "https://github.com/smartworldarafath/Material-3-Expressive-Screen-UI.git"
   },
-  "homepage": "https://lnkiai.github.io/m3e-canvas/"
+  "homepage": "https://smartworldarafath.github.io/Material-3-Expressive-Screen-UI/"
 }

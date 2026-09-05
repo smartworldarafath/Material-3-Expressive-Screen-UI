@@ -1,25 +1,21 @@
-# Contributing to M3E Canvas
+# Contributing to Material 3 Expressive Screen UI
 
-Thanks for your interest. This page explains how to report problems, propose
-changes and send code. Japanese, Chinese and Korean summaries are at the end.
+Thank you for your interest in contributing! This document outlines guidelines for reporting issues, proposing enhancements, and submitting pull requests.
 
-## Before you start
+## Getting Started
 
-- **Bugs and small fixes**: open an issue or a pull request directly.
-- **New parts, new panels, prompt wording, anything larger**: please open an
-  issue first so we can agree on the shape of the change before you spend
-  time on it. Material 3 Expressive has a specific vocabulary, and the prompt
-  is tuned carefully; a short discussion up front saves rework.
-- **Questions and ideas**: use [Discussions](https://github.com/lnkiai/m3e-canvas/discussions).
+- **Bug Reports & Minor Fixes**: Feel free to submit an issue or open a pull request directly.
+- **New Components, Panels, or Prompt Refinements**: Please open an issue beforehand so we can align on design specs and implementation strategy prior to investing significant development time. Material 3 Expressive follows strict design tokens and naming conventions, and prompt templates are finely tuned.
+- **Inquiries & Ideas**: Join the conversation in [Discussions](https://github.com/smartworldarafath/Material-3-Expressive-Screen-UI/discussions).
 
-## Setting up
+## Local Development Setup
 
 ```bash
 npm install
-npm run dev        # http://localhost:3000
-npm run typecheck  # tsc --noEmit
-npm test           # Vitest unit tests
-npm run build      # static export into out/
+npm run dev        # Launch local server at http://localhost:3000
+npm run typecheck  # Run TypeScript verification (tsc --noEmit)
+npm test           # Execute Vitest test suite
+npm run build      # Perform static site export into out/
 ```
 
 Node 22.12 or newer is required (the test suite needs it); CI uses Node 22. The app is a single Next.js page with no server; everything is stored in the browser.
@@ -67,30 +63,3 @@ A new kind touches all of these; the existing kinds are the reference:
   help for anything visual.
 - By contributing you agree that your changes are licensed under the project's
   [MIT license](LICENSE).
-
-## 日本語
-
-- バグ報告や小さな修正は Issue または PR を直接どうぞ。
-- 新しい部品やパネル、プロンプトの文言など大きめの変更は、先に Issue で相談してください。
-- 質問やアイデアは Discussions へ。
-- コードのコメントは英語で書きます。UI の文言とプロンプト文は日本語・英語・中国語・韓国語の 4 言語すべてに追加してください。
-- PR の前に `npm run typecheck`、`npm test`、`npm run build` を通してください。CI でも同じものが走ります。
-- 貢献したコードは MIT ライセンスで公開されます。
-
-## 中文
-
-- Bug 报告和小修改可以直接提 Issue 或 PR。
-- 新组件、新面板、提示词措辞等较大的改动，请先开 Issue 讨论。
-- 提问和想法请到 Discussions。
-- 代码注释用英文。UI 文字和提示词需同时提供日文、英文、中文、韩文四种语言。
-- 提交 PR 前请运行 `npm run typecheck`、`npm test` 和 `npm run build`，CI 会执行同样的检查。
-- 贡献的代码以 MIT 许可证发布。
-
-## 한국어
-
-- 버그 보고나 작은 수정은 Issue 또는 PR로 바로 보내 주세요.
-- 새 부품, 새 패널, 프롬프트 문구 등 비교적 큰 변경은 먼저 Issue에서 상의해 주세요.
-- 질문과 아이디어는 Discussions로.
-- 코드 주석은 영어로 씁니다. UI 문구와 프롬프트 문장은 일본어·영어·중국어·한국어 네 언어 모두에 추가해 주세요.
-- PR 전에 `npm run typecheck`, `npm test`, `npm run build`를 통과시켜 주세요. CI에서도 같은 검사가 실행됩니다.
-- 기여한 코드는 MIT 라이선스로 공개됩니다.
