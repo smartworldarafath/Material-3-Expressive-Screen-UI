@@ -1,5 +1,5 @@
 import type { CSSProperties } from "react";
-import { FAB_MENU_TABS, KIND_TEXT, NAV_TABS, TAB_LABELS, getLang, t } from "./i18n";
+import { FAB_MENU_TABS, KIND_TEXT, Lang, NAV_TABS, TAB_LABELS, getLang, t } from "./i18n";
 import { Contrast, schemeFromSeed } from "./color";
 
 /* ---------- geometry ---------- */
@@ -320,13 +320,38 @@ export const SHAPES: { key: ShapeScale; label: string; icon: string }[] = [
 ];
 
 export const FONTS: { key: FontKey; label: string; family: string; /** Google Fonts family to fetch, if any */ google?: string }[] = [
-  { key: "roboto", label: "Roboto", family: "Roboto, 'Noto Sans KR', system-ui, sans-serif" },
-  { key: "robotoFlex", label: "Roboto Flex", family: "'Roboto Flex', Roboto, 'Noto Sans KR', system-ui, sans-serif", google: "Roboto+Flex:wght@400;500;600;700" },
-  { key: "robotoSerif", label: "Roboto Serif", family: "'Roboto Serif', Georgia, 'Noto Sans KR', serif", google: "Roboto+Serif:wght@400;500;600;700" },
+  { key: "roboto", label: "Roboto", family: "Roboto, system-ui, sans-serif" },
+  { key: "robotoFlex", label: "Roboto Flex", family: "'Roboto Flex', Roboto, system-ui, sans-serif", google: "Roboto+Flex:wght@400;500;600;700" },
+  { key: "robotoSerif", label: "Roboto Serif", family: "'Roboto Serif', Georgia, serif", google: "Roboto+Serif:wght@400;500;600;700" },
   { key: "system", label: "System", family: "system-ui, -apple-system, 'Segoe UI', sans-serif" },
 ];
 
-export const fontFamilyOf = (f: FontKey) => FONTS.find((x) => x.key === f)?.family ?? FONTS[0].family;
+/** The Noto Sans face that covers a language's script, spliced in behind the chosen
+ *  face so CJK text renders the same on every OS. English needs none. */
+export const LANG_FONT: Record<Lang, { family: string; google: string } | null> = {
+  ja: { family: "'Noto Sans JP'", google: "Noto+Sans+JP:wght@400;500;600;700" },
+  zh: { family: "'Noto Sans SC'", google: "Noto+Sans+SC:wght@400;500;600;700" },
+  ko: { family: "'Noto Sans KR'", google: "Noto+Sans+KR:wght@400;500;600;700" },
+  en: null,
+};
+
+/** a family list with the language's Noto face placed before the generic fallbacks */
+const withLangFont = (family: string, lang?: Lang) => {
+  const extra = lang ? LANG_FONT[lang]?.family : undefined;
+  if (!extra) return family;
+  const parts = family.split(",").map((s) => s.trim());
+  const at = parts.findIndex((s) => /^(system-ui|-apple-system|Georgia|serif|sans-serif)$/.test(s));
+  parts.splice(at < 0 ? parts.length : at, 0, extra);
+  return parts.join(", ");
+};
+
+/** the chosen face, with the language's Noto face behind it; the system font is left to the device */
+export const fontFamilyOf = (f: FontKey, lang?: Lang) => {
+  const family = FONTS.find((x) => x.key === f)?.family ?? FONTS[0].family;
+  return f === "system" ? family : withLangFont(family, lang);
+};
+/** the editor's own font: Roboto, then the language's Noto face */
+export const uiFontFamily = (lang?: Lang) => withLangFont("Roboto, system-ui, sans-serif", lang);
 
 export const CONTRASTS: { key: Contrast; label: string }[] = [
   { key: "standard", label: "Standard" },

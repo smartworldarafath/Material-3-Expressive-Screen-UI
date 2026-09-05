@@ -52,6 +52,7 @@ import {
   DEFAULT_THEME,
   Theme,
   fontFamilyOf,
+  uiFontFamily,
   normalizeTheme,
   setGlobalShape,
   MEASURED,
@@ -90,7 +91,7 @@ import { barSlotOf, carryFrame, pullInto, tidyFrame } from "@/lib/tidy";
 import { readProject, saveProject } from "@/lib/project";
 import { ColorPanel } from "@/components/ColorPanel";
 import { MotionPanel, ShapePanel, TypePanel } from "@/components/ThemePanel";
-import { ThemeContext, ensureFontLoaded } from "@/lib/theme";
+import { ThemeContext, ensureFontLoaded, ensureLangFontLoaded } from "@/lib/theme";
 import { BottomSheet, MobileActionBar, MobileInspector, MobileLang, MobileSettings } from "@/components/Mobile";
 import { ConfirmDialog, IconBtn, Segmented } from "@/components/ui";
 import { Lang, LangContext, SEED_TEXT, getLang, isLang, setGlobalLang, t, translateDefaultFrameName, translateDefaultText } from "@/lib/i18n";
@@ -566,6 +567,9 @@ export default function Page() {
 
   useEffect(() => {
     document.documentElement.lang = lang;
+    /* the editor's own text and the parts both pick up the language's Noto face */
+    document.body.style.fontFamily = uiFontFamily(lang);
+    ensureLangFontLoaded(lang, () => setWidths({}));
   }, [lang]);
 
   useEffect(() => {
@@ -2659,7 +2663,7 @@ export default function Page() {
             top: 0,
             visibility: "hidden",
             pointerEvents: "none",
-            fontFamily: fontFamilyOf(theme.font),
+            fontFamily: fontFamilyOf(theme.font, lang),
           }}
         >
           {allItems
@@ -2689,7 +2693,7 @@ export default function Page() {
         </div>
 
         {exportFrame && (
-          <div aria-hidden style={{ position: "fixed", left: -99999, top: 0, pointerEvents: "none", fontFamily: fontFamilyOf(theme.font) }}>
+          <div aria-hidden style={{ position: "fixed", left: -99999, top: 0, pointerEvents: "none", fontFamily: fontFamilyOf(theme.font, lang) }}>
             {renderExport(exportFrame)}
           </div>
         )}
@@ -2883,7 +2887,7 @@ export default function Page() {
                 transition: cameraEasing ? `transform ${SETTLE_MS}ms cubic-bezier(0.2, 0, 0, 1)` : undefined,
                 willChange: "transform",
                 visibility: viewReady ? "visible" : "hidden",
-                fontFamily: fontFamilyOf(theme.font),
+                fontFamily: fontFamilyOf(theme.font, lang),
               }}
             >
               {frame === "phone" &&
@@ -2918,7 +2922,7 @@ export default function Page() {
                           cursor: handMode ? "grab" : "move",
                           userSelect: "none",
                           whiteSpace: "nowrap",
-                          fontFamily: "Roboto, 'Noto Sans KR', system-ui, sans-serif",
+                          fontFamily: uiFontFamily(lang),
                         }}
                       >
                         <div onPointerDown={(e) => e.stopPropagation()}>

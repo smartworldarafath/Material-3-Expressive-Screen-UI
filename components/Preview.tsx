@@ -723,7 +723,7 @@ export function Preview({
               borderRadius: screenRadius,
               overflow: "hidden",
               background: p[current.bg ?? "surface"],
-              fontFamily: fontFamilyOf(theme.font),
+              fontFamily: fontFamilyOf(theme.font, lang),
               touchAction: "none",
             }}
           >
