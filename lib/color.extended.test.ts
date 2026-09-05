@@ -106,11 +106,12 @@ describe("tone()", () => {
   it("reduces absurdly high chroma until the color fits sRGB", () => {
     const out = tone(50, 500, 0);
     expect(out).toMatch(/^#[0-9A-F]{6}$/);
-    // The 500-chroma input is far outside sRGB: the loop must have shrunk it.
-    // Measure what came out — full chroma surviving would mean no reduction.
+    // The 500-chroma input is far outside sRGB (the widest sRGB chroma is
+    // ~134), so the loop must have shrunk it to fit. Bound at 200: the
+    // un-reduced input exceeds it, any genuinely reduced result sits below.
     const rgb = hexToRgb(out);
     expect(rgb).not.toBeNull();
-    expect(labToLch(rgbToLab(...rgb!)).C).toBeLessThan(500);
+    expect(labToLch(rgbToLab(...rgb!)).C).toBeLessThan(200);
   });
 
   it("grey (chroma 0) produces a neutral grey at the given tone", () => {
