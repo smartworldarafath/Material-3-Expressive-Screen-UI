@@ -131,8 +131,8 @@ describe("buildPrompt — palette section", () => {
       "onError",
       "errorContainer",
       "onErrorContainer",
-    ]) {
-      expect(out).toContain(role);
+    ] as const) {
+      expect(out).toContain(`${role} ${palette[role]}`);
     }
   });
 

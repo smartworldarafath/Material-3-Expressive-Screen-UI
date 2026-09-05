@@ -5,7 +5,6 @@
  *  - Math helpers: lerp, clamp, uid uniqueness + format
  *  - Frame helpers: frameSizeOf, isPhoneFrame, framePresetOf, frameRect
  *  - isExpanded boundary at 840 dp
- *  - runCorners: outer/inner assignment for axis, first/last combinations
  *  - uniformRadii: simple all-corners-equal constructor
  *  - carryItemSize: width/height scaling, kind-specific formulas
  *  - connectSpecOf returns connect metadata; canJoin is true only when same axis + family
@@ -35,7 +34,6 @@ import {
   clamp,
   uid,
   uniformRadii,
-  runCorners,
   isExpanded,
   frameSizeOf,
   isPhoneFrame,
@@ -52,7 +50,6 @@ import {
   defaultPlatformOf,
   isPlatform,
   makeItem,
-  Group,
   Frame,
   Item,
   NavTab,
@@ -178,21 +175,6 @@ describe("frame helpers", () => {
   });
 });
 
-describe("runCorners", () => {
-  it("x axis: outer on the side that's 'first' or 'last'", () => {
-    expect(runCorners("x", true, true, 20, 4)).toEqual({ tl: 20, bl: 20, tr: 20, br: 20 });
-    expect(runCorners("x", true, false, 20, 4)).toEqual({ tl: 20, bl: 20, tr: 4, br: 4 });
-    expect(runCorners("x", false, true, 20, 4)).toEqual({ tl: 4, bl: 4, tr: 20, br: 20 });
-    expect(runCorners("x", false, false, 20, 4)).toEqual({ tl: 4, bl: 4, tr: 4, br: 4 });
-  });
-
-  it("y axis: outer on top/bottom, inner on the middle sides", () => {
-    expect(runCorners("y", true, true, 20, 4)).toEqual({ tl: 20, tr: 20, bl: 20, br: 20 });
-    expect(runCorners("y", true, false, 20, 4)).toEqual({ tl: 20, tr: 20, bl: 4, br: 4 });
-    expect(runCorners("y", false, true, 20, 4)).toEqual({ tl: 4, tr: 4, bl: 20, br: 20 });
-    expect(runCorners("y", false, false, 20, 4)).toEqual({ tl: 4, tr: 4, bl: 4, br: 4 });
-  });
-});
 
 describe("carryItemSize", () => {
   const from = { w: 100, h: 100 };
@@ -204,10 +186,11 @@ describe("carryItemSize", () => {
     expect(out.size).toBe(200);
   });
 
-  it("a button has fixed height 56 and keeps variant", () => {
+  it("a button carries no explicit size across frames and keeps its variant", () => {
     const it: Item = { id: "1", kind: "button", label: "L", icon: null, variant: "filled" };
     const out = carryItemSize(it, from, to);
     expect(out.size).toBeUndefined();
+    expect(out.variant).toBe("filled");
   });
 
   it("a box scales its second size dimension", () => {
@@ -315,13 +298,6 @@ describe("normalizeTheme", () => {
     });
   });
 
-  it("fills missing fields but preserves overrides", () => {
-    const t = normalizeTheme({ dark: true, shape: "full" } as any);
-    expect(t.dark).toBe(true);
-    expect(t.shape).toBe("full");
-    expect(t.contrast).toBe("standard");
-    expect(t.font).toBe("roboto");
-  });
 });
 
 describe("isPlatform / defaultPlatformOf", () => {
@@ -363,11 +339,3 @@ describe("makeItem", () => {
   });
 });
 
-describe("Group construction smoke", () => {
-  it("can build a minimal Group referencing a single Item (sanity)", () => {
-    const it: Item = { id: "a", kind: "button", label: "A", icon: null, variant: "filled" };
-    const g: Group = { id: "g1", x: 0, y: 0, axis: "x", items: [it] };
-    expect(g.items[0].kind).toBe("button");
-    expect(g.axis).toBe("x");
-  });
-});

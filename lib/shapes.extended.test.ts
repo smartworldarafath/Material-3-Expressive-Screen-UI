@@ -153,11 +153,13 @@ describe("Spring", () => {
     expect(s.target).toBe(0);
   });
 
-  it("dt=0 doesn't change state (no integration performed)", () => {
+  it("dt=0 leaves a displaced spring where it is", () => {
     const s = new Spring(100, 1);
-    const before = s.pos;
+    s.pos = 2;
+    s.target = 0;
     s.step(0);
-    expect(s.pos).toBe(before);
+    expect(s.pos).toBe(2);
+    expect(s.vel).toBe(0);
   });
 });
 

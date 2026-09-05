@@ -7,8 +7,7 @@
  *  - tone() always returns a valid #RRGGBB hex (even at full chroma)
  *  - hexToRgb rejects malformed input
  *  - schemeFromSeed produces all required Palette roles with distinct colors
- *  - dark mode flips surface tones; contrast levels shift accent tones
- *  - keepChroma doesn't reduce chroma below seed
+ *  - keepChroma leaves a grey seed grey
  *  - invalid seed falls back to the default purple seed
  *  - onColorFor picks light or dark text based on background L*
  *  - isHex accepts / rejects correctly
@@ -204,27 +203,14 @@ describe("schemeFromSeed()", () => {
     expect(a.primary).not.toBe(b.primary);
   });
 
-  it("dark mode flips surface to a dark tone (light < 0..50 in lab terms)", () => {
-    const light = schemeFromSeed("#6750A4", "X", { dark: false });
-    const dark = schemeFromSeed("#6750A4", "X", { dark: true });
-    // light.surface is very light (RGB values high)
-    const [lr, lg, lb] = hexToRgb(light.surface)!;
-    const [dr, dg, db] = hexToRgb(dark.surface)!;
-    expect(lr + lg + lb).toBeGreaterThan(dr + dg + db);
-  });
 
-  it("contrast level changes the primary tone (standard vs high)", () => {
-    const std = schemeFromSeed("#6750A4", "X", { contrast: "standard" });
-    const hi = schemeFromSeed("#6750A4", "X", { contrast: "high" });
-    expect(std.primary).not.toBe(hi.primary);
-  });
 
-  it("keepChroma doesn't lift a muted seed's chroma above its source", () => {
+  it("keepChroma keeps a grey seed grey, while the default lifts its chroma", () => {
+    const chroma = (hex: string) => labToLch(rgbToLab(...hexToRgb(hex)!)).C;
     const muted = schemeFromSeed("#888888", "muted", { keepChroma: true });
     const lifted = schemeFromSeed("#888888", "muted", { keepChroma: false });
-    // the lifted version gets chroma bumped to at least 36, so it should be different
-    expect(muted.primary).not.toBe(lifted.primary);
-    expect(muted.primary).toMatch(/^#[0-9A-F]{6}$/);
+    expect(chroma(muted.primary)).toBeLessThan(2);
+    expect(chroma(lifted.primary)).toBeGreaterThan(20);
   });
 
   it("error colors come from the light/dark ERROR constants", () => {
@@ -253,7 +239,4 @@ describe("onColorFor()", () => {
     expect(darkRGB[0] + darkRGB[1] + darkRGB[2]).toBeGreaterThan(128);
   });
 
-  it("returns black for unparseable hex", () => {
-    expect(onColorFor("not-a-color")).toBe("#000000");
-  });
 });

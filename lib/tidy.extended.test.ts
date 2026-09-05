@@ -10,7 +10,7 @@
  *  - tidyFrame returns null when the screen is already tidy
  *  - tidyFrame shifts the parts so they don't overlap a bar at the top, etc.
  *  - Tidy assigns an axis to joined runs
- *  - Two near-neighbour buttons (within JOIN_GAP_X) on the same row get fused
+ *  - Two near-neighbour buttons fuse; two beyond JOIN_GAP_X stay separate rows
  *  - Three list items stacked vertically with the right gap join into one run
  *  - Groups of different families do not join
  *  - carryFrame: phone <-> desktop conversion swaps a stand-alone bottomNav with a navRail
@@ -32,6 +32,8 @@ import {
   PHONE_H,
   DESKTOP_W,
   DESKTOP_H,
+  NAV_BAR_H,
+  PHONE_MARGIN,
   makeItem,
 } from "./tokens";
 
@@ -120,15 +122,18 @@ describe("tidyFrame", () => {
     expect(tidyFrame([], phoneFrame, [phoneFrame], widths)).toBeNull();
   });
 
-  it("returns null when groups are already at their canonical spots", () => {
+  it("returns null when a top app bar already sits in its slot", () => {
     const f = phoneFrame;
-    const g = group("g1", 16, 24, [topBar("t")]); // a top app bar at the top edge
-    const groups = [g];
-    const out = tidyFrame(groups, f, [f], widths);
-    // it may or may not be null depending on the algorithm; we assert that calling tidy
-    // twice converges (idempotent).
-    const second = out ? tidyFrame(out, f, [f], widths) : null;
-    expect(second).toBeNull();
+    expect(tidyFrame([group("g1", 0, 0, [topBar("t")])], f, [f], widths)).toBeNull();
+  });
+
+  it("leaves two buttons apart when the gap between them exceeds the join distance", () => {
+    const f = phoneFrame;
+    // A 24dp gap joins (see lib/tidy.test.ts); at 60dp the buttons stay two rows.
+    const apart = [group("g1", 16, 300, [btn("a")]), group("g2", 16 + 128 + 60, 300, [btn("b")])];
+    const out = tidyFrame(apart, f, [f], widths) ?? apart;
+    expect(out).toHaveLength(2);
+    expect(out.flatMap((g) => g.items.map((it) => it.id)).sort()).toEqual(["a", "b"]);
   });
 
   it("fuses two close buttons in a row into one connected run", () => {
@@ -157,8 +162,7 @@ describe("tidyFrame", () => {
     const g = group("g1", 100, 100, [navBar("bn")]); // placed near top
     const out = tidyFrame([g], f, [f], widths)!;
     const nav = out.find((x) => x.items[0].kind === "bottomNav")!;
-    // the bar's bottom edge should be at PHONE_H
-    expect(nav.y).toBeGreaterThan(PHONE_H / 2);
+    expect([nav.x, nav.y]).toEqual([0, PHONE_H - (80 + NAV_BAR_H)]);
   });
 
   it("places a FAB at the bottom-right corner of the body", () => {
@@ -166,8 +170,7 @@ describe("tidyFrame", () => {
     const g = group("g1", 0, 0, [fab("f")]);
     const out = tidyFrame([g], f, [f], widths)!;
     const f0 = out.find((x) => x.items[0].kind === "fab")!;
-    // FAB sits with its right edge near the body's right edge minus PHONE_MARGIN
-    expect(f0.x).toBeGreaterThan(PHONE_W / 2);
+    expect([f0.x, f0.y]).toEqual([PHONE_W - PHONE_MARGIN - 56, PHONE_H - PHONE_MARGIN - 56]);
   });
 
   it("stacks loose rows on the layout margin from the top down", () => {
@@ -190,8 +193,8 @@ describe("carryFrame", () => {
     // The screen that became "smaller" — it's `to`, so the result frame should be smaller.
     expect(res.frames[1].w).toBe(300);
     expect(res.frames[1].h).toBe(500);
-    // The top-bar group survives the move, tracked by id.
-    expect(res.groups.some((g) => g.id === "g1")).toBe(true);
+    expect(res.groups).toHaveLength(1);
+    expect(res.groups[0].items[0].kind).toBe("topAppBar");
   });
 
   it("expands a phone to desktop: a stand-alone bottomNav becomes a navRail", () => {
@@ -234,6 +237,7 @@ describe("integration with makeItem", () => {
     const it = makeItem("button");
     const g = group("g", 100, 100, [it]);
     const out = tidyFrame([g], phoneFrame, [phoneFrame], widths)!;
-    expect(out.length).toBeGreaterThanOrEqual(0);
+    expect(out).toHaveLength(1);
+    expect(out[0].items[0].id).toBe(it.id);
   });
 });
