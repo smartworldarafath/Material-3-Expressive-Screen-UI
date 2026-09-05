@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { COLOR_TOKENS, ColorToken, Palette, R_INNER, clamp } from "@/lib/tokens";
 import { AnimatePresence, motion } from "motion/react";
-import { t, useLang } from "@/lib/i18n";
+import { COLOR_TOKEN_TEXT, t, useLang } from "@/lib/i18n";
 import { Icon } from "./M3Node";
 
 export function IconBtn({
@@ -700,12 +700,13 @@ export function TokenChips({
       )}
       {COLOR_TOKENS.map((t) => {
         const on = !noneOn && t.key === value;
+        const label = lang === "en" ? t.label : COLOR_TOKEN_TEXT[lang][t.key];
         return (
           <button
             key={t.key}
             onClick={() => onChange(t.key)}
-            title={t.label}
-            aria-label={t.label}
+            title={label}
+            aria-label={label}
             aria-pressed={on}
             className="m3-press"
             style={{

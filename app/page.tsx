@@ -93,7 +93,7 @@ import { MotionPanel, ShapePanel, TypePanel } from "@/components/ThemePanel";
 import { ThemeContext, ensureFontLoaded } from "@/lib/theme";
 import { BottomSheet, MobileActionBar, MobileInspector, MobileLang, MobileSettings } from "@/components/Mobile";
 import { ConfirmDialog, IconBtn, Segmented } from "@/components/ui";
-import { Lang, LangContext, isLang, setGlobalLang, t } from "@/lib/i18n";
+import { Lang, LangContext, SEED_TEXT, getLang, isLang, setGlobalLang, t, translateDefaultFrameName, translateDefaultText } from "@/lib/i18n";
 
 /** the dragged part's own travel: a little lag reads as weight */
 const CARRY = {
@@ -170,6 +170,21 @@ type Snapshot = { groups: Group[]; frames: Frame[] };
 /** a screen changing size eases the way a settling part does */
 const SIZE_TRANSITION = `width ${SETTLE_MS}ms cubic-bezier(0.2, 0, 0, 1), height ${SETTLE_MS}ms cubic-bezier(0.2, 0, 0, 1), border-radius ${SETTLE_MS}ms cubic-bezier(0.2, 0, 0, 1)`;
 
+function translateSnapshot(snap: Snapshot, lang: Lang): Snapshot {
+  return {
+    groups: snap.groups.map((group) => ({
+      ...group,
+      items: group.items.map((item) => ({
+        ...item,
+        label: translateDefaultText(item.label, item.kind, "label", lang),
+        ...(item.supporting !== undefined && { supporting: translateDefaultText(item.supporting, item.kind, "supporting", lang) }),
+        ...(item.tabs && { tabs: item.tabs.map((tab) => ({ ...tab, label: translateDefaultText(tab.label, item.kind, "tab", lang) })) }),
+      })),
+    })),
+    frames: snap.frames.map((frame) => ({ ...frame, name: translateDefaultFrameName(frame.name, lang) })),
+  };
+}
+
 const SEED_FRAMES: Frame[] = [{ id: "seedF1", name: "Home", x: 0, y: 0 }];
 
 /** Documents saved before the bars grew their system insets have the navigation
@@ -187,23 +202,24 @@ function migrateGroups(groups: Group[], frames: Frame[]): Group[] {
 }
 
 /** Seed ids are deterministic so server and client render the same markup. */
-const seed = (): Group[] => {
+const seed = (lang: Lang = getLang()): Group[] => {
+  const text = SEED_TEXT[lang];
   let n = 0;
   const sid = () => `seed${++n}`;
   const mk = (k: Kind) => ({ ...makeItem(k), id: sid() });
   const bar = mk("topAppBar");
   const a = mk("button");
   const b = mk("button");
-  a.label = "お気に入り";
+  a.label = text.favorite;
   a.icon = "star";
-  b.label = "共有";
+  b.label = text.share;
   b.icon = "share";
   b.variant = "tonal";
-  const rows = ["受信トレイ", "スター付き", "アーカイブ"].map((t, i) => {
+  const rows = [text.inbox, text.starred, text.archive].map((t, i) => {
     const it = mk("listItem");
     it.label = t;
     it.icon = ["inbox", "star", "archive"][i];
-    it.supporting = "サブテキスト";
+    it.supporting = text.supporting;
     return it;
   });
   const nav = mk("bottomNav");
@@ -224,17 +240,18 @@ const seed = (): Group[] => {
 };
 
 /** The phone version starts with buttons only: that is all it edits. */
-const mobileSeed = (): Group[] => {
+const mobileSeed = (lang: Lang = getLang()): Group[] => {
+  const text = SEED_TEXT[lang];
   const mk = (k: Kind) => makeItem(k);
   const a = mk("button");
   const b = mk("button");
   const c = mk("button");
-  a.label = "お気に入り";
+  a.label = text.favorite;
   a.icon = "star";
-  b.label = "共有";
+  b.label = text.share;
   b.icon = "share";
   b.variant = "tonal";
-  c.label = "はじめる";
+  c.label = text.start;
   c.icon = "arrow_forward";
   return [
     { id: uid(), x: PHONE_MARGIN, y: 120, axis: "x", items: [a, b] },
@@ -301,6 +318,24 @@ export default function Page() {
   const patchTheme = (patch: Partial<Theme>) => setTheme((t) => ({ ...t, ...patch }));
   const [frame, setFrame] = useState<FrameMode>("phone");
   const [lang, setLang] = useState<Lang>("ja");
+  const changeLanguage = (next: Lang) => {
+    setGlobalLang(next);
+    initialLangRef.current = next;
+    setLang(next);
+    const translated = translateSnapshot({ groups: groupsRef.current, frames: framesRef.current }, next);
+    const tidy = tidyRef.current;
+    if (tidy) {
+      tidyRef.current = tidy.after === groupsRef.current ? {
+        ...tidy,
+        before: translateSnapshot({ groups: tidy.before, frames: framesRef.current }, next).groups,
+        after: translated.groups,
+      } : null;
+    }
+    setGroups(translated.groups);
+    setFrames(translated.frames);
+    pastRef.current = pastRef.current.map((snap) => translateSnapshot(snap, next));
+    futureRef.current = futureRef.current.map((snap) => translateSnapshot(snap, next));
+  };
   const [isMobile, setIsMobile] = useState(false);
   const [sheet, setSheet] = useState<"edit" | "settings" | "lang" | null>(null);
   const [confirmClear, setConfirmClear] = useState(false);
@@ -401,7 +436,8 @@ export default function Page() {
   /** groups that must reposition without animating on the next render */
   const instantRef = useRef<Set<string>>(new Set());
   const loadedRef = useRef(false);
-  /** whether a saved document existed, so the phone seed only applies to a fresh start */
+  const initialLangRef = useRef<Lang>("ja");
+  /** A saved document or the first viewport initialization prevents later reseeding. */
   const hadDocRef = useRef(false);
 
   /* ---------- history ---------- */
@@ -496,6 +532,7 @@ export default function Page() {
         applyDoc(JSON.parse(d) as Partial<Doc>, false);
         // frame mode is decided by the device (media-query effect), not restored
       }
+      let initialLang: Lang = "ja";
       const u = localStorage.getItem(UI_KEY);
       if (u) {
         const ui = JSON.parse(u);
@@ -506,12 +543,21 @@ export default function Page() {
         if (ui.rightW) setRightW(ui.rightW);
         if (Array.isArray(ui.favorites)) setFavorites(ui.favorites);
         if (ui.mode) setMode(ui.mode);
-        if (isLang(ui.lang)) setLang(ui.lang);
+        if (isLang(ui.lang)) {
+          initialLang = ui.lang;
+          setLang(ui.lang);
+        }
       } else {
         const nl = (navigator.language ?? "").toLowerCase();
-        if (nl.startsWith("zh")) setLang("zh");
-        else if (!nl.startsWith("ja")) setLang("en");
+        initialLang = nl.startsWith("zh") ? "zh" : nl.startsWith("ko") ? "ko" : nl.startsWith("ja") ? "ja" : "en";
+        setLang(initialLang);
         queueMicrotask(() => fitRef.current());
+      }
+      setGlobalLang(initialLang);
+      initialLangRef.current = initialLang;
+      if (!d) {
+        setGroups(seed(initialLang));
+        setFrames([{ ...SEED_FRAMES[0], name: t("home", initialLang) }]);
       }
     } catch {}
     setAiSettings(loadAiSettings());
@@ -519,7 +565,6 @@ export default function Page() {
   }, []);
 
   useEffect(() => {
-    setGlobalLang(lang);
     document.documentElement.lang = lang;
   }, [lang]);
 
@@ -575,10 +620,11 @@ export default function Page() {
         setSheet(null);
         if (!hadDocRef.current) {
           hadDocRef.current = true;
-          setGroups(mobileSeed());
-          setFrames([{ id: uid(), name: t("home"), x: 0, y: 0 }]);
+          setGroups(mobileSeed(initialLangRef.current));
+          setFrames([{ id: uid(), name: t("home", initialLangRef.current), x: 0, y: 0 }]);
         }
       }
+      hadDocRef.current = true;
       if (frameRef.current !== "phone") {
         setFrame("phone");
         frameRef.current = "phone";
@@ -653,7 +699,10 @@ export default function Page() {
   });
 
   useEffect(() => {
-    document.fonts?.ready.then(() => setWidths({}));
+    const refreshWidths = () => setWidths({});
+    document.fonts?.ready.then(refreshWidths);
+    document.fonts?.addEventListener("loadingdone", refreshWidths);
+    return () => document.fonts?.removeEventListener("loadingdone", refreshWidths);
   }, []);
 
   const sizeRef = useCallback((it: Item) => sizeOf(it, widthsRef.current), []);
@@ -2694,7 +2743,7 @@ export default function Page() {
                 </div>
               ))}
               <div style={{ flex: 1 }} onClick={() => !leftOpen && setLeftOpen(true)} />
-              <LangMenu p={p} onLang={setLang} side="right" size={44} />
+              <LangMenu p={p} onLang={changeLanguage} side="right" size={44} />
               <GitHubLink p={p} size={44} />
             </div>
             {leftOpen && (
@@ -2869,7 +2918,7 @@ export default function Page() {
                           cursor: handMode ? "grab" : "move",
                           userSelect: "none",
                           whiteSpace: "nowrap",
-                          fontFamily: "Roboto, system-ui, sans-serif",
+                          fontFamily: "Roboto, 'Noto Sans KR', system-ui, sans-serif",
                         }}
                       >
                         <div onPointerDown={(e) => e.stopPropagation()}>
@@ -3239,7 +3288,7 @@ export default function Page() {
                   palette={p}
                   lang={lang}
                   onLang={(l) => {
-                    setLang(l);
+                    changeLanguage(l);
                     setSheet(null);
                   }}
                 />
