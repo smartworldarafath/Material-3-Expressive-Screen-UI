@@ -13,6 +13,7 @@
   <a href="https://github.com/lnkiai/m3e-canvas/actions/workflows/deploy.yml"><img alt="Deploy" src="https://github.com/lnkiai/m3e-canvas/actions/workflows/deploy.yml/badge.svg" /></a>
   <a href="https://github.com/lnkiai/m3e-canvas/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/lnkiai/m3e-canvas?style=flat&logo=github&color=6750A4" /></a>
   <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/license-MIT-blue.svg" /></a>
+  <a href="https://github.com/sponsors/lnkiai"><img alt="Sponsor" src="https://img.shields.io/badge/sponsor-%E2%9D%A4-EA4AAA?logo=githubsponsors&logoColor=white" /></a>
   <img alt="Next.js" src="https://img.shields.io/badge/Next.js-16-black?logo=nextdotjs" />
   <img alt="React" src="https://img.shields.io/badge/React-19-20232a?logo=react&logoColor=61DAFB" />
   <img alt="Material 3 Expressive" src="https://img.shields.io/badge/Material%203-Expressive-EADDFF?logo=materialdesign&logoColor=6750A4" />
@@ -83,6 +84,10 @@ The app is a static Next.js export. To host it under a sub-path (for example a G
 
 Bug reports, part requests and pull requests are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) explains the setup, the conventions (English comments, four languages for every string) and where each kind of change lives. Questions go to [Discussions](https://github.com/lnkiai/m3e-canvas/discussions).
 
+## Support
+
+M3E Canvas is free and MIT-licensed, and stays that way. If it saves you time, you can [sponsor the work on GitHub](https://github.com/sponsors/lnkiai); it pays for the hours that go into new parts, the prompt, and reviewing contributions. No feature is behind sponsorship.
+
 ## Credits
 
 - Loading indicator shapes and animation model: [material-components-android](https://github.com/material-components/material-components-android) (Apache-2.0) via [Aler1x/m3-loading-indicator](https://github.com/Aler1x/m3-loading-indicator). See `NOTICE`.
@@ -143,6 +148,10 @@ npm run build      # ./out に静的書き出し
 
 バグ報告、部品のリクエスト、PR を歓迎します。手順と約束事は [CONTRIBUTING.md](CONTRIBUTING.md) にまとめています。質問は [Discussions](https://github.com/lnkiai/m3e-canvas/discussions) へどうぞ。
 
+### 支援
+
+M3E Canvas は無料で MIT ライセンスのまま続けます。時間の節約になったら、[GitHub Sponsors](https://github.com/sponsors/lnkiai) で開発を支えてもらえると助かります。新しい部品、プロンプトの調整、貢献のレビューにかかる時間に充てます。支援の有無で使える機能は変わりません。
+
 ### ライセンス
 
 MIT © lnkiai
@@ -193,6 +202,10 @@ npm run build      # 静态导出到 ./out
 
 欢迎 Bug 报告、组件请求和 PR。步骤和约定见 [CONTRIBUTING.md](CONTRIBUTING.md)。提问请到 [Discussions](https://github.com/lnkiai/m3e-canvas/discussions)。
 
+### 支持
+
+M3E Canvas 免费且采用 MIT 许可证，今后也不会改变。如果它为你节省了时间，欢迎在 [GitHub Sponsors](https://github.com/sponsors/lnkiai) 上支持开发；这些支持将用于新组件、提示词的打磨和审阅贡献所花的时间。没有任何功能因赞助而受限。
+
 ### 许可证
 
 MIT © lnkiai
@@ -242,6 +255,10 @@ npm run build      # ./out 에 정적 내보내기
 ### 기여
 
 버그 보고, 부품 요청, PR을 환영합니다. 절차와 약속은 [CONTRIBUTING.md](CONTRIBUTING.md)에 정리되어 있습니다. 질문은 [Discussions](https://github.com/lnkiai/m3e-canvas/discussions)로 보내 주세요.
+
+### 후원
+
+M3E Canvas는 무료이며 MIT 라이선스로 계속 유지됩니다. 시간을 아끼는 데 도움이 되었다면 [GitHub Sponsors](https://github.com/sponsors/lnkiai)에서 개발을 후원해 주세요. 새 부품, 프롬프트 다듬기, 기여 검토에 드는 시간에 쓰입니다. 후원 여부로 기능이 달라지지 않습니다.
 
 ### 라이선스
 
