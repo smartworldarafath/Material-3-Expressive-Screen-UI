@@ -94,7 +94,6 @@ import { MotionPanel, ShapePanel, TypePanel } from "@/components/ThemePanel";
 import { ThemeContext, ensureFontLoaded, ensureLangFontLoaded } from "@/lib/theme";
 import { BottomSheet, MobileActionBar, MobileInspector, MobileLang, MobileSettings } from "@/components/Mobile";
 import { ConfirmDialog, IconBtn, Segmented } from "@/components/ui";
-import { LoadingIndicator } from "@/components/Loading";
 import { Lang, LangContext, SEED_TEXT, getLang, isLang, setGlobalLang, t, translateDefaultFrameName, translateDefaultText } from "@/lib/i18n";
 
 /** the dragged part's own travel: a little lag reads as weight */
@@ -312,7 +311,7 @@ const LEFT_TABS: { key: LeftTab; icon: string; title: "parts" | "layers" | "colo
 
 export default function Page() {
   /* ---------- document ---------- */
-  const [editAccess, setEditAccess] = useState<"checking" | "editable" | "readonly" | "unavailable">("checking");
+  const [editAccess, setEditAccess] = useState<"checking" | "editable" | "readonly">("checking");
   const [groups, setGroups] = useState<Group[]>(seed);
   const [frames, setFrames] = useState<Frame[]>(SEED_FRAMES);
   const [paletteKey, setPaletteKey] = useState("purple");
@@ -504,9 +503,11 @@ export default function Page() {
   /* ---------- persistence ---------- */
   useEffect(() => {
     /* The first tab keeps this promise pending for its lifetime. Later tabs get
-       `null` immediately and stay read-only until they are reloaded. */
+       `null` immediately and stay read-only until they are reloaded. Where the
+       browser has no locks (an insecure origin, an old WebKit) the editor works
+       as it always did, without the guard. */
     if (!navigator.locks) {
-      setEditAccess("unavailable");
+      setEditAccess("editable");
       return;
     }
     let active = true;
@@ -528,7 +529,7 @@ export default function Page() {
           });
         })
         .catch(() => {
-          if (active) setEditAccess("unavailable");
+          if (active) setEditAccess("editable");
         });
     });
     return () => {
@@ -2708,7 +2709,6 @@ export default function Page() {
   };
 
   const showRight = rightOpen && !isMobile;
-  const accessBlocked = editAccess === "readonly" || editAccess === "unavailable";
   const guide = drag?.active ? drag.guide : null;
   const visibleWorld = (() => {
     const r = canvasRef.current?.getBoundingClientRect();
@@ -3572,11 +3572,11 @@ export default function Page() {
         </AnimatePresence>
       </div>
 
-      {editAccess !== "editable" && (
+      {editAccess === "readonly" && (
         <div
-          role={editAccess === "checking" ? "status" : "dialog"}
-          aria-modal={accessBlocked ? "true" : undefined}
-          aria-labelledby={accessBlocked ? "edit-access-title" : undefined}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="edit-access-title"
           style={{
             position: "fixed",
             inset: 0,
@@ -3584,29 +3584,9 @@ export default function Page() {
             display: "grid",
             placeItems: "center",
             padding: 24,
-            background: accessBlocked ? "rgba(0,0,0,0.32)" : "transparent",
+            background: "rgba(0,0,0,0.32)",
           }}
         >
-          {editAccess === "checking" && (
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 12,
-                padding: "12px 18px",
-                borderRadius: 28,
-                background: p.surfaceContainerHigh,
-                color: p.onSurface,
-                boxShadow: "0 8px 24px rgba(0,0,0,0.16)",
-                fontSize: 14,
-                fontWeight: 600,
-              }}
-            >
-              <LoadingIndicator size={28} color={p.primary} />
-              {t("checkingEditAccess", lang)}
-            </div>
-          )}
-          {accessBlocked && (
             <div
               style={{
                 width: "min(420px, 100%)",
@@ -3619,10 +3599,10 @@ export default function Page() {
             >
               <Icon name="lock" size={28} />
               <h1 id="edit-access-title" style={{ margin: "16px 0 8px", fontSize: 22, lineHeight: 1.25 }}>
-                {t(editAccess === "readonly" ? "readOnlyTitle" : "editUnavailableTitle", lang)}
+                {t("readOnlyTitle", lang)}
               </h1>
               <p style={{ margin: 0, color: p.onSurfaceVariant, fontSize: 14, lineHeight: 1.5 }}>
-                {t(editAccess === "readonly" ? "readOnlyBody" : "editUnavailableBody", lang)}
+                {t("readOnlyBody", lang)}
               </p>
               <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 24 }}>
                 <button
@@ -3645,7 +3625,6 @@ export default function Page() {
                 </button>
               </div>
             </div>
-          )}
         </div>
       )}
     </ThemeContext.Provider>
