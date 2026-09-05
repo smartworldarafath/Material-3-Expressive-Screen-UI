@@ -1076,6 +1076,8 @@ export type Item = {
   size?: number;
   radiusTop?: number;
   radiusBottom?: number;
+  /** boxes only: each corner on its own, when the pairs above are not enough */
+  corners?: Radii;
   tabs?: NavTab[];
   /** on/off state for switches, checkboxes and chips */
   checked?: boolean;
@@ -1545,6 +1547,8 @@ export function baseRadii(it: Item): Radii {
   const s = KIND_SPEC[it.kind];
   switch (it.kind) {
     case "box":
+      if (it.corners) return { ...it.corners };
+    // falls through
     case "bottomNav":
     case "topAppBar":
     case "tabs": {

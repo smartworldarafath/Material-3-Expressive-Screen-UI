@@ -93,7 +93,7 @@ function itemJa(it: Item): string {
     case "divider":
       return "区切り線";
     case "box":
-      return `${it.size ?? PHONE_W}×${it.size2 ?? 220}dp の${it.checked ? "ボトムシート（上部にドラッグハンドル。" : "ボックス（"}背景 ${it.fill ?? "surfaceContainerLow"}、角丸は上 ${it.radiusTop ?? 28}dp・下 ${it.radiusBottom ?? 28}dp）`;
+      return `${it.size ?? PHONE_W}×${it.size2 ?? 220}dp の${it.checked ? "ボトムシート（上部にドラッグハンドル。" : "ボックス（"}背景 ${it.fill ?? "surfaceContainerLow"}、${boxCorners(it, "ja")}）`;
     case "loadingIndicator":
       return `M3 Expressive の形が変化するローディングインジケータ${it.contained ? "（コンテナ付き）" : ""}`;
     case "linearProgress":
@@ -175,7 +175,7 @@ function itemEn(it: Item): string {
     case "divider":
       return "a divider";
     case "box":
-      return `a ${it.size ?? PHONE_W}×${it.size2 ?? 220}dp ${it.checked ? "bottom sheet with a drag handle at the top" : "box"} (background ${it.fill ?? "surfaceContainerLow"}, corner radius ${it.radiusTop ?? 28}dp top / ${it.radiusBottom ?? 28}dp bottom)`;
+      return `a ${it.size ?? PHONE_W}×${it.size2 ?? 220}dp ${it.checked ? "bottom sheet with a drag handle at the top" : "box"} (background ${it.fill ?? "surfaceContainerLow"}, ${boxCorners(it, "en")})`;
     case "loadingIndicator":
       return `the M3 Expressive shape-morphing loading indicator${it.contained ? " (contained)" : ""}`;
     case "linearProgress":
@@ -257,7 +257,7 @@ function itemZh(it: Item): string {
     case "divider":
       return "分割线";
     case "box":
-      return `${it.size ?? PHONE_W}×${it.size2 ?? 220}dp 的${it.checked ? "底部面板（顶部带拖动条，" : "容器框（"}背景 ${it.fill ?? "surfaceContainerLow"}，圆角上 ${it.radiusTop ?? 28}dp、下 ${it.radiusBottom ?? 28}dp）`;
+      return `${it.size ?? PHONE_W}×${it.size2 ?? 220}dp 的${it.checked ? "底部面板（顶部带拖动条，" : "容器框（"}背景 ${it.fill ?? "surfaceContainerLow"}，${boxCorners(it, "zh")}）`;
     case "loadingIndicator":
       return `M3 Expressive 形状变化的加载指示器${it.contained ? "（带容器）" : ""}`;
     case "linearProgress":
@@ -321,7 +321,7 @@ function itemKo(it: Item): string {
     case "text": return `${it.bold ? "굵은 " : ""}텍스트 ${q(it.label)}(${it.size ?? 28}sp)`;
     case "image": return `${it.size ?? 200}dp 정사각형 이미지${it.src ? "(지정한 이미지 표시)" : " 자리표시자"}`;
     case "divider": return "구분선";
-    case "box": return `${it.size ?? PHONE_W}×${it.size2 ?? 220}dp ${it.checked ? "하단 시트(위쪽 드래그 핸들 포함)" : "상자"}(배경 ${it.fill ?? "surfaceContainerLow"}, 위쪽 모서리 ${it.radiusTop ?? 28}dp / 아래쪽 ${it.radiusBottom ?? 28}dp)`;
+    case "box": return `${it.size ?? PHONE_W}×${it.size2 ?? 220}dp ${it.checked ? "하단 시트(위쪽 드래그 핸들 포함)" : "상자"}(배경 ${it.fill ?? "surfaceContainerLow"}, ${boxCorners(it, "ko")})`;
     case "loadingIndicator": return `M3 Expressive 형태 변환 로딩 표시기${it.contained ? "(컨테이너 포함)" : ""}`;
     case "linearProgress": return `${it.wavy ? "물결 모양 " : ""}선형 진행 표시기(${it.value === undefined ? "불확정" : `${it.value}%`})`;
     case "circularProgress": return `${it.wavy ? "물결 모양 " : ""}원형 진행 표시기(${it.value === undefined ? "불확정" : `${it.value}%`})`;
@@ -342,6 +342,24 @@ function itemKo(it: Item): string {
     case "badge": return hasText(it.label) ? `${q(it.label)}을 표시하는 배지` : "작은 점 배지";
     default: return noun;
   }
+}
+
+/** a box's corners in words: the top / bottom pairs, or each corner when they differ */
+function boxCorners(it: Item, lang: Lang): string {
+  const c = it.corners;
+  const each = c && !(c.tl === c.tr && c.bl === c.br);
+  if (each) {
+    if (lang === "ja") return `角丸は左上 ${c.tl}dp・右上 ${c.tr}dp・左下 ${c.bl}dp・右下 ${c.br}dp`;
+    if (lang === "zh") return `圆角左上 ${c.tl}dp、右上 ${c.tr}dp、左下 ${c.bl}dp、右下 ${c.br}dp`;
+    if (lang === "ko") return `모서리 왼쪽 위 ${c.tl}dp / 오른쪽 위 ${c.tr}dp / 왼쪽 아래 ${c.bl}dp / 오른쪽 아래 ${c.br}dp`;
+    return `corner radius ${c.tl}dp top-left / ${c.tr}dp top-right / ${c.bl}dp bottom-left / ${c.br}dp bottom-right`;
+  }
+  const t = c ? c.tl : (it.radiusTop ?? 28);
+  const b = c ? c.bl : (it.radiusBottom ?? 28);
+  if (lang === "ja") return `角丸は上 ${t}dp・下 ${b}dp`;
+  if (lang === "zh") return `圆角上 ${t}dp、下 ${b}dp`;
+  if (lang === "ko") return `위쪽 모서리 ${t}dp / 아래쪽 ${b}dp`;
+  return `corner radius ${t}dp top / ${b}dp bottom`;
 }
 
 const itemText = (it: Item, lang: Lang) => (lang === "ja" ? itemJa(it) : lang === "zh" ? itemZh(it) : lang === "ko" ? itemKo(it) : itemEn(it));

@@ -233,15 +233,19 @@ export function Field({
 /** Slider with a typed-in number beside it. The slider moves in `step`s; the
  *  field accepts any whole number and is clamped to min..max when it commits. */
 /** A rectangle whose top or bottom corners are rounded: the corner-radius slider icons. */
-export function CornerIcon({ side, size = 20 }: { side: "top" | "bottom" | "left" | "right"; size?: number }) {
-  const d =
-    side === "top"
-      ? "M4 17 V9 a5 5 0 0 1 5 -5 h6 a5 5 0 0 1 5 5 v8"
-      : side === "bottom"
-        ? "M4 3 v8 a5 5 0 0 0 5 5 h6 a5 5 0 0 0 5 -5 v-8"
-        : side === "left"
-          ? "M17 4 H9 a5 5 0 0 0 -5 5 v6 a5 5 0 0 0 5 5 h8"
-          : "M7 4 h8 a5 5 0 0 1 5 5 v6 a5 5 0 0 1 -5 5 h-8";
+/** a pair of corners on one side, or a single corner */
+export function CornerIcon({ side, size = 20 }: { side: "top" | "bottom" | "left" | "right" | "tl" | "tr" | "bl" | "br"; size?: number }) {
+  const PATHS: Record<typeof side, string> = {
+    top: "M4 17 V9 a5 5 0 0 1 5 -5 h6 a5 5 0 0 1 5 5 v8",
+    bottom: "M4 3 v8 a5 5 0 0 0 5 5 h6 a5 5 0 0 0 5 -5 v-8",
+    left: "M17 4 H9 a5 5 0 0 0 -5 5 v6 a5 5 0 0 0 5 5 h8",
+    right: "M7 4 h8 a5 5 0 0 1 5 5 v6 a5 5 0 0 1 -5 5 h-8",
+    tl: "M5 20 V11 a6 6 0 0 1 6 -6 H20",
+    tr: "M4 5 H13 a6 6 0 0 1 6 6 V20",
+    bl: "M5 4 V13 a6 6 0 0 0 6 6 H20",
+    br: "M20 4 V13 a6 6 0 0 1 -6 6 H4",
+  };
+  const d = PATHS[side];
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" aria-hidden>
       <path d={d} />

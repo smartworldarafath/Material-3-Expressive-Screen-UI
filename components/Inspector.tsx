@@ -1086,7 +1086,40 @@ export function Inspector({
                 p={p}
               />
             )}
-            {hasRadius && (item.kind === "bottomNav" || item.kind === "navRail" || item.kind === "topAppBar" || item.kind === "box") && (
+            {hasRadius && item.kind === "box" && (
+              <Toggle
+                on={!!item.corners}
+                onChange={(each) =>
+                  onChange(
+                    each
+                      ? { corners: { tl: item.radiusTop ?? 0, tr: item.radiusTop ?? 0, bl: item.radiusBottom ?? 0, br: item.radiusBottom ?? 0 } }
+                      : { corners: undefined, radiusTop: item.corners?.tl ?? item.radiusTop, radiusBottom: item.corners?.bl ?? item.radiusBottom },
+                  )
+                }
+                p={p}
+                icon="crop_free"
+                label={t("cornersEach", lang)}
+                grow
+              />
+            )}
+            {hasRadius && item.kind === "box" && item.corners && (
+              <>
+                {(["tl", "tr", "bl", "br"] as const).map((k) => (
+                  <Slider
+                    key={k}
+                    iconNode={<CornerIcon side={k} />}
+                    title={t(k === "tl" ? "cornerTl" : k === "tr" ? "cornerTr" : k === "bl" ? "cornerBl" : "cornerBr", lang)}
+                    value={item.corners![k]}
+                    min={0}
+                    max={40}
+                    step={1}
+                    onChange={(v) => onChange({ corners: { ...item.corners!, [k]: v } })}
+                    p={p}
+                  />
+                ))}
+              </>
+            )}
+            {hasRadius && (item.kind === "bottomNav" || item.kind === "navRail" || item.kind === "topAppBar" || (item.kind === "box" && !item.corners)) && (
               <>
                 {/* a rail's two sliders are its left and right sides; the fields are shared with the bars */}
                 <Slider

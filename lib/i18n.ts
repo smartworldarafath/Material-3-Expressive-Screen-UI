@@ -162,6 +162,11 @@ const UI = {
   cornerBottom: { ja: "下の角丸", en: "Bottom corners", zh: "下方圆角" },
   cornerLeft: { ja: "左の角丸", en: "Left corners", zh: "左侧圆角" },
   cornerRight: { ja: "右の角丸", en: "Right corners", zh: "右侧圆角" },
+  cornersEach: { ja: "角ごとに指定", en: "Each corner", zh: "分别设置各角" },
+  cornerTl: { ja: "左上", en: "Top left", zh: "左上" },
+  cornerTr: { ja: "右上", en: "Top right", zh: "右上" },
+  cornerBl: { ja: "左下", en: "Bottom left", zh: "左下" },
+  cornerBr: { ja: "右下", en: "Bottom right", zh: "右下" },
   screenWidth: { ja: "画面いっぱい", en: "Screen width", zh: "全屏宽" },
   contentWidth: { ja: "左右 16dp の余白", en: "16dp side margins", zh: "左右 16dp 边距" },
   halfWidth: { ja: "2 列に並べる幅", en: "Half a row (two columns)", zh: "两列宽" },
@@ -330,7 +335,7 @@ const UI = {
 export type UIKey = keyof typeof UI;
 
 const KO: Record<UIKey, string> = {
-  frameSize: "화면 크기", phoneFrame: "휴대전화", desktopFrame: "데스크톱", columnWidth: "휴대전화 한 화면 너비", cornerLeft: "왼쪽 모서리", cornerRight: "오른쪽 모서리",
+  frameSize: "화면 크기", phoneFrame: "휴대전화", desktopFrame: "데스크톱", columnWidth: "휴대전화 한 화면 너비", cornerLeft: "왼쪽 모서리", cornerRight: "오른쪽 모서리", cornersEach: "모서리별로 지정", cornerTl: "왼쪽 위", cornerTr: "오른쪽 위", cornerBl: "왼쪽 아래", cornerBr: "오른쪽 아래",
   filled: "채움", tonal: "색조", elevated: "그림자", outlined: "윤곽선", standard: "표준", vibrant: "선명함",
   parts: "부품", layers: "레이어", edit: "편집", prompt: "프롬프트", closePanel: "패널 닫기",
   search: "검색", favorites: "즐겨찾기", addFavorite: "즐겨찾기에 추가", removeFavorite: "즐겨찾기에서 제거", clear: "지우기", language: "언어",

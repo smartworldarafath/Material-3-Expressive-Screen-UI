@@ -10,8 +10,11 @@ const KINDS = new Set<string>(KIND_ORDER);
 
 const validTabs = (tabs: unknown) => tabs === undefined || (Array.isArray(tabs) && tabs.every((tab) => isRecord(tab) && typeof tab.label === "string" && typeof tab.icon === "string"));
 
+const validCorners = (c: unknown) => c === undefined || (isRecord(c) && ["tl", "tr", "bl", "br"].every((k) => Number.isFinite(c[k])));
+
 const validItem = (item: unknown) =>
   isRecord(item) &&
+  validCorners(item.corners) &&
   typeof item.id === "string" &&
   typeof item.kind === "string" &&
   KINDS.has(item.kind as Kind) &&
