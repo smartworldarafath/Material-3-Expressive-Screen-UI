@@ -1,4 +1,4 @@
-import { FULL_WIDTH, Frame, Group, Item, KIND_SPEC, Kind, PHONE_MARGIN, RAIL_W, canJoin, scaleR, carryItemSize, connectSpecOf, frameOfGroup, frameRect, frameSizeOf, groupBounds, isExpanded } from "./tokens";
+import { CONTENT_W, FULL_WIDTH, Frame, Group, Item, KIND_SPEC, Kind, PHONE_MARGIN, RAIL_W, canJoin, isPhoneFrame, scaleR, carryItemSize, connectSpecOf, frameOfGroup, frameRect, frameSizeOf, groupBounds, isExpanded } from "./tokens";
 
 /* Rule-based layout for one screen. Nothing here is guessed by a model.
  *
@@ -11,7 +11,9 @@ import { FULL_WIDTH, Frame, Group, Item, KIND_SPEC, Kind, PHONE_MARGIN, RAIL_W, 
  *    a dialog is centered.
  * 3. Everything else is stacked from the top on the 16dp layout margins. Rows,
  *    hand-made groups and intentional overlaps (a badge on an icon, parts on a
- *    box) are kept as one unit, and a part keeps the side it was on.
+ *    box) are kept as one unit, and a part keeps the side it was on. A run
+ *    nearly as wide as the content sits on the margin; a text with a switch,
+ *    checkbox or radio beside it spans the row, the control on the right.
  *
  * 4. Inside one unit (parts on a box, a hand-made group) edges that are almost
  *    aligned snap to the common line; across the screen, boxes whose corners are
@@ -158,6 +160,9 @@ const isBottomBar = (u: Unit) => u.kind === "bottomNav" || (u.kind === "box" && 
 const isFloatingBottom = (u: Unit) => u.kind === "toolbar" || u.kind === "snackbar";
 const isFab = (u: Unit) => u.kind === "fab" || u.kind === "extendedFab" || u.kind === "fabMenu";
 const isOverlay = (u: Unit) => u.kind === "dialog";
+/** a line of text, and the small controls that pair with one across a row */
+const isLabel = (u: Unit) => u.kind === "text";
+const isControl = (u: Unit) => u.kind === "switch" || u.kind === "checkbox" || u.kind === "radio" || u.kind === "iconButton";
 const isAnchored = (u: Unit) => isRail(u) || isTop(u) || isBottomBar(u) || isFloatingBottom(u) || isFab(u) || isOverlay(u);
 
 /** where a unit sits horizontally, so tidying keeps a right-aligned part on the right.
@@ -345,8 +350,27 @@ export function tidyFrame(groups: Group[], frame: Frame, frames: Frame[], widths
 
   /* joining rewrites the list; the other screens' groups keep their slots */
   const before = groups.filter((g) => mineIds.has(g.id));
-  const mine = joinRuns(before, widths);
-  const joined = mine.length !== before.length;
+  /* a labelled switch standing on its own on a phone screen reads as a settings row: it takes
+   * the content width, label left, switch right. One on a box, in a group or on a desktop
+   * screen keeps its size. */
+  let widened = false;
+  const alone = (g: Group) => {
+    const r = groupBounds(g, widths);
+    /* nothing on it, and nothing beside it on the same row, which would have to share the width */
+    return !before.some((o) => {
+      if (o === g) return false;
+      const ob = groupBounds(o, widths);
+      return overlap(ob, r) || share(r.t, r.b, ob.t, ob.b) > 0.5;
+    });
+  };
+  const spanned = before.map((g) => {
+    const it = g.items[0];
+    if (!isPhoneFrame(frame) || g.items.length !== 1 || it.kind !== "switch" || !it.label.trim() || it.size || !alone(g)) return g;
+    widened = true;
+    return { ...g, items: [{ ...it, size: CONTENT_W }] };
+  });
+  const mine = joinRuns(spanned, widths);
+  const joined = mine.length !== before.length || widened;
 
   const units = clusters(mine, widths);
   const target = new Map<Unit, { l: number; t: number }>();
@@ -400,12 +424,23 @@ export function tidyFrame(groups: Group[], frame: Frame, frames: Frame[], widths
     y += gapBefore(prev, row);
     const rowH = Math.max(...row.map((u) => u.bb.b - u.bb.t));
     if (y + rowH > limit) break;
+    const inner = frameW - PHONE_MARGIN * 2;
     if (row.length === 1) {
       const u = row[0];
       const w = u.bb.r - u.bb.l;
       const a = align(u.bb, fr);
-      const l = a === "left" ? fr.l + PHONE_MARGIN : a === "right" ? fr.r - PHONE_MARGIN - w : fr.l + Math.round((frameW - w) / 2);
+      /* a run nearly as wide as the content (a button row, a chip row) sits on the left margin,
+       * so its edge lines up with the cards and lists above and below it */
+      const wide = w >= inner * 0.7;
+      const l = wide || a === "left" ? fr.l + PHONE_MARGIN : a === "right" ? fr.r - PHONE_MARGIN - w : fr.l + Math.round((frameW - w) / 2);
       target.set(u, { l, t: y });
+    } else if (row.length === 2 && row.some(isLabel) && row.some(isControl)) {
+      /* a label with its control: the label on the left margin, the control on the right, like a settings row */
+      const label = row.find(isLabel)!;
+      const control = row.find(isControl)!;
+      const cw = control.bb.r - control.bb.l;
+      target.set(label, { l: fr.l + PHONE_MARGIN, t: y + Math.round((rowH - (label.bb.b - label.bb.t)) / 2) });
+      target.set(control, { l: fr.r - PHONE_MARGIN - cw, t: y + Math.round((rowH - (control.bb.b - control.bb.t)) / 2) });
     } else {
       const ws = row.map((u) => u.bb.r - u.bb.l);
       const total = ws.reduce((s, w) => s + w, 0);
@@ -413,7 +448,6 @@ export function tidyFrame(groups: Group[], frame: Frame, frames: Frame[], widths
       const gaps = row.slice(1).map((u, i) => (canJoin(row[i].probe, u.probe) ? APART_GAP_X : ROW_ITEM_GAP));
       const minPacked = total + gaps.reduce((s, g) => s + g, 0);
       const span = row[row.length - 1].bb.r - row[0].bb.l;
-      const inner = frameW - PHONE_MARGIN * 2;
       const spread = span >= inner * 0.7 && minPacked <= inner;
       const packed = spread ? inner : minPacked;
       const extra = spread ? (inner - minPacked) / gaps.length : 0;
