@@ -317,6 +317,8 @@ export default function Page() {
 
   /* ---------- editor ui ---------- */
   const [view, setView] = useState<View>({ x: 0, y: 0, z: 1 });
+  /** Keep the server-rendered world hidden until its first fit has completed. */
+  const [viewReady, setViewReady] = useState(false);
   /** screens ease to their new place and size for a moment after one changes size */
   const [easing, setEasing] = useState(false);
   /** the canvas transform eases while the camera glides to or from a screen */
@@ -582,7 +584,10 @@ export default function Page() {
         frameRef.current = "phone";
       }
       ensureFrameRef.current();
-      queueMicrotask(() => fitRef.current());
+      queueMicrotask(() => {
+        fitRef.current();
+        setViewReady(true);
+      });
     };
     apply();
     mq.addEventListener("change", apply);
@@ -2828,6 +2833,7 @@ export default function Page() {
                 transformOrigin: "0 0",
                 transition: cameraEasing ? `transform ${SETTLE_MS}ms cubic-bezier(0.2, 0, 0, 1)` : undefined,
                 willChange: "transform",
+                visibility: viewReady ? "visible" : "hidden",
                 fontFamily: fontFamilyOf(theme.font),
               }}
             >
