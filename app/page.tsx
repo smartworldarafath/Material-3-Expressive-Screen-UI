@@ -94,6 +94,7 @@ import { MotionPanel, ShapePanel, TypePanel } from "@/components/ThemePanel";
 import { ThemeContext, ensureFontLoaded, ensureLangFontLoaded } from "@/lib/theme";
 import { BottomSheet, MobileActionBar, MobileInspector, MobileLang, MobileSettings } from "@/components/Mobile";
 import { ConfirmDialog, IconBtn, Segmented } from "@/components/ui";
+import { LoadingIndicator } from "@/components/Loading";
 import { Lang, LangContext, SEED_TEXT, getLang, isLang, setGlobalLang, t, translateDefaultFrameName, translateDefaultText } from "@/lib/i18n";
 
 /** the dragged part's own travel: a little lag reads as weight */
@@ -118,6 +119,7 @@ const MIN_Z = 0.25;
 const MAX_Z = 3;
 const HISTORY_MAX = 100;
 const DOC_KEY = "m3e:doc";
+const DOC_LOCK = "m3e:doc:editor";
 const UI_KEY = "m3e:ui";
 
 type View = { x: number; y: number; z: number };
@@ -310,6 +312,7 @@ const LEFT_TABS: { key: LeftTab; icon: string; title: "parts" | "layers" | "colo
 
 export default function Page() {
   /* ---------- document ---------- */
+  const [editAccess, setEditAccess] = useState<"checking" | "editable" | "readonly" | "unavailable">("checking");
   const [groups, setGroups] = useState<Group[]>(seed);
   const [frames, setFrames] = useState<Frame[]>(SEED_FRAMES);
   const [paletteKey, setPaletteKey] = useState("purple");
@@ -499,6 +502,41 @@ export default function Page() {
   });
 
   /* ---------- persistence ---------- */
+  useEffect(() => {
+    /* The first tab keeps this promise pending for its lifetime. Later tabs get
+       `null` immediately and stay read-only until they are reloaded. */
+    if (!navigator.locks) {
+      setEditAccess("unavailable");
+      return;
+    }
+    let active = true;
+    let releaseLock: (() => void) | undefined;
+    /* Wait until React has finished its development-only effect replay. This
+       prevents the discarded setup from briefly competing with the real one. */
+    queueMicrotask(() => {
+      if (!active) return;
+      void navigator.locks
+        .request(DOC_LOCK, { ifAvailable: true }, async (lock) => {
+          if (!active) return;
+          if (!lock) {
+            setEditAccess("readonly");
+            return;
+          }
+          setEditAccess("editable");
+          await new Promise<void>((resolve) => {
+            releaseLock = resolve;
+          });
+        })
+        .catch(() => {
+          if (active) setEditAccess("unavailable");
+        });
+    });
+    return () => {
+      active = false;
+      releaseLock?.();
+    };
+  }, []);
+
   /** Puts a stored or opened document into the editor. Fields a partial document
    *  leaves out keep their current value, or go back to the default when `reset`. */
   const applyDoc = (doc: Partial<Doc>, reset: boolean) => {
@@ -645,14 +683,14 @@ export default function Page() {
   }, []);
 
   useEffect(() => {
-    if (!loadedRef.current) return;
+    if (!loadedRef.current || editAccess !== "editable") return;
     try {
       localStorage.setItem(
         DOC_KEY,
         JSON.stringify({ groups, frames, paletteKey, frame, title, brief, promptEdit, platform: platform ?? undefined, customPalette: customPalette ?? undefined, dynamicColor, theme }),
       );
     } catch {}
-  }, [groups, frames, paletteKey, frame, title, brief, promptEdit, platform, customPalette, dynamicColor, theme]);
+  }, [editAccess, groups, frames, paletteKey, frame, title, brief, promptEdit, platform, customPalette, dynamicColor, theme]);
 
   useEffect(() => {
     if (!loadedRef.current) return;
@@ -2242,6 +2280,7 @@ export default function Page() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (editAccess !== "editable") return;
       const t = e.target as HTMLElement;
       const typing =
         t &&
@@ -2337,6 +2376,7 @@ export default function Page() {
     deleteFrame,
     confirmClear,
     previewId,
+    editAccess,
   ]);
   const openPreviewRef = useRef(openPreview);
   openPreviewRef.current = openPreview;
@@ -2668,6 +2708,7 @@ export default function Page() {
   };
 
   const showRight = rightOpen && !isMobile;
+  const accessBlocked = editAccess === "readonly" || editAccess === "unavailable";
   const guide = drag?.active ? drag.guide : null;
   const visibleWorld = (() => {
     const r = canvasRef.current?.getBoundingClientRect();
@@ -2684,6 +2725,8 @@ export default function Page() {
     <ThemeContext.Provider value={theme}>
       <div
         className="app-root"
+        inert={editAccess !== "editable"}
+        aria-hidden={editAccess !== "editable"}
         style={{
           display: "flex",
           overflow: "hidden",
@@ -3528,6 +3571,83 @@ export default function Page() {
           )}
         </AnimatePresence>
       </div>
+
+      {editAccess !== "editable" && (
+        <div
+          role={editAccess === "checking" ? "status" : "dialog"}
+          aria-modal={accessBlocked ? "true" : undefined}
+          aria-labelledby={accessBlocked ? "edit-access-title" : undefined}
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 100,
+            display: "grid",
+            placeItems: "center",
+            padding: 24,
+            background: accessBlocked ? "rgba(0,0,0,0.32)" : "transparent",
+          }}
+        >
+          {editAccess === "checking" && (
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 12,
+                padding: "12px 18px",
+                borderRadius: 28,
+                background: p.surfaceContainerHigh,
+                color: p.onSurface,
+                boxShadow: "0 8px 24px rgba(0,0,0,0.16)",
+                fontSize: 14,
+                fontWeight: 600,
+              }}
+            >
+              <LoadingIndicator size={28} color={p.primary} />
+              {t("checkingEditAccess", lang)}
+            </div>
+          )}
+          {accessBlocked && (
+            <div
+              style={{
+                width: "min(420px, 100%)",
+                padding: 24,
+                borderRadius: 28,
+                background: p.surfaceContainerHigh,
+                color: p.onSurface,
+                boxShadow: "0 12px 40px rgba(0,0,0,0.22)",
+              }}
+            >
+              <Icon name="lock" size={28} />
+              <h1 id="edit-access-title" style={{ margin: "16px 0 8px", fontSize: 22, lineHeight: 1.25 }}>
+                {t(editAccess === "readonly" ? "readOnlyTitle" : "editUnavailableTitle", lang)}
+              </h1>
+              <p style={{ margin: 0, color: p.onSurfaceVariant, fontSize: 14, lineHeight: 1.5 }}>
+                {t(editAccess === "readonly" ? "readOnlyBody" : "editUnavailableBody", lang)}
+              </p>
+              <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 24 }}>
+                <button
+                  autoFocus
+                  className="m3-press"
+                  onClick={() => window.location.reload()}
+                  style={{
+                    minHeight: 40,
+                    padding: "0 20px",
+                    border: "none",
+                    borderRadius: 20,
+                    background: p.primary,
+                    color: p.onPrimary,
+                    fontSize: 14,
+                    fontWeight: 700,
+                    cursor: "pointer",
+                  }}
+                >
+                  {t("reload", lang)}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </ThemeContext.Provider>
     </LangContext.Provider>
   );
