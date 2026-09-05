@@ -18,6 +18,7 @@ changes and send code. Japanese and Chinese summaries are at the end.
 npm install
 npm run dev        # http://localhost:3000
 npm run typecheck  # tsc --noEmit
+npm test           # Vitest unit tests
 npm run build      # static export into out/
 ```
 
@@ -62,7 +63,7 @@ A new kind touches all of these; the existing kinds are the reference:
 ## Pull requests
 
 - Branch from `main` in your fork.
-- Run `npm run typecheck` and `npm run build`; CI runs the same two on every PR.
+- Run `npm run typecheck`, `npm test` and `npm run build`; CI runs the same three on every PR.
 - Fill in the PR template: what changed, why, and how you checked it. Screenshots
   help for anything visual.
 - By contributing you agree that your changes are licensed under the project's
@@ -74,7 +75,7 @@ A new kind touches all of these; the existing kinds are the reference:
 - 新しい部品やパネル、プロンプトの文言など大きめの変更は、先に Issue で相談してください。
 - 質問やアイデアは Discussions へ。
 - コードのコメントは英語で書きます。UI の文言とプロンプト文は日本語・英語・中国語の 3 言語すべてに追加してください。
-- PR の前に `npm run typecheck` と `npm run build` を通してください。CI でも同じものが走ります。
+- PR の前に `npm run typecheck`、`npm test`、`npm run build` を通してください。CI でも同じものが走ります。
 - 貢献したコードは MIT ライセンスで公開されます。
 
 ## 中文
@@ -83,5 +84,5 @@ A new kind touches all of these; the existing kinds are the reference:
 - 新组件、新面板、提示词措辞等较大的改动，请先开 Issue 讨论。
 - 提问和想法请到 Discussions。
 - 代码注释用英文。UI 文字和提示词需同时提供日文、英文、中文三种语言。
-- 提交 PR 前请运行 `npm run typecheck` 和 `npm run build`，CI 会执行同样的检查。
+- 提交 PR 前请运行 `npm run typecheck`、`npm test` 和 `npm run build`，CI 会执行同样的检查。
 - 贡献的代码以 MIT 许可证发布。

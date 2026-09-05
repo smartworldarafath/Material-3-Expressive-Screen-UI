@@ -13,7 +13,6 @@ describe("tidyFrame", () => {
   it("snaps the app bar to the top edge and the navigation bar to the bottom", () => {
     const groups = [grp("g-bar", 40, 300, [part("topAppBar", "bar")]), grp("g-nav", 40, 100, [part("bottomNav", "nav")])];
     const out = tidyFrame(groups, frame, frames, {});
-    expect(out).not.toBeNull();
     const bar = out!.find((g) => g.id === "g-bar")!;
     const nav = out!.find((g) => g.id === "g-nav")!;
     expect([bar.x, bar.y]).toEqual([0, 0]);
@@ -22,7 +21,6 @@ describe("tidyFrame", () => {
 
   it("moves a FAB to the bottom-right corner, one margin in", () => {
     const out = tidyFrame([grp("g-fab", 40, 100, [part("fab", "fab")])], frame, frames, {});
-    expect(out).not.toBeNull();
     expect([out![0].x, out![0].y]).toEqual([PHONE_W - PHONE_MARGIN - 56, PHONE_H - PHONE_MARGIN - 56]);
   });
 

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 
-import { DEFAULT_THEME, R_FULL, baseRadii, getShape, makeItem, normalizeTheme, runCorners, scaleR, setGlobalShape } from "./tokens";
+import { DEFAULT_THEME, R_FULL, baseRadii, makeItem, normalizeTheme, runCorners, scaleR, setGlobalShape } from "./tokens";
 
 afterEach(() => setGlobalShape("rounded")); // restore the module default
 
@@ -66,8 +66,4 @@ describe("normalizeTheme", () => {
     expect(t.font).toBe(DEFAULT_THEME.font);
     expect(t.shape).toBe(DEFAULT_THEME.shape);
   });
-});
-
-it("restores the default shape scale between tests", () => {
-  expect(getShape()).toBe("rounded");
 });

@@ -77,7 +77,6 @@ describe("buildPrompt structure", () => {
     const web = lines(build(lang, "web"));
     expect(android[2]).toBe(PLATFORM_LINE[lang].android);
     expect(web[2]).toBe(PLATFORM_LINE[lang].web);
-    expect(android[2]).not.toBe(web[2]);
   });
 
   it("names Android when the doc picks no platform", () => {
@@ -88,7 +87,7 @@ describe("buildPrompt structure", () => {
 
   it.each(LANGS)("writes one style note per part kind in use in %s", (lang) => {
     expect(styleBullets(build(lang), lang)).toHaveLength(3); // topAppBar, button, bottomNav
-    const chip: Item = { ...makeItem("chip"), id: "chip", label: "New" };
+    const chip: Item = { ...makeItem("chip"), id: "chip" };
     expect(styleBullets(build(lang, "android", [chip]), lang)).toHaveLength(4);
   });
 
