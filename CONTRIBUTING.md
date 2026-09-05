@@ -22,8 +22,7 @@ npm test           # Vitest unit tests
 npm run build      # static export into out/
 ```
 
-Node 22 is what CI uses. The app is a single Next.js page with no server; everything
-is stored in the browser.
+Node 22.12 or newer is required (the test suite needs it); CI uses Node 22. The app is a single Next.js page with no server; everything is stored in the browser.
 
 ## Where things live
 
