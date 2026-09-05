@@ -10,7 +10,7 @@ import { t, useLang } from "@/lib/i18n";
 
 export type Mode = "select" | "hand";
 
-const REPO_URL = "https://github.com/lnkiai/m3e-canvas";
+const REPO_URL = "https://github.com/smartworldarafath/Material-3-Expressive-Screen-UI";
 
 export function GitHubLink({ p, size = 40 }: { p: Palette; size?: number }) {
   return (
