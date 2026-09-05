@@ -29,11 +29,12 @@ describe("getShapes()", () => {
   });
 
   it("each shape has POINTS_PER_SHAPE points", () => {
-    // POINTS_PER_SHAPE isn't exported, but we know it from the file (180); use a sanity bound
+    // POINTS_PER_SHAPE isn't exported; lock the uniform count plus the known
+    // value (180) so any resampling change fails loudly here, not in a snapshot.
     const shapes = getShapes();
+    expect(new Set(shapes.map((s) => s.length)).size).toBe(1);
     for (const s of shapes) {
-      expect(s.length).toBeGreaterThan(100);
-      expect(s.length).toBeLessThan(500);
+      expect(s.length).toBe(180);
     }
   });
 
@@ -188,13 +189,17 @@ describe("LoadingAnimator", () => {
     expect(DURATION_PER_SHAPE_MS).toBe(650);
   });
 
-  it("the morph target ticks up every 650 ms", () => {
+  it("the morph target ticks up every 650 ms and the spring tracks it", () => {
     const a = new LoadingAnimator();
     a.update(0);
-    // Simulate to just past one cycle boundary (650 ms -> morph target becomes 2)
-    for (let i = 1; i <= 700; i++) a.update(i);
-    // morph target (private, but inferable) — by 700ms the spring should have passed the original
-    // target of 1 and be heading toward 2.
-    expect(a.morph).toBeGreaterThan(1);
+    // Run well past several cycle boundaries: targets tick 1 -> 4 over 2.6 s
+    // and the stiff spring tracks within a fraction, so assert tracking with
+    // margin instead of a threshold coupled to one 50 ms window.
+    for (let i = 1; i <= 1500; i++) a.update(i);
+    const mid = a.morph;
+    expect(mid).toBeGreaterThan(1);
+    for (let i = 1501; i <= 3000; i++) a.update(i);
+    expect(a.morph).toBeGreaterThan(mid);
+    expect(a.morph).toBeGreaterThan(2);
   });
 });

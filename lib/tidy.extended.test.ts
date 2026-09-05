@@ -134,12 +134,13 @@ describe("tidyFrame", () => {
   it("fuses two close buttons in a row into one connected run", () => {
     const f = phoneFrame;
     const g1 = group("g1", 100, 100, [btn("a")]);
-    const g2 = group("g2", 200, 100, [btn("b")]); // ~100 dp apart, well within JOIN_GAP_X=24? actually a button is ~80-100dp wide
-    // Need them to actually be near enough that b.l - a.r <= JOIN_GAP_X
-    // Use known button width: spec.w = 0, but layoutOf sizes it from label. We rely on the algorithm.
-    // Instead of relying on layout, just check it doesn't crash and groups are repositioned.
+    // Same row, dropped onto the same spot: gap <= JOIN_GAP_X, so joinRuns
+    // must fuse them into one group holding both ids.
+    const g2 = group("g2", 100, 100, [btn("b")]);
     const out = tidyFrame([g1, g2], f, [f], widths);
     expect(out).not.toBeNull();
+    const merged = out!.find((g) => g.items.some((i) => i.id === "a") && g.items.some((i) => i.id === "b"));
+    expect(merged).toBeDefined();
   });
 
   it("anchors a top app bar to the top of the screen", () => {
@@ -189,8 +190,8 @@ describe("carryFrame", () => {
     // The screen that became "smaller" — it's `to`, so the result frame should be smaller.
     expect(res.frames[1].w).toBe(300);
     expect(res.frames[1].h).toBe(500);
-    // The top-bar group survives.
-    expect(res.groups.length).toBeGreaterThanOrEqual(0);
+    // The top-bar group survives the move, tracked by id.
+    expect(res.groups.some((g) => g.id === "g1")).toBe(true);
   });
 
   it("expands a phone to desktop: a stand-alone bottomNav becomes a navRail", () => {

@@ -146,10 +146,10 @@ describe("buildPrompt — palette section", () => {
   it("bothModes=true emits both light and dark color sections", () => {
     const doc = baseDoc({ theme: { dark: false, bothModes: true, contrast: "standard", shape: "rounded", font: "roboto", emphasized: false, motion: "standard" } });
     const out = buildPrompt(doc, widths, undefined, "en");
-    // bothModes path emits two schemeHead() calls
-    expect(out).toMatch(/light|dark/i);
-    // The dark surface should appear (#322F35 from the baseline palette)
-    expect(out).toContain("#322F35");
+    // bothModes is the only path that pushes both scheme headers — one
+    // section alone can never emit "Dark scheme:".
+    expect(out).toContain("Light scheme:");
+    expect(out).toContain("Dark scheme:");
   });
 
   it("dynamicColor=true adds the dynamic-color note", () => {
@@ -204,16 +204,15 @@ describe("buildPrompt — platform switch", () => {
   });
 
   it("Web platform emits web style notes when a kind has one", () => {
-    // button has STYLE_NOTES_WEB entries
-    const item: Item = { id: "b1", kind: "button", label: "Go", icon: null, variant: "filled" };
+    // STYLE_NOTES_WEB.en only covers topAppBar/bottomNav — a button has no
+    // web note, so use a top app bar and assert its actual note text.
+    const item: Item = { id: "t1", kind: "topAppBar", label: "Title", icon: null, variant: "filled" };
     const doc = baseDoc({
       platform: "web",
       groups: [{ id: "g", x: 100, y: 100, axis: "x", items: [item] }],
     });
     const out = buildPrompt(doc, widths, undefined, "en");
-    // The web button note (per STYLE_NOTES_WEB.en.button) should appear.
-    // We don't assert exact wording (i18n may evolve) but we do expect the "Style notes" section.
-    expect(out).toMatch(/[Ss]tyle notes?|component/i);
+    expect(out).toContain("Top app bar: 64dp tall on surface");
   });
 });
 

@@ -103,9 +103,14 @@ describe("tone()", () => {
     expect(out).toMatch(/^#[0-9A-F]{6}$/);
   });
 
-  it("falls back gracefully for absurdly high chroma (within 40 iterations)", () => {
+  it("reduces absurdly high chroma until the color fits sRGB", () => {
     const out = tone(50, 500, 0);
     expect(out).toMatch(/^#[0-9A-F]{6}$/);
+    // The 500-chroma input is far outside sRGB: the loop must have shrunk it.
+    // Measure what came out — full chroma surviving would mean no reduction.
+    const rgb = hexToRgb(out);
+    expect(rgb).not.toBeNull();
+    expect(labToLch(rgbToLab(...rgb!)).C).toBeLessThan(500);
   });
 
   it("grey (chroma 0) produces a neutral grey at the given tone", () => {
@@ -133,11 +138,12 @@ describe("isHex", () => {
     expect(isHex("#1234567")).toBe(false);
   });
 
-  it("rejects malformed", () => {
-    expect(isHex("#abc")).toBe(false);
-    expect(isHex("#1234567")).toBe(false);
-    expect(isHex("rgb(0,0,0)")).toBe(false);
-    expect(isHex("")).toBe(false);
+  it("rejects novel malformed shapes (bad chars, wrong length, prefixes)", () => {
+    expect(isHex("#GGGGGG")).toBe(false);
+    expect(isHex("#ABCDE")).toBe(false);
+    expect(isHex("#12345678")).toBe(false);
+    expect(isHex("#")).toBe(false);
+    expect(isHex("0x6750A4")).toBe(false);
   });
 });
 
