@@ -1,23 +1,12 @@
-import { readFileSync } from "node:fs";
-import { runInNewContext } from "node:vm";
 import { describe, expect, it } from "vitest";
 import {
-  COLOR_TOKEN_TEXT, FAB_MENU_TABS, KIND_TEXT, LANGS, NAV_TABS, SEED_TEXT,
-  SWIPE_TEXT, TAB_LABELS, TRANSITION_TEXT, t, type UIKey,
+  COLOR_TOKEN_TEXT, FAB_MENU_TABS, KIND_TEXT, KO, LANGS, NAV_TABS, SEED_TEXT,
+  SWIPE_TEXT, TAB_LABELS, TRANSITION_TEXT, UI, t, type UIKey,
 } from "./i18n";
 import { KIND_ORDER, LANG_FONT, SWIPE_DIRS, TRANSITIONS } from "./tokens";
 
-// UI and KO are private. Read only their literal initializers so new UI keys are
-// discovered automatically, without widening the production API or copying keys.
-// These anchors intentionally fail loudly if the dictionary representation changes.
-const source = readFileSync(new URL("./i18n.ts", import.meta.url), "utf8");
-function dictionary(pattern: RegExp): Record<string, unknown> {
-  const literal = source.match(pattern)?.[1];
-  if (!literal) throw new Error(`Could not locate dictionary: ${pattern}`);
-  return runInNewContext(`(${literal})`, Object.create(null), { timeout: 1000 });
-}
-const ui = dictionary(/const UI = (\{[\s\S]*?\n\}) as const/) as Record<UIKey, Record<string, string>>;
-const ko = dictionary(/const KO: Record<UIKey, string> = (\{[\s\S]*?\n\});/);
+const ui: Record<UIKey, Record<string, string>> = UI;
+const ko: Record<UIKey, string> = KO;
 const keys = Object.keys(ui) as UIKey[];
 const languages = LANGS.map(({ key }) => key);
 const sortedKeys = (value: object) => Object.keys(value).sort();

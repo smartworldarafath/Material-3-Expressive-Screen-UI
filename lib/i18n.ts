@@ -66,7 +66,8 @@ export const COLOR_TOKEN_TEXT = {
   ko: { surface: "표면", surfaceContainerLow: "낮은 컨테이너", surfaceContainer: "컨테이너", surfaceContainerHigh: "높은 컨테이너", surfaceContainerHighest: "가장 높은 컨테이너", primaryContainer: "주 색상 컨테이너", secondaryContainer: "보조 색상 컨테이너", tertiaryContainer: "세 번째 색상 컨테이너", primary: "주 색상", inverseSurface: "반전 표면" },
 };
 
-const UI = {
+/** exported for the parity tests only; read strings through t() */
+export const UI = {
   // panels
   parts: { ja: "部品", en: "Parts", zh: "组件" },
   layers: { ja: "レイヤー", en: "Layers", zh: "图层" },
@@ -374,7 +375,8 @@ const UI = {
 
 export type UIKey = keyof typeof UI;
 
-const KO: Record<UIKey, string> = {
+/** exported for the parity tests only; read strings through t() */
+export const KO: Record<UIKey, string> = {
   frameSize: "화면 크기", phoneFrame: "휴대전화", desktopFrame: "데스크톱", columnWidth: "휴대전화 한 화면 너비", cornerLeft: "왼쪽 모서리", cornerRight: "오른쪽 모서리", cornersEach: "모서리별로 지정", cornerTl: "왼쪽 위", cornerTr: "오른쪽 위", cornerBl: "왼쪽 아래", cornerBr: "오른쪽 아래",
   filled: "채움", tonal: "색조", elevated: "그림자", outlined: "윤곽선", standard: "표준", vibrant: "선명함",
   parts: "부품", layers: "레이어", edit: "편집", prompt: "프롬프트", closePanel: "패널 닫기",
