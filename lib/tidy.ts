@@ -1,10 +1,10 @@
-import { FULL_WIDTH, Frame, Group, Item, Kind, PHONE_MARGIN, RAIL_W, canJoin, carryItemSize, connectSpecOf, frameOfGroup, frameRect, frameSizeOf, groupBounds, isExpanded } from "./tokens";
+import { FULL_WIDTH, Frame, Group, Item, KIND_SPEC, Kind, PHONE_MARGIN, RAIL_W, canJoin, scaleR, carryItemSize, connectSpecOf, frameOfGroup, frameRect, frameSizeOf, groupBounds, isExpanded } from "./tokens";
 
 /* Rule-based layout for one screen. Nothing here is guessed by a model.
  *
- * 1. Parts of one connectable family that sit next to each other fuse into a
- *    connected run, the same way the magnetic drop does: list items stacked in
- *    a column, buttons or icon buttons side by side in a row.
+ * 1. Parts of one connectable family that sit next to each other, or on top of
+ *    each other, fuse into a connected run, the same way the magnetic drop does:
+ *    list items stacked in a column, buttons or icon buttons side by side in a row.
  * 2. Bars stick to the edges they belong to (app bar and tabs at the top, the
  *    navigation bar at the bottom, toolbars and snackbars hovering above it,
  *    a bottom sheet on the bottom edge), a FAB takes the bottom-right corner,
@@ -13,7 +13,18 @@ import { FULL_WIDTH, Frame, Group, Item, Kind, PHONE_MARGIN, RAIL_W, canJoin, ca
  *    hand-made groups and intentional overlaps (a badge on an icon, parts on a
  *    box) are kept as one unit, and a part keeps the side it was on.
  *
- * Only positions change and runs are joined; sizes, order and contents stay. */
+ * 4. Inside one unit (parts on a box, a hand-made group) edges that are almost
+ *    aligned snap to the common line; across the screen, boxes whose corners are
+ *    almost the same radius become the same, and likewise cards. Both only act on
+ *    differences a hand would call a slip, never on a gap someone clearly meant.
+ *
+ * Only positions change and runs are joined; sizes, order and contents stay,
+ * apart from a corner radius evened out by rule 4. */
+
+/** the farthest two edges may be apart and still count as meant to line up */
+const SNAP = 6;
+/** the farthest two corner radii may be apart and still count as meant to match */
+const RADIUS_SNAP = 4;
 
 type Rect = { l: number; t: number; r: number; b: number };
 
@@ -68,9 +79,12 @@ function joinRuns(groups: Group[], widths: Record<string, number>): Group[] {
         if (!fb || fa.axis !== fb.axis || !canJoin(fa.probe, fb.probe)) continue;
         const ra = bounds.get(a.id)!;
         const rb = bounds.get(b.id)!;
-        /* b must come right after a along the axis, and line up across it */
+        /* b must come right after a along the axis, and line up across it; parts dropped onto
+         * each other count as neighbours too, read from the one that starts first */
         const gap = fa.axis === "x" ? rb.l - ra.r : rb.t - ra.b;
-        if (gap < -2 || gap > (fa.axis === "x" ? JOIN_GAP_X : JOIN_GAP_Y)) continue;
+        if (gap > (fa.axis === "x" ? JOIN_GAP_X : JOIN_GAP_Y)) continue;
+        const ahead = fa.axis === "x" ? ra.l < rb.l || (ra.l === rb.l && i < j) : ra.t < rb.t || (ra.t === rb.t && i < j);
+        if (gap < -2 && !ahead) continue;
         const lined = fa.axis === "x" ? share(ra.t, ra.b, rb.t, rb.b) : share(ra.l, ra.r, rb.l, rb.r);
         if (lined < 0.5) continue;
         /* nothing else may sit between them */
@@ -249,6 +263,80 @@ export function barSlotOf(groups: Group[], frame: Frame, frames: Frame[], widths
   return { x: frame.x + left * RAIL_W, w: w - rails.length * RAIL_W };
 }
 
+/** The value most of a set share, within `tol`: the biggest cluster wins; `prefer` breaks a tie, else the first seen. */
+function commonValue(values: number[], tol: number, prefer?: number): number | null {
+  let best: { v: number; n: number } | null = null;
+  for (const v of values) {
+    const n = values.filter((w) => Math.abs(w - v) <= tol).length;
+    if (!best || n > best.n || (n === best.n && v === prefer && best.v !== prefer)) best = { v, n };
+  }
+  return best && best.n >= 2 ? best.v : null;
+}
+
+/** Runs inside one unit whose left, right or top edges nearly agree move to the shared line.
+ *  A run is only ever nudged by up to SNAP, so the picture stays what the author drew. */
+function snapEdges(unit: Unit, groups: Map<string, Group>, widths: Record<string, number>): boolean {
+  if (unit.ids.length < 2) return false;
+  const runs = unit.ids.map((id) => groups.get(id)!);
+  const rects = new Map(runs.map((g) => [g.id, groupBounds(g, widths)]));
+  /* the container (the biggest run) sets the line; the parts on it follow */
+  const container = runs.reduce((a, b) => (area(rects.get(a.id)!) >= area(rects.get(b.id)!) ? a : b));
+  const others = runs.filter((g) => g !== container);
+  if (!others.length) return false;
+  let moved = false;
+  const nudge = (g: Group, dx: number, dy: number) => {
+    if (!dx && !dy) return;
+    groups.set(g.id, { ...groups.get(g.id)!, x: groups.get(g.id)!.x + dx, y: groups.get(g.id)!.y + dy });
+    moved = true;
+  };
+  const lefts = commonValue(others.map((g) => rects.get(g.id)!.l), SNAP);
+  const rights = commonValue(others.map((g) => rects.get(g.id)!.r), SNAP);
+  for (const g of others) {
+    const r = rects.get(g.id)!;
+    /* a run already on one shared line is left alone, so a left snap never turns into a right snap later */
+    if (r.l === lefts || r.r === rights) continue;
+    const dl = lefts === null ? Infinity : Math.abs(r.l - lefts);
+    const dr = rights === null ? Infinity : Math.abs(r.r - rights);
+    if (dl <= SNAP && dl <= dr) nudge(g, Math.round(lefts! - r.l), 0);
+    else if (dr <= SNAP) nudge(g, Math.round(rights! - r.r), 0);
+  }
+  /* parts side by side that nearly share a top edge: the neighbours set the line, not the part itself */
+  for (const g of others) {
+    const r = groupBounds(groups.get(g.id)!, widths);
+    const beside = others.filter((o) => o !== g && share(r.t, r.b, rects.get(o.id)!.t, rects.get(o.id)!.b) > 0.5).map((o) => groupBounds(groups.get(o.id)!, widths).t);
+    const tops = beside.length === 1 ? beside[0] : commonValue(beside, SNAP);
+    if (tops !== null && r.t !== tops && Math.abs(r.t - tops) <= SNAP) nudge(g, 0, Math.round(tops - r.t));
+  }
+  return moved;
+}
+
+/** Boxes on the screen whose corner radii almost agree take the common radius, and so do
+ *  cards, each kind among its own. A card still on the shape scale is not touched: writing a
+ *  radius into it would cut it loose from the Shape control. */
+function evenCorners(groups: Map<string, Group>): boolean {
+  const boxes: { g: Group; it: Item; r: number }[] = [];
+  const cards: { g: Group; it: Item; r: number }[] = [];
+  for (const g of groups.values())
+    for (const it of g.items) {
+      if (it.kind === "card" && it.radiusTop !== undefined) cards.push({ g, it, r: it.radiusTop });
+      else if (it.kind === "box" && !it.corners && (it.radiusTop ?? 0) === (it.radiusBottom ?? 0)) boxes.push({ g, it, r: it.radiusTop ?? 0 });
+    }
+  let changed = false;
+  const even = (list: typeof boxes, prefer: number) => {
+    const common = commonValue(list.map((b) => b.r), RADIUS_SNAP, prefer);
+    if (common === null) return;
+    for (const { g, it, r } of list) {
+      if (r === common || Math.abs(r - common) > RADIUS_SNAP) continue;
+      const cur = groups.get(g.id)!;
+      groups.set(g.id, { ...cur, items: cur.items.map((x) => (x.id === it.id ? (x.kind === "card" ? { ...x, radiusTop: common } : { ...x, radiusTop: common, radiusBottom: common }) : x)) });
+      changed = true;
+    }
+  };
+  even(boxes, 28);
+  even(cards, scaleR(KIND_SPEC.card.radius));
+  return changed;
+}
+
 /** The tidied groups of the document, or null when `frame` is already tidy. */
 export function tidyFrame(groups: Group[], frame: Frame, frames: Frame[], widths: Record<string, number>): Group[] | null {
   const screen: Rect = frameRect(frame);
@@ -357,6 +445,8 @@ export function tidyFrame(groups: Group[], frame: Frame, frames: Frame[], widths
       return [g.id, { ...g, x: g.x + s.dx, y: g.y + s.dy }] as const;
     }),
   );
+  for (const u of units) if (snapEdges(u, placed, widths)) moved = true;
+  if (evenCorners(placed)) moved = true;
   if (!moved) return null;
   /* keep canvas order: a joined run takes the slot of its last original member */
   const survivorOf = new Map<string, Group>();

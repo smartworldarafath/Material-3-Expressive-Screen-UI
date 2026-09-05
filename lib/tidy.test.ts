@@ -30,6 +30,12 @@ describe("tidyFrame", () => {
     expect(out![0].items.map((it) => it.id)).toEqual(["b1", "b2"]);
   });
 
+  it("joins buttons dropped onto each other, in reading order", () => {
+    const out = tidyFrame([grp("g1", 150, 300, [part("button", "b1")]), grp("g2", 100, 304, [part("button", "b2")])], frame, frames, {});
+    expect(out).toHaveLength(1);
+    expect(out![0].items.map((it) => it.id)).toEqual(["b2", "b1"]);
+  });
+
   it("joins neighbouring list items into one connected column", () => {
     const out = tidyFrame([grp("g1", 16, 100, [part("listItem", "l1")]), grp("g2", 16, 180, [part("listItem", "l2")])], frame, frames, {});
     expect(out).toHaveLength(1);
