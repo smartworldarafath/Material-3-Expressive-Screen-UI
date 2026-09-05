@@ -1720,6 +1720,64 @@ export default function Page() {
     setSelectedIds([copy.id]);
   }, [selected, selectedIds, itemRects, snapshot]);
 
+  /* The in-app clipboard: Ctrl+C keeps a copy of the selection (a whole group when
+   * the selection covers one) with its offset inside its screen, so Ctrl+V can put it
+   * at the same spot on another screen, or a step aside on the same one. */
+  const clipboardRef = useRef<{ group: Group; dx: number; dy: number; frameId: string | null } | null>(null);
+
+  const copySelected = useCallback(() => {
+    if (!selected) return;
+    const ids = new Set(selectedIds);
+    const g = groupsRef.current.find((x) => x.items.some((it) => it.id === selected.id));
+    if (!g) return;
+    let group: Group;
+    if (g.items.every((it) => ids.has(it.id))) {
+      group = structuredClone(g);
+    } else {
+      const rect = itemRects().find((r) => r.id === selected.id);
+      if (!rect) return;
+      group = { id: g.id, x: rect.l, y: rect.t, axis: connectSpecOf(selected)?.axis ?? "x", items: [structuredClone(selected)] };
+    }
+    /* a group on no screen keeps its canvas position; one on a screen keeps its offset there */
+    const f = frameOfGroup(g, framesRef.current, widthsRef.current);
+    clipboardRef.current = { group, dx: f ? group.x - f.x : 0, dy: f ? group.y - f.y : 0, frameId: f?.id ?? null };
+  }, [selected, selectedIds, itemRects]);
+
+  const pasteClipboard = useCallback(() => {
+    const clip = clipboardRef.current;
+    if (!clip) return;
+    const fs = framesRef.current;
+    /* the screen to paste into: the selected screen, else the selection's, else the source */
+    let target = selectedFrameId ? fs.find((f) => f.id === selectedFrameId) : undefined;
+    if (!target && selected) {
+      const g = groupsRef.current.find((x) => x.items.some((it) => it.id === selected.id));
+      if (g) target = frameOfGroup(g, fs, widthsRef.current) ?? undefined;
+    }
+    if (!target) target = fs.find((f) => f.id === clip.frameId);
+    let x = target && clip.frameId ? target.x + clip.dx : clip.group.x;
+    let y = target && clip.frameId ? target.y + clip.dy : clip.group.y;
+    /* onto a spot already taken (the source, or an earlier paste) it steps aside like a duplicate */
+    while (groupsRef.current.some((g) => g.x === x && g.y === y)) {
+      x += 24;
+      y += 24;
+    }
+    const idMap = new Map(clip.group.items.map((it) => [it.id, uid()]));
+    const pos: Record<string, { x: number; y: number }> | undefined = clip.group.pos ? {} : undefined;
+    if (pos) for (const it of clip.group.items) pos[idMap.get(it.id)!] = clip.group.pos?.[it.id] ?? { x: 0, y: 0 };
+    const copy: Group = {
+      ...structuredClone(clip.group),
+      id: uid(),
+      x,
+      y,
+      pos,
+      items: clip.group.items.map((it) => ({ ...structuredClone(it), id: idMap.get(it.id)! })),
+    };
+    snapshot();
+    setGroups((prev) => [...prev, copy]);
+    setSelectedIds(copy.items.map((it) => it.id));
+    setSelectedFrameId(null);
+  }, [selected, selectedFrameId, snapshot]);
+
   /** the free group the whole selection belongs to, if it is exactly one */
   const selectedGroup = useMemo(() => {
     if (selectedIds.length === 0) return null;
@@ -2457,6 +2515,19 @@ export default function Page() {
         else duplicateSelected();
         return;
       }
+      if (mod && e.key.toLowerCase() === "c") {
+        /* with nothing selected, or text highlighted somewhere, the browser keeps its own copy */
+        if (selectedIds.length === 0 || window.getSelection()?.toString()) return;
+        e.preventDefault();
+        copySelected();
+        return;
+      }
+      if (mod && e.key.toLowerCase() === "v") {
+        if (!clipboardRef.current) return;
+        e.preventDefault();
+        pasteClipboard();
+        return;
+      }
       if (mod && e.key.toLowerCase() === "g") {
         e.preventDefault();
         if (e.shiftKey) ungroupSelected();
@@ -2514,6 +2585,8 @@ export default function Page() {
   }, [
     deleteSelected,
     duplicateSelected,
+    copySelected,
+    pasteClipboard,
     groupSelected,
     ungroupSelected,
     nudge,
