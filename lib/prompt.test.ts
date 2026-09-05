@@ -4,19 +4,21 @@ import { Lang, setGlobalLang } from "./i18n";
 import { buildPrompt } from "./prompt";
 import { BACK_TARGET, Doc, Item, Platform, defaultTabs, makeItem } from "./tokens";
 
-const LANGS: Lang[] = ["ja", "en", "zh"];
+const LANGS: Lang[] = ["ja", "en", "zh", "ko"];
 
 /* Section headings in the order buildPrompt must emit them. */
 const SECTIONS: Record<Lang, string[]> = {
   ja: ["## カラー", "## 形・文字・動き", "## 画面構成", "## 振る舞いと画面遷移", "## 各部品のスタイル", "## 全体の指針"],
   en: ["## Colors", "## Shape, type and motion", "## Layout", "## Behavior and navigation", "## Component styles", "## General guidance"],
   zh: ["## 配色", "## 形状、字体与动效", "## 屏幕结构", "## 行为与屏幕跳转", "## 各组件的样式", "## 整体原则"],
+  ko: ["## 색상", "## 모양, 글꼴 및 모션", "## 화면 구성", "## 동작 및 화면 전환", "## 부품별 스타일", "## 전체 지침"],
 };
 
 const PLATFORM_LINE: Record<Lang, Record<Platform, string>> = {
   ja: { android: "実装先は Android（ネイティブアプリ）です。", web: "実装先は Web（ブラウザで動くアプリ）です。" },
   en: { android: "Build it for Android, as a native app.", web: "Build it for the web, as an app that runs in the browser." },
   zh: { android: "实现目标是 Android（原生应用）。", web: "实现目标是 Web（在浏览器中运行的应用）。" },
+  ko: { android: "Android 네이티브 앱으로 구현한다.", web: "브라우저에서 실행되는 웹 앱으로 구현한다." },
 };
 
 /* One phone screen with a top app bar, a connected pair of buttons (one with a
@@ -63,6 +65,7 @@ const QUOTED: Record<Lang, { label: string; others: string[] }> = {
   ja: { label: "「Save」", others: ['"Save"', "“Save”"] },
   en: { label: '"Save"', others: ["「Save」", "“Save”"] },
   zh: { label: "“Save”", others: ["「Save」", '"Save"'] },
+  ko: { label: '"Save"', others: ["「Save」", "“Save”"] },
 };
 
 describe("buildPrompt structure", () => {
