@@ -21,7 +21,7 @@
 </p>
 
 <p align="center">
-  <a href="https://smartworldarafath.github.io/Material-3-Expressive-Screen-UI/"><strong>🚀 Open the Live Application</strong></a> · <a href="#core-features">Features</a> · <a href="#keyboard-shortcuts">Shortcuts</a> · <a href="#contributors">Contributors</a> · <a href="#sponsoring--support">Sponsor</a>
+  <a href="https://smartworldarafath.github.io/Material-3-Expressive-Screen-UI/"><strong>🚀 Open the Live Application</strong></a> · <a href="#core-features">Features</a> · <a href="#keyboard-shortcuts">Shortcuts</a> · <a href="#sponsoring--support">Sponsor & Donate</a> · <a href="#contributors">Contributors</a>
 </p>
 
 ![Demonstrating screen composition, palette adjustment, prompt generation, and Android deployment](docs/story.gif)
@@ -128,6 +128,23 @@ Material 3 Expressive Screen UI is completely free, open-source software under t
 If this tool enhances your productivity, streamlines your UI prototypes, or saves you hours of coding, please consider supporting ongoing maintenance and new feature development:
 
 💖 **[Sponsor Arafath on GitHub Sponsors](https://github.com/sponsors/smartworldarafath)**
+
+You can also support directly via **nsave** or **RedotPay** using the QR codes below:
+
+<table>
+  <tr>
+    <td align="center" width="50%">
+      <img src="docs/nsave_qr.jpg" width="220" alt="nsave QR Code" /><br />
+      <sub><b>nsave</b></sub><br />
+      <sub>Scan to send support via nsave (@arafath_rahman9)</sub>
+    </td>
+    <td align="center" width="50%">
+      <img src="docs/redotpay_qr.jpg" width="220" alt="RedotPay QR Code" /><br />
+      <sub><b>RedotPay</b></sub><br />
+      <sub>Scan to send support via RedotPay</sub>
+    </td>
+  </tr>
+</table>
 
 Your sponsorship directly funds time spent refining components, tuning prompt generation models, and expanding capabilities. No features are gated behind payment.
 
