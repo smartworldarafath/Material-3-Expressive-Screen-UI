@@ -43,7 +43,7 @@ const JOIN_GAP_Y = 48;
 const APART_GAP_X = JOIN_GAP_X + 8;
 const APART_GAP_Y = JOIN_GAP_Y + 8;
 
-const LIST_KINDS = new Set(["listItem", "textField", "checkbox", "radio", "switch", "chip", "divider", "card"]);
+const LIST_KINDS = new Set(["listItem", "textField", "select", "checkbox", "radio", "switch", "chip", "divider", "card"]);
 
 /** one movable unit: a group plus everything nested inside or overlapping it */
 type Unit = { ids: string[]; bb: Rect; kind: string; checked?: boolean; /** the first part, for family checks */ probe: Item };

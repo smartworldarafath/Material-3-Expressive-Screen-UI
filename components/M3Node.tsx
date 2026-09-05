@@ -687,6 +687,47 @@ function Body({ item, p }: { item: Item; p: Palette }) {
       );
     }
 
+    case "select": {
+      /* a closed dropdown: the chosen option is the value and the label floats; with
+       * nothing chosen the label sits in the field */
+      const filled = item.variant === "filled";
+      const value = item.selected === undefined ? undefined : item.tabs?.[item.selected]?.label;
+      return (
+        <div style={{ position: "relative", height: "100%" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "0 12px 0 16px", height: "100%" }}>
+            {item.icon && <Icon name={item.icon} size={24} color={p.onSurfaceVariant} />}
+            <span style={{ flex: 1, minWidth: 0, fontSize: 16, color: value ? p.onSurface : p.onSurfaceVariant, paddingTop: value && filled ? 16 : 0, ...ellipsis }}>
+              {value ?? item.label}
+            </span>
+            <Icon name="arrow_drop_down" size={24} color={p.onSurfaceVariant} />
+          </div>
+          {value && hasLabel && (
+            <span
+              style={{
+                position: "absolute",
+                left: item.icon ? 52 : 16,
+                top: filled ? 8 : -8,
+                fontSize: 12,
+                lineHeight: "16px",
+                color: p.onSurfaceVariant,
+                background: filled ? "transparent" : p.surface,
+                padding: filled ? 0 : "0 4px",
+                marginLeft: filled ? 0 : -4,
+              }}
+            >
+              {item.label}
+            </span>
+          )}
+          {filled && <span style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: 1, background: p.onSurfaceVariant }} />}
+          {hasSupporting && (
+            <span style={{ position: "absolute", left: 16, top: "100%", marginTop: 4, fontSize: 12, color: p.onSurfaceVariant, whiteSpace: "nowrap" }}>
+              {item.supporting}
+            </span>
+          )}
+        </div>
+      );
+    }
+
     case "slider": {
       const v = Math.min(100, Math.max(0, item.value ?? 40)) / 100;
       const w = item.size ?? 280;
@@ -756,6 +797,63 @@ function Body({ item, p }: { item: Item; p: Palette }) {
       return (
         <div style={{ display: "grid", placeItems: "center", height: "100%", color: p.outline }}>
           {item.icon && <Icon name={item.icon} size={Math.min(48, Math.round((item.size ?? 200) * 0.3))} />}
+        </div>
+      );
+
+    case "camera":
+      /* a viewfinder: the live feed is dark, with focus brackets and a shutter row */
+      return (
+        <div style={{ position: "relative", height: "100%", color: p.inverseOnSurface }}>
+          {(["left", "right"] as const).map((side) =>
+            (["top", "bottom"] as const).map((edge) => (
+              <div
+                key={`${side}-${edge}`}
+                style={{
+                  position: "absolute",
+                  [side]: 24,
+                  [edge]: 24,
+                  width: 28,
+                  height: 28,
+                  opacity: 0.7,
+                  [`border${side === "left" ? "Left" : "Right"}`]: `3px solid ${p.inverseOnSurface}`,
+                  [`border${edge === "top" ? "Top" : "Bottom"}`]: `3px solid ${p.inverseOnSurface}`,
+                  [`border${edge === "top" ? "Top" : "Bottom"}${side === "left" ? "Left" : "Right"}Radius`]: 6,
+                }}
+              />
+            )),
+          )}
+          <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", opacity: 0.5 }}>
+            {item.icon && <Icon name={item.icon} size={40} />}
+          </div>
+          <div style={{ position: "absolute", left: 0, right: 0, bottom: 20, display: "grid", placeItems: "center" }}>
+            <div style={{ width: 64, height: 64, borderRadius: 32, border: `4px solid ${p.inverseOnSurface}`, display: "grid", placeItems: "center" }}>
+              <div style={{ width: 48, height: 48, borderRadius: 24, background: p.inverseOnSurface }} />
+            </div>
+          </div>
+        </div>
+      );
+
+    case "map":
+      /* a stylised city: blocks on a light ground, two main roads and a river, one pin */
+      return (
+        <div style={{ position: "relative", height: "100%", overflow: "hidden" }}>
+          <svg width="100%" height="100%" viewBox="0 0 400 300" preserveAspectRatio="xMidYMid slice" style={{ position: "absolute", inset: 0 }} aria-hidden>
+            <rect width="400" height="300" fill={p.surfaceContainerLow} />
+            <path d="M-20 210 C 80 170, 140 260, 240 220 S 380 150, 430 190 L 430 240 C 380 200, 300 260, 240 250 S 120 230, -20 250 Z" fill={p.primaryContainer} opacity={0.6} />
+            {[
+              [20, 20, 90, 60], [130, 20, 110, 60], [260, 20, 120, 60],
+              [20, 100, 90, 70], [130, 100, 60, 70], [210, 100, 170, 70],
+              [20, 190, 60, 40], [300, 200, 80, 30],
+            ].map(([x, y, w, h], i) => (
+              <rect key={i} x={x} y={y} width={w} height={h} rx={6} fill={p.surfaceContainerHighest} />
+            ))}
+            <path d="M0 90 H400 M110 0 V300 M250 0 V300" stroke={p.surface} strokeWidth={10} fill="none" />
+            <path d="M0 90 H400 M110 0 V300 M250 0 V300" stroke={p.outlineVariant} strokeWidth={1} fill="none" opacity={0.6} />
+            <g transform="translate(200 150)">
+              <path d="M0 24 C -14 6, -20 -2, -20 -12 A 20 20 0 0 1 20 -12 C 20 -2, 14 6, 0 24 Z" fill={p.primary} />
+              <circle cx="0" cy="-12" r="7" fill={p.onPrimary} />
+            </g>
+          </svg>
         </div>
       );
 
@@ -1083,6 +1181,7 @@ function boxStyle(item: Item, p: Palette): React.CSSProperties {
     case "card":
       return { background: p[cardFillOf(item)], border: item.variant === "outlined" ? `1px solid ${p.outlineVariant}` : "none" };
     case "textField":
+    case "select":
       return item.variant === "filled"
         ? { background: p.surfaceContainerHighest, border: "none", color: p.onSurface }
         : { background: p.surface, border: `1px solid ${p.outline}`, color: p.onSurface };
@@ -1103,7 +1202,10 @@ function boxStyle(item: Item, p: Palette): React.CSSProperties {
     case "snackbar":
       return { background: p.inverseSurface, border: "none", color: p.inverseOnSurface };
     case "image":
+    case "map":
       return { background: p.surfaceContainerHighest, border: "none" };
+    case "camera":
+      return { background: p.inverseSurface, border: "none", color: p.inverseOnSurface };
     case "listItem": {
       const t = item.fill ?? "surfaceContainerLow";
       return { background: p[t], border: "none", color: onToken(t, p) };
@@ -1164,7 +1266,7 @@ export function M3Node({
   const r = radii ?? baseRadii(item);
   const size = sizeOf(item, widths);
   const measured = MEASURED.includes(item.kind) && !((item.kind === "switch" || item.kind === "button") && item.size);
-  const clips = !NO_BOX.includes(item.kind) && item.kind !== "textField";
+  const clips = !NO_BOX.includes(item.kind) && item.kind !== "textField" && item.kind !== "select";
 
   return (
     <motion.div
@@ -1225,7 +1327,7 @@ export function M3Static({
   const r = radii ?? baseRadii(item);
   const size = sizeOf(item, {});
   const measured = MEASURED.includes(item.kind) && !((item.kind === "switch" || item.kind === "button") && item.size);
-  const clips = !NO_BOX.includes(item.kind) && item.kind !== "textField";
+  const clips = !NO_BOX.includes(item.kind) && item.kind !== "textField" && item.kind !== "select";
   return (
     <div
       style={{

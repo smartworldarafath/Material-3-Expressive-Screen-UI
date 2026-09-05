@@ -33,7 +33,7 @@ export const SEED_TEXT: Record<Lang, { favorite: string; share: string; inbox: s
 export function translateDefaultText(value: string, kind: string, field: "label" | "supporting" | "tab", lang: Lang): string {
   for (const { key: from } of LANGS) {
     if (field === "tab") {
-      const labels = (l: Lang) => kind === "tabs" ? TAB_LABELS[l] : (kind === "fabMenu" ? FAB_MENU_TABS[l] : NAV_TABS[l]).map((tab) => tab.label);
+      const labels = (l: Lang) => kind === "tabs" ? TAB_LABELS[l] : kind === "select" ? SELECT_OPTIONS[l] : (kind === "fabMenu" ? FAB_MENU_TABS[l] : NAV_TABS[l]).map((tab) => tab.label);
       const index = labels(from).indexOf(value);
       if (index >= 0) return labels(lang)[index] ?? value;
     } else {
@@ -168,6 +168,8 @@ export const UI = {
   action: { ja: "アクション", en: "Action", zh: "操作" },
   supporting: { ja: "サブテキスト", en: "Supporting text", zh: "辅助文本" },
   tabs: { ja: "項目", en: "Items", zh: "项目" },
+  options: { ja: "選択肢", en: "Options", zh: "选项" },
+  selectedOption: { ja: "初期値にする（もう一度押すと未選択）", en: "Make this the initial value (press again for none)", zh: "设为初始值（再按一次取消）" },
   changeIcon: { ja: "アイコンを変更", en: "Change icon", zh: "更改图标" },
   image: { ja: "画像", en: "Image", zh: "图片" },
   pickImage: { ja: "画像を選ぶ", en: "Choose image", zh: "选择图片" },
@@ -402,7 +404,7 @@ export const KO: Record<UIKey, string> = {
   copied: "복사됨", saveImage: "이미지로 저장", saving: "저장 중…", previewFrom: "이 화면부터 미리보기",
   duplicate: "복제", duplicateKey: "복제 (Ctrl+D)", delete: "삭제 (Delete)", deleteSelection: "선택 항목 삭제",
   text: "텍스트", label: "레이블", bold: "굵게", action: "동작", supporting: "보조 텍스트", tabs: "항목", changeIcon: "아이콘 변경",
-  image: "이미지", pickImage: "이미지 선택", removeImage: "이미지 제거", imageUrl: "이미지 URL", imageArea: "이미지 영역", autoWidth: "글자 너비", icon: "아이콘", noIcon: "아이콘 없음", searchIcons: "아이콘 검색",
+  options: "옵션", selectedOption: "초깃값으로 설정(다시 누르면 선택 해제)", image: "이미지", pickImage: "이미지 선택", removeImage: "이미지 제거", imageUrl: "이미지 URL", imageArea: "이미지 영역", autoWidth: "글자 너비", icon: "아이콘", noIcon: "아이콘 없음", searchIcons: "아이콘 검색",
   style: "스타일", state: "상태", selected: "선택됨", handle: "핸들(하단 시트)", listSwitch: "끝에 스위치", on: "켜짐", container: "컨테이너", wavy: "물결 모양", determinate: "확정형",
   size: "크기", width: "너비", height: "높이", fontSize: "글자 크기", cornerRadius: "모서리 둥글기", cornerTop: "위쪽 모서리", cornerBottom: "아래쪽 모서리",
   screenWidth: "화면 너비", contentWidth: "좌우 16dp 여백", halfWidth: "한 행의 절반(2열)", screenHeight: "화면 높이", halfHeight: "화면의 절반",
@@ -458,11 +460,14 @@ export const KIND_TEXT: Record<
     dialog: { noun: "ダイアログ", label: "確認", supporting: "この操作を実行しますか？" },
     snackbar: { noun: "スナックバー", label: "保存しました", supporting: "元に戻す" },
     textField: { noun: "テキスト入力", label: "ラベル" },
+    select: { noun: "ドロップダウン", label: "ラベル" },
     switch: { noun: "スイッチ", label: "通知" },
     checkbox: { noun: "チェックボックス", label: "同意する" },
     slider: { noun: "スライダー" },
     text: { noun: "テキスト", label: "見出し" },
     image: { noun: "画像" },
+    camera: { noun: "カメラ" },
+    map: { noun: "地図" },
     divider: { noun: "区切り線" },
     loadingIndicator: { noun: "ローディングインジケータ" },
     linearProgress: { noun: "リニアプログレス" },
@@ -490,11 +495,14 @@ export const KIND_TEXT: Record<
     dialog: { noun: "dialog", label: "Confirm", supporting: "Do you want to continue?" },
     snackbar: { noun: "snackbar", label: "Saved", supporting: "Undo" },
     textField: { noun: "text field", label: "Label" },
+    select: { noun: "dropdown", label: "Label" },
     switch: { noun: "switch", label: "Notifications" },
     checkbox: { noun: "checkbox", label: "I agree" },
     slider: { noun: "slider" },
     text: { noun: "text", label: "Headline" },
     image: { noun: "image" },
+    camera: { noun: "camera" },
+    map: { noun: "map" },
     divider: { noun: "divider" },
     loadingIndicator: { noun: "loading indicator" },
     linearProgress: { noun: "linear progress indicator" },
@@ -522,11 +530,14 @@ export const KIND_TEXT: Record<
     dialog: { noun: "对话框", label: "确认", supporting: "要执行此操作吗？" },
     snackbar: { noun: "消息条", label: "已保存", supporting: "撤销" },
     textField: { noun: "文本输入框", label: "标签" },
+    select: { noun: "下拉菜单", label: "标签" },
     switch: { noun: "开关", label: "通知" },
     checkbox: { noun: "复选框", label: "我同意" },
     slider: { noun: "滑块" },
     text: { noun: "文本", label: "标题" },
     image: { noun: "图片" },
+    camera: { noun: "相机" },
+    map: { noun: "地图" },
     divider: { noun: "分割线" },
     loadingIndicator: { noun: "加载指示器" },
     linearProgress: { noun: "线性进度条" },
@@ -554,11 +565,14 @@ export const KIND_TEXT: Record<
     dialog: { noun: "대화상자", label: "확인", supporting: "계속하시겠습니까?" },
     snackbar: { noun: "스낵바", label: "저장됨", supporting: "실행 취소" },
     textField: { noun: "텍스트 입력란", label: "레이블" },
+    select: { noun: "드롭다운", label: "레이블" },
     switch: { noun: "스위치", label: "알림" },
     checkbox: { noun: "체크박스", label: "동의합니다" },
     slider: { noun: "슬라이더" },
     text: { noun: "텍스트", label: "제목" },
     image: { noun: "이미지" },
+    camera: { noun: "카메라" },
+    map: { noun: "지도" },
     divider: { noun: "구분선" },
     loadingIndicator: { noun: "로딩 표시기" },
     linearProgress: { noun: "선형 진행 표시기" },
@@ -581,6 +595,14 @@ export const TAB_LABELS: Record<Lang, string[]> = {
 };
 
 /** default entries of a FAB menu */
+/** the options a new dropdown starts with */
+export const SELECT_OPTIONS: Record<Lang, string[]> = {
+  ja: ["選択肢 1", "選択肢 2", "選択肢 3"],
+  en: ["Option 1", "Option 2", "Option 3"],
+  zh: ["选项 1", "选项 2", "选项 3"],
+  ko: ["옵션 1", "옵션 2", "옵션 3"],
+};
+
 export const FAB_MENU_TABS: Record<Lang, { icon: string; label: string }[]> = {
   ja: [
     { icon: "edit", label: "メモ" },

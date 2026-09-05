@@ -1,5 +1,5 @@
 import type { CSSProperties } from "react";
-import { FAB_MENU_TABS, KIND_TEXT, Lang, NAV_TABS, TAB_LABELS, getLang, t } from "./i18n";
+import { FAB_MENU_TABS, KIND_TEXT, Lang, NAV_TABS, TAB_LABELS, getLang, t, SELECT_OPTIONS } from "./i18n";
 import { Contrast, schemeFromSeed } from "./color";
 
 /* ---------- geometry ---------- */
@@ -432,11 +432,14 @@ export type Kind =
   | "dialog"
   | "snackbar"
   | "textField"
+  | "select"
   | "switch"
   | "checkbox"
   | "slider"
   | "text"
   | "image"
+  | "camera"
+  | "map"
   | "divider"
   | "loadingIndicator"
   | "linearProgress"
@@ -772,6 +775,26 @@ export const KIND_SPEC: Record<Kind, KindSpec> = {
     defSize: CONTENT_W,
     defVariant: "outlined",
   },
+  select: {
+    label: "Dropdown",
+    noun: "ドロップダウン",
+    category: "inputs",
+    paletteIcon: "arrow_drop_down_circle",
+    w: CONTENT_W,
+    h: 56,
+    radius: 16,
+    hasVariant: true,
+    hasLabel: true,
+    hasSupporting: true,
+    hasIcon: true,
+    hasTabs: true,
+    size: { min: 160, max: PHONE_W, step: 4, icon: "width", presets: WIDTH_PRESETS },
+    defLabel: "ラベル",
+    defIcon: null,
+    defSupporting: "",
+    defSize: CONTENT_W,
+    defVariant: "outlined",
+  },
   switch: {
     label: "Switch",
     noun: "スイッチ",
@@ -856,6 +879,42 @@ export const KIND_SPEC: Record<Kind, KindSpec> = {
     defLabel: "",
     defIcon: "image",
     defSize: 200,
+  },
+  camera: {
+    label: "Camera",
+    noun: "カメラ",
+    category: "content",
+    paletteIcon: "photo_camera",
+    w: CONTENT_W,
+    h: Math.round((CONTENT_W * 4) / 3),
+    radius: 20,
+    hasVariant: false,
+    hasLabel: false,
+    hasSupporting: false,
+    hasIcon: true,
+    size: { min: 96, max: PHONE_W, step: 4, icon: "width", presets: [HALF_W, CONTENT_W, PHONE_W] },
+    size2: { min: 96, max: PHONE_H, step: 4, icon: "height", presets: [280, 507, PHONE_H] },
+    defLabel: "",
+    defIcon: "photo_camera",
+    defSize: CONTENT_W,
+  },
+  map: {
+    label: "Map",
+    noun: "地図",
+    category: "content",
+    paletteIcon: "map",
+    w: CONTENT_W,
+    h: Math.round((CONTENT_W * 3) / 4),
+    radius: 20,
+    hasVariant: false,
+    hasLabel: false,
+    hasSupporting: false,
+    hasIcon: true,
+    size: { min: 96, max: PHONE_W, step: 4, icon: "width", presets: [HALF_W, CONTENT_W, PHONE_W] },
+    size2: { min: 96, max: PHONE_H, step: 4, icon: "height", presets: [200, 285, PHONE_H] },
+    defLabel: "",
+    defIcon: "map",
+    defSize: CONTENT_W,
   },
   divider: {
     label: "Divider",
@@ -1053,12 +1112,15 @@ export const KIND_ORDER: Kind[] = [
   "dialog",
   "snackbar",
   "textField",
+  "select",
   "switch",
   "checkbox",
   "radio",
   "slider",
   "text",
   "image",
+  "camera",
+  "map",
   "badge",
   "divider",
   "loadingIndicator",
@@ -1285,7 +1347,7 @@ export function fitHeight(it: Item, screenH: number): Item {
 export function carryItemSize(it: Item, from: { w: number; h: number }, to: { w: number; h: number }): Item {
   const spec = KIND_SPEC[it.kind];
   const patch: Partial<Item> = {};
-  const keepsShape = it.kind === "card" || it.kind === "image";
+  const keepsShape = it.kind === "card" || it.kind === "image" || it.kind === "camera" || it.kind === "map";
   if (spec.size && (spec.size.icon === "width" || keepsShape)) {
     /* only a size that is a width; a text size or an icon button's square are left alone */
     const cur = it.size ?? spec.defSize ?? spec.w;
@@ -1301,6 +1363,11 @@ export function carryItemSize(it: Item, from: { w: number; h: number }, to: { w:
     else if (cur > contentWidth(to.w) && it.kind !== "box") patch.size = contentWidth(to.w);
   }
   if ((it.kind === "box" || it.kind === "navRail") && (it.size2 ?? spec.h) === from.h) patch.size2 = to.h;
+  /* a camera or map the author gave a height keeps its aspect ratio when its width changes */
+  if ((it.kind === "camera" || it.kind === "map") && it.size2 !== undefined && patch.size !== undefined) {
+    const cur = it.size ?? spec.defSize ?? spec.w;
+    patch.size2 = Math.round((it.size2 * patch.size) / cur);
+  }
   return Object.keys(patch).length ? { ...it, ...patch } : it;
 }
 
@@ -1459,6 +1526,8 @@ export function defaultTabsFor(kind: Kind): NavTab[] {
   switch (kind) {
     case "tabs":
       return TAB_LABELS[getLang()].map((label) => ({ icon: "", label }));
+    case "select":
+      return SELECT_OPTIONS[getLang()].map((label) => ({ icon: "", label }));
     case "fabMenu":
       return FAB_MENU_TABS[getLang()].map((t) => ({ ...t }));
     case "toolbar":
@@ -1495,7 +1564,7 @@ export function makeItem(kind: Kind): Item {
     it.radiusBottom = 0;
   }
   if (kind === "navRail") it.tabs = defaultTabs();
-  if (kind === "tabs" || kind === "fabMenu") it.tabs = defaultTabsFor(kind);
+  if (kind === "tabs" || kind === "fabMenu" || kind === "select") it.tabs = defaultTabsFor(kind);
   if (kind === "toolbar") it.tabs = defaultTabsFor(kind).slice(0, 4);
   return it;
 }
@@ -1532,6 +1601,10 @@ export function sizeOf(it: Item, widths: Record<string, number>) {
     case "loadingIndicator":
     case "image":
       return { w: n, h: n };
+    case "camera":
+      return { w: n, h: it.size2 ?? Math.round((n * 4) / 3) };
+    case "map":
+      return { w: n, h: it.size2 ?? Math.round((n * 3) / 4) };
     case "topAppBar":
       /* the status-bar inset belongs to a phone: a bar wider than one has no status bar above it.
        * (An Android tablet does; the canvas leaves that to the prompt.) */
@@ -1540,6 +1613,7 @@ export function sizeOf(it: Item, widths: Record<string, number>) {
     case "bottomNav":
     case "listItem":
     case "textField":
+    case "select":
     case "slider":
     case "linearProgress":
     case "divider":
@@ -1586,6 +1660,8 @@ export function baseRadii(it: Item): Radii {
     case "loadingIndicator":
       return uniformRadii((it.size ?? 48) / 2);
     case "image":
+    case "camera":
+    case "map":
     case "card":
       return uniformRadii(it.radiusTop ?? scaleR(s.radius));
     case "badge":

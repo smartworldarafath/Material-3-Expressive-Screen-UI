@@ -109,3 +109,50 @@ describe("buildPrompt structure", () => {
     expect(prompt).toContain("「Save」");
   });
 });
+
+/* The placeholder parts state their box, and a dropdown names its options and initial value.
+ * Each sits in its own group: a run of mixed kinds would be described as a button group. */
+describe("buildPrompt for the camera, map and dropdown parts", () => {
+  afterEach(() => setGlobalLang("ja"));
+
+  const NOUN: Record<Lang, [camera: string, map: string]> = {
+    ja: ["カメラプレビュー", "地図"],
+    en: ["camera preview", "map"],
+    zh: ["相机预览", "地图"],
+    ko: ["카메라 미리보기", "지도"],
+  };
+
+  function screen(lang: Lang, items: Item[]) {
+    setGlobalLang(lang);
+    const doc: Doc = {
+      groups: items.map((it, i) => ({ id: `g${i}`, x: 16, y: 100 + i * 300, axis: "x", items: [it] })),
+      frames: [{ id: "f", name: "Home", x: 0, y: 0 }],
+      paletteKey: "purple",
+      frame: "phone",
+      title: "Notes",
+      brief: "",
+    };
+    return buildPrompt(doc, {}, undefined, lang);
+  }
+
+  it.each(LANGS)("writes the camera and map boxes as width × height in %s", (lang) => {
+    const camera: Item = { ...makeItem("camera"), id: "cam" };
+    const map: Item = { ...makeItem("map"), id: "map", size: 200, size2: 120 };
+    const prompt = screen(lang, [camera, map]);
+    expect(prompt).toContain("380×507dp");
+    expect(prompt).toContain(NOUN[lang][0]);
+    expect(prompt).toContain("200×120dp");
+    expect(prompt).toContain(NOUN[lang][1]);
+    expect(styleBullets(prompt, lang)).toHaveLength(2);
+  });
+
+  it.each(LANGS)("lists a dropdown's options and names the initial value in %s", (lang) => {
+    const select: Item = { ...makeItem("select"), id: "sel", label: "Size", tabs: [{ icon: "", label: "Espresso" }, { icon: "", label: "Latte" }], selected: 1 };
+    const withValue = screen(lang, [select]);
+    for (const word of ["Size", "Espresso", "Latte"]) expect(withValue).toContain(word);
+    /* the initial value is named a second time, after the option list */
+    expect(withValue.indexOf("Latte")).not.toBe(withValue.lastIndexOf("Latte"));
+    const noValue = screen(lang, [{ ...select, selected: undefined }]);
+    expect(noValue.indexOf("Latte")).toBe(noValue.lastIndexOf("Latte"));
+  });
+});

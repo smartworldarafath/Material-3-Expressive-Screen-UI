@@ -116,12 +116,15 @@ Sizes are in dp; `size` is the width unless noted. Content width inside the phon
 | `dialog` | dialog | `label` title, `supporting` body, `icon` | 312 × 220, centered |
 | `snackbar` | snackbar | `label`, `supporting` action label | 344 × 48 |
 | `textField` | text field | `label`, `supporting` helper, `icon`, `variant` `outlined / filled` | 380 × 56 |
+| `select` | dropdown (exposed dropdown menu) | `label`, `tabs` the options as `{ "label" }`, `selected` index of the initial value (omit for none), `supporting` helper, `icon`, `variant` `outlined / filled` | 380 × 56 |
 | `switch` | switch with label | `label`, `checked`, `size` width (omit for text-sized; 380 puts the label left and the switch right) | text-sized × 48 |
 | `checkbox` | checkbox with label | `label`, `checked` | 40 tall |
 | `radio` | radio button with label | `label`, `checked` | 40 tall |
 | `slider` | slider | `value` 0–100 | 380 × 44 |
 | `text` | a line of text | `label`, `size` font size (28 default), `bold` | |
 | `image` | image | `size` square side, `src` an https URL (optional) | 200 × 200 |
+| `camera` | camera preview placeholder | `size` width, `size2` height | 380 × 507 |
+| `map` | map placeholder | `size` width, `size2` height | 380 × 285 |
 | `divider` | divider | | 380 × 16 |
 | `badge` | badge | `label` (empty for a dot) | |
 | `loadingIndicator` | M3 Expressive loading indicator | `contained` | 48 × 48 |

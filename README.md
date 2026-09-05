@@ -32,7 +32,7 @@ Works with any AI coding tool that takes a prompt, such as Claude Code, Codex, G
 
 ## What it does
 
-- **Drag-and-drop parts** – buttons, icon buttons, FABs, split buttons, FAB menus, chips, app bars, navigation bars, floating toolbars, tabs, search bars, cards, lists, dialogs, snackbars, text fields, switches, checkboxes, radio buttons, sliders, text, images, badges, boxes and dividers, all drawn to Material 3 Expressive.
+- **Drag-and-drop parts** – buttons, icon buttons, FABs, split buttons, FAB menus, chips, app bars, navigation bars, floating toolbars, tabs, search bars, cards, lists, dialogs, snackbars, text fields, dropdowns, switches, checkboxes, radio buttons, sliders, text, images, camera and map placeholders, badges, boxes and dividers, all drawn to Material 3 Expressive.
 - **Magnetic connections** – bring two buttons or list items close and they fuse into a connected group; the corners soften as they meet.
 - **Real M3 Expressive loading** – the shape-morphing Loading Indicator (ported from material-components-android) and wavy linear / circular progress indicators.
 - **Phone and desktop screens** – add as many screens as you like, name them, pick a background, and drag a screen to move everything on it. Switch any screen between a 412×892 phone and a 1280×800 desktop from its label: bars stretch, the navigation bar becomes a rail (and a rail becomes a bar again on a phone), and the parts are laid out again beside it. Screens of both sizes can share one design; same-named screens are written into the prompt as one screen at two widths.
@@ -119,7 +119,7 @@ Claude Code、Codex、Gemini CLI、Cursor など、プロンプトを受け取�
 
 ### できること
 
-- **ドラッグ＆ドロップ** – ボタン、アイコンボタン、FAB、スプリットボタン、FAB メニュー、チップ、アプリバー、ナビゲーションバー、フローティングツールバー、タブ、検索バー、カード、リスト、ダイアログ、スナックバー、テキスト入力、スイッチ、チェックボックス、ラジオボタン、スライダー、テキスト、画像、バッジ、ボックス、区切り線。
+- **ドラッグ＆ドロップ** – ボタン、アイコンボタン、FAB、スプリットボタン、FAB メニュー、チップ、アプリバー、ナビゲーションバー、フローティングツールバー、タブ、検索バー、カード、リスト、ダイアログ、スナックバー、テキスト入力、ドロップダウン、スイッチ、チェックボックス、ラジオボタン、スライダー、テキスト、画像、カメラと地図のプレースホルダー、バッジ、ボックス、区切り線。
 - **磁石のような連結** – ボタンやリスト項目を近づけると 1 つのグループにくっつき、角が溶けてつながります。
 - **本物の M3 Expressive ローディング** – 形が変化する Loading Indicator（Android 実装からの移植）と、波形のリニア／サーキュラープログレス。
 - **スマホ画面とデスクトップ画面** – 画面を何枚でも追加して名前や背景色を付け、画面ごと動かせます。画面のラベルから 412×892 のスマホと 1280×800 のデスクトップを切り替えられ、バーは伸び、ナビゲーションバーはレールに（スマホに戻せばレールはバーに）なり、部品はその横に並べ直されます。両方のサイズを 1 つのデザインに混在でき、同じ名前の画面はプロンプトで「1 つの画面の 2 つの幅」として書かれます。
@@ -174,7 +174,7 @@ MIT © lnkiai
 
 ### 功能
 
-- **拖放组件** – 按钮、图标按钮、FAB、拆分按钮、FAB 菜单、标签片、应用栏、导航栏、悬浮工具栏、标签页、搜索栏、卡片、列表、对话框、消息条、文本输入框、开关、复选框、单选按钮、滑块、文本、图片、徽标、容器框和分割线，全部按 Material 3 Expressive 绘制。
+- **拖放组件** – 按钮、图标按钮、FAB、拆分按钮、FAB 菜单、标签片、应用栏、导航栏、悬浮工具栏、标签页、搜索栏、卡片、列表、对话框、消息条、文本输入框、下拉菜单、开关、复选框、单选按钮、滑块、文本、图片、相机和地图占位符、徽标、容器框和分割线，全部按 Material 3 Expressive 绘制。
 - **磁吸连接** – 把两个按钮或列表项靠近，它们会合并成一个相连的组，圆角随之融合。
 - **真正的 M3 Expressive 加载动画** – 形状变化的 Loading Indicator（移植自 material-components-android）以及波浪形的线性／圆形进度条。
 - **手机与桌面屏幕** – 想加多少个屏幕都可以，为它们命名、选择背景，拖动屏幕即可整体移动。在屏幕标签上可在 412×892 的手机和 1280×800 的桌面之间切换：栏会拉伸，导航栏变为侧边导航栏（切回手机时侧边导航栏又变回导航栏），组件在其旁边重新排列。两种尺寸可以共存于一个设计中，同名屏幕会在提示词中写成“同一个屏幕的两种宽度”。
@@ -229,7 +229,7 @@ Claude Code, Codex, Gemini CLI, Cursor 등 프롬프트를 받을 수 있는 AI 
 
 ### 할 수 있는 것
 
-- **드래그 앤 드롭** – 버튼, 아이콘 버튼, FAB, 분할 버튼, FAB 메뉴, 칩, 앱 바, 내비게이션 바, 플로팅 도구 모음, 탭, 검색창, 카드, 목록, 대화상자, 스낵바, 텍스트 입력란, 스위치, 체크박스, 라디오 버튼, 슬라이더, 텍스트, 이미지, 배지, 상자, 구분선. 모두 Material 3 Expressive 규격으로 그려집니다.
+- **드래그 앤 드롭** – 버튼, 아이콘 버튼, FAB, 분할 버튼, FAB 메뉴, 칩, 앱 바, 내비게이션 바, 플로팅 도구 모음, 탭, 검색창, 카드, 목록, 대화상자, 스낵바, 텍스트 입력란, 드롭다운, 스위치, 체크박스, 라디오 버튼, 슬라이더, 텍스트, 이미지, 카메라와 지도 자리표시자, 배지, 상자, 구분선. 모두 Material 3 Expressive 규격으로 그려집니다.
 - **자석처럼 붙는 연결** – 버튼이나 목록 항목을 가까이 가져가면 하나의 그룹으로 붙고, 맞닿는 모서리가 부드럽게 이어집니다.
 - **진짜 M3 Expressive 로딩** – 모양이 변하는 Loading Indicator(Android 구현에서 이식)와 물결 모양의 선형/원형 진행 표시기.
 - **휴대전화 화면과 데스크톱 화면** – 화면을 원하는 만큼 추가하고 이름과 배경색을 정하고 화면째로 옮길 수 있습니다. 화면 레이블에서 412×892 휴대전화와 1280×800 데스크톱을 전환하면 바는 늘어나고 내비게이션 바는 레일이 되며(휴대전화로 돌리면 레일은 다시 바로), 부품은 그 옆에 다시 배치됩니다. 두 크기를 한 디자인에 섞을 수 있고, 이름이 같은 화면은 프롬프트에 "한 화면의 두 너비"로 적힙니다.

@@ -126,8 +126,10 @@ export function MobileInspector({
     const defaults = defaultTabsFor(item.kind);
     const next: NavTab[] = [];
     for (let i = 0; i < n; i++) next.push(tabs[i] ? { ...tabs[i] } : { ...defaults[i % defaults.length] });
-    onChange({ tabs: next });
+    onChange({ tabs: next, selected: item.selected !== undefined && item.selected >= n ? undefined : item.selected });
   };
+  /* a dropdown's rows are options: no icons, and one of them may be the initial value */
+  const isSelect = item.kind === "select";
 
   return (
     <div>
@@ -177,7 +179,7 @@ export function MobileInspector({
       )}
 
       {spec.hasTabs && (
-        <Row icon="view_column" label={t("tabs", lang)} p={p}>
+        <Row icon={isSelect ? "list" : "view_column"} label={t(isSelect ? "options" : "tabs", lang)} p={p}>
           <Segmented
             options={(item.kind === "toolbar" ? [2, 3, 4, 5, 6] : [2, 3, 4, 5]).map((n) => ({ key: String(n), label: String(n) }))}
             value={String(tabs.length)}
@@ -188,7 +190,17 @@ export function MobileInspector({
           <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 8 }}>
             {tabs.map((tab, i) => (
               <div key={i} style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                {item.kind !== "tabs" && (
+                {isSelect && (
+                  <IconBtn
+                    icon={item.selected === i ? "radio_button_checked" : "radio_button_unchecked"}
+                    p={p}
+                    size={48}
+                    on={item.selected === i}
+                    onClick={() => onChange({ selected: item.selected === i ? undefined : i })}
+                    title={t("selectedOption", lang)}
+                  />
+                )}
+                {item.kind !== "tabs" && !isSelect && (
                   <IconBtn icon={tab.icon || "add"} p={p} size={48} on={tabSlot === i} onClick={() => setTabSlot(tabSlot === i ? null : i)} title={t("changeIcon", lang)} />
                 )}
                 {item.kind !== "toolbar" && (

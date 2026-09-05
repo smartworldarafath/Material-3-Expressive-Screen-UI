@@ -145,6 +145,9 @@ function Tappable({
   onTap,
   onSlot,
   onValue,
+  onPick,
+  menuOpen,
+  onMenu,
 }: {
   item: Item;
   p: Palette;
@@ -155,11 +158,34 @@ function Tappable({
   onSlot?: (slot: string) => void;
   /** live value for sliders */
   onValue?: (v: number) => void;
+  /** an option chosen from a dropdown's menu */
+  onPick?: (index: number) => void;
+  /** whether this dropdown's menu is the open one; the screen keeps at most one open */
+  menuOpen?: boolean;
+  onMenu?: (open: boolean) => void;
 }) {
   const [pressed, setPressed] = useState(false);
   const [hot, setHot] = useState<string | null>(null);
-  const live = !!onTap || (TAPPABLE.includes(item.kind) && item.kind !== "text");
+  const menu = !!menuOpen;
+  const live = !!onTap || !!onPick || (TAPPABLE.includes(item.kind) && item.kind !== "text");
   const ref = useRef<HTMLDivElement>(null);
+
+  /* the open menu closes on a tap anywhere else or on Escape */
+  useEffect(() => {
+    if (!menu || !onMenu) return;
+    const away = (e: PointerEvent) => {
+      if (!ref.current?.contains(e.target as Node)) onMenu(false);
+    };
+    const key = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onMenu(false);
+    };
+    document.addEventListener("pointerdown", away, true);
+    document.addEventListener("keydown", key, true);
+    return () => {
+      document.removeEventListener("pointerdown", away, true);
+      document.removeEventListener("keydown", key, true);
+    };
+  }, [menu, onMenu]);
 
   const dragValue = (e: React.PointerEvent) => {
     const r = ref.current?.getBoundingClientRect();
@@ -214,7 +240,7 @@ function Tappable({
       onPointerUp={() => setPressed(false)}
       onPointerCancel={() => setPressed(false)}
       onPointerLeave={() => !onValue && setPressed(false)}
-      onClick={onTap}
+      onClick={onPick ? () => onMenu?.(!menu) : onTap}
       style={{ cursor: live || onValue ? "pointer" : "default", display: "flex", position: "relative", touchAction: "none" }}
     >
       <M3Node item={item} palette={p} widths={widths} radii={radii} interactive={false} pressed={pressed && !onValue} />
@@ -259,9 +285,53 @@ function Tappable({
           }}
         />
       ))}
+      {onPick && menu && (
+        /* the dropdown's menu, under the field: surfaceContainer, 48dp items, the chosen one tinted */
+        <div
+          onPointerDown={(e) => e.stopPropagation()}
+          style={{
+            position: "absolute",
+            left: 0,
+            right: 0,
+            top: "100%",
+            marginTop: 4,
+            padding: "8px 0",
+            borderRadius: 4,
+            background: p.surfaceContainer,
+            color: p.onSurface,
+            boxShadow: "0 2px 6px rgba(0,0,0,0.15), 0 8px 24px rgba(0,0,0,0.12)",
+            zIndex: 2,
+          }}
+        >
+          {(item.tabs ?? []).map((opt, i) => (
+            <div
+              key={i}
+              onClick={(e) => {
+                e.stopPropagation();
+                onPick(i);
+                onMenu?.(false);
+              }}
+              style={{
+                height: 48,
+                display: "flex",
+                alignItems: "center",
+                padding: "0 12px",
+                fontSize: 16,
+                cursor: "pointer",
+                background: item.selected === i ? `color-mix(in srgb, ${p.onSurface} 12%, transparent)` : "transparent",
+                ...ellipsisText,
+              }}
+            >
+              {opt.label}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
+
+const ellipsisText: React.CSSProperties = { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" };
 
 function Screen({
   frame,
@@ -285,6 +355,8 @@ function Screen({
   values: Record<string, number>;
   onValue: (id: string, v: number) => void;
 }) {
+  /* the dropdown whose menu is open, if any; its group is lifted above the rest */
+  const [menuId, setMenuId] = useState<string | null>(null);
   return (
     <div style={{ position: "absolute", inset: 0, background: p[frame.bg ?? "surface"], overflow: "hidden" }}>
       {groups.map((g) => (
@@ -292,11 +364,12 @@ function Screen({
           key={g.id}
           style={
             g.free
-              ? { position: "absolute", left: g.x - frame.x, top: g.y - frame.y }
+              ? { position: "absolute", left: g.x - frame.x, top: g.y - frame.y, zIndex: g.items.some((it) => it.id === menuId) ? 2 : undefined }
               : {
                   position: "absolute",
                   left: g.x - frame.x,
                   top: g.y - frame.y,
+                  zIndex: g.items.some((it) => it.id === menuId) ? 2 : undefined,
                   display: "flex",
                   flexDirection: g.axis === "x" ? "row" : "column",
                   alignItems: g.axis === "x" ? "center" : "stretch",
@@ -329,6 +402,7 @@ function Screen({
             const act = it.action;
             let shown = flipped.has(it.id) ? flippedLook(it) : it;
             if (it.kind === "slider" && values[it.id] !== undefined) shown = { ...shown, value: values[it.id] };
+            if (it.kind === "select" && values[it.id] !== undefined) shown = { ...shown, selected: values[it.id] };
             const navKind = it.kind === "bottomNav" || it.kind === "navRail" || it.kind === "tabs";
             /* bars with the same destinations are one bar to the visitor: the choice follows them across screens */
             const navKey = navKind ? `nav:${it.kind}:${(it.tabs ?? []).map((t) => t.label).join("|")}` : "";
@@ -361,6 +435,9 @@ function Screen({
                     : undefined
                 }
                 onValue={it.kind === "slider" ? (v) => onValue(it.id, v) : undefined}
+                onPick={it.kind === "select" ? (i) => onValue(it.id, i) : undefined}
+                menuOpen={menuId === it.id}
+                onMenu={it.kind === "select" ? (open) => setMenuId(open ? it.id : null) : undefined}
               />
             );
             if (!g.free) return node;

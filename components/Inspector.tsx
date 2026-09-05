@@ -77,6 +77,7 @@ export function variantsOf(kind: Kind): { key: Variant; label: string }[] {
         { key: "outlined", label: t("outlined") },
       ];
     case "textField":
+    case "select":
       return [
         { key: "outlined", label: t("outlined") },
         { key: "filled", label: t("filled") },
@@ -693,18 +694,20 @@ export function Inspector({
     const next: NavTab[] = [];
     const defaults = defaultTabsFor(item.kind);
     for (let i = 0; i < n; i++) next.push(tabs[i] ? { ...tabs[i] } : { ...defaults[i % defaults.length] });
-    onChange({ tabs: next });
+    onChange({ tabs: next, selected: item.selected !== undefined && item.selected >= n ? undefined : item.selected });
   };
   /** entries of a tab row have no icon; toolbar buttons have no label */
-  const tabIcons = item.kind !== "tabs";
+  const tabIcons = item.kind !== "tabs" && item.kind !== "select";
   const tabLabels = item.kind !== "toolbar";
   const mainSlots = slots.filter((s) => !s.key.startsWith("tab:"));
 
   const setTabLabel = (i: number, label: string) =>
     onChange({ tabs: tabs.map((t, j) => (j === i ? { ...t, label } : t)) });
   /** bars, rails and tab rows show one destination as selected */
-  const hasSelected = item.kind === "bottomNav" || item.kind === "navRail" || item.kind === "tabs";
-  const selectedTab = Math.min(item.selected ?? 0, Math.max(0, tabs.length - 1));
+  const isSelect = item.kind === "select";
+  const hasSelected = item.kind === "bottomNav" || item.kind === "navRail" || item.kind === "tabs" || isSelect;
+  /* a dropdown may start with nothing chosen; bars always show one destination */
+  const selectedTab = isSelect && item.selected === undefined ? -1 : Math.min(item.selected ?? 0, Math.max(0, tabs.length - 1));
 
   const hasRadius =
     item.kind === "bottomNav" ||
@@ -712,6 +715,8 @@ export function Inspector({
     item.kind === "topAppBar" ||
     item.kind === "card" ||
     item.kind === "image" ||
+    item.kind === "camera" ||
+    item.kind === "map" ||
     item.kind === "box";
 
   return (
@@ -807,7 +812,7 @@ export function Inspector({
       )}
 
       {spec.hasTabs && !editOn && (
-        <Section id="tabs" icon="view_column" title={t("tabs", lang)} p={p}>
+        <Section id="tabs" icon={isSelect ? "list" : "view_column"} title={t(isSelect ? "options" : "tabs", lang)} p={p}>
           <Segmented
             options={(item.kind === "toolbar" ? [2, 3, 4, 5, 6] : [2, 3, 4, 5]).map((n) => ({ key: String(n), label: String(n) }))}
             value={String(tabs.length)}
@@ -826,8 +831,8 @@ export function Inspector({
                       p={p}
                       size={40}
                       on={selectedTab === i}
-                      onClick={() => onChange({ selected: i })}
-                      title={t("selectedTab", lang)}
+                      onClick={() => onChange({ selected: isSelect && selectedTab === i ? undefined : i })}
+                      title={t(isSelect ? "selectedOption" : "selectedTab", lang)}
                     />
                   )}
                   {tabIcons && (
