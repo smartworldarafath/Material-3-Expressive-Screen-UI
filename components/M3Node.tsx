@@ -13,6 +13,7 @@ import {
   Radii,
   STATUS_BAR_H,
   baseRadii,
+  cardFillOf,
   onToken,
   scaleR,
   sizeOf,
@@ -96,6 +97,9 @@ export function ButtonContent({ item }: { item: Item }) {
       style={{
         display: "inline-flex",
         alignItems: "center",
+        justifyContent: "center",
+        width: item.size ? "100%" : undefined,
+        boxSizing: "border-box",
         gap: hasIcon && hasLabel ? 8 : 0,
         paddingLeft: padX,
         paddingRight: padX,
@@ -160,12 +164,19 @@ function ChipContent({ item, p }: { item: Item; p: Palette }) {
 }
 
 function SwitchContent({ item, p }: { item: Item; p: Palette }) {
-  const on = !!item.checked;
   const hasLabel = item.label.trim().length > 0;
   return (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: 14, height: 32, whiteSpace: "nowrap" }}>
-      {hasLabel && <span style={{ fontSize: 16, color: p.onSurface }}>{item.label}</span>}
-      <span
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 14, height: H - 8, whiteSpace: "nowrap", width: item.size ? "100%" : undefined, justifyContent: item.size ? "space-between" : undefined }}>
+      {hasLabel && <span style={{ fontSize: 16, color: p.onSurface, overflow: "hidden", textOverflow: "ellipsis" }}>{item.label}</span>}
+      <SwitchControl on={!!item.checked} noCheck={!!item.noCheck} p={p} />
+    </span>
+  );
+}
+
+/** the M3 switch track and handle, 52 × 32 */
+function SwitchControl({ on, noCheck, p }: { on: boolean; noCheck?: boolean; p: Palette }) {
+  return (
+    <span
         style={{
           position: "relative",
           width: 52,
@@ -194,10 +205,9 @@ function SwitchContent({ item, p }: { item: Item; p: Palette }) {
             transition: "left 160ms, width 160ms, height 160ms",
           }}
         >
-          {on && !item.noCheck && <Icon name="check" size={16} weight={600} />}
+          {on && !noCheck && <Icon name="check" size={16} weight={600} />}
         </span>
       </span>
-    </span>
   );
 }
 
@@ -474,24 +484,32 @@ function Body({ item, p }: { item: Item; p: Palette }) {
             boxSizing: "border-box",
           }}
         >
-          <div
-            style={{
-              height: Math.round(cw * 0.28),
-              borderRadius: scaleR(14),
-              background: p.primaryContainer,
-              color: p.onPrimaryContainer,
-              display: "grid",
-              placeItems: "center",
-              flex: "0 0 auto",
-            }}
-          >
-            {item.icon && <Icon name={item.icon} size={34} />}
-          </div>
+          {!item.noImage && (
+            <div
+              style={{
+                height: Math.round(cw * 0.28),
+                borderRadius: scaleR(14),
+                background: p.primaryContainer,
+                color: p.onPrimaryContainer,
+                display: "grid",
+                placeItems: "center",
+                flex: "0 0 auto",
+                overflow: "hidden",
+              }}
+            >
+              {item.src ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={item.src} alt="" draggable={false} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+              ) : (
+                item.icon && <Icon name={item.icon} size={34} />
+              )}
+            </div>
+          )}
           {hasLabel && (
-            <div style={{ fontSize: 16, fontWeight: w(600, 700), color: p.onSurface, ...ellipsis }}>{item.label}</div>
+            <div style={{ fontSize: 16, fontWeight: w(600, 700), color: item.fill ? onToken(item.fill, p) : p.onSurface, ...ellipsis }}>{item.label}</div>
           )}
           {hasSupporting && (
-            <div style={{ fontSize: 13, lineHeight: 1.5, color: p.onSurfaceVariant, overflow: "hidden" }}>
+            <div style={{ fontSize: 13, lineHeight: 1.5, color: item.fill ? onToken(item.fill, p) : p.onSurfaceVariant, opacity: item.fill ? 0.8 : 1, overflow: "hidden" }}>
               {item.supporting}
             </div>
           )}
@@ -525,7 +543,7 @@ function Body({ item, p }: { item: Item; p: Palette }) {
               <div style={{ fontSize: 13, color: p.onSurfaceVariant, ...ellipsis }}>{item.supporting}</div>
             )}
           </div>
-          {item.icon2 && <Icon name={item.icon2} size={22} color={p.onSurfaceVariant} />}
+          {item.switch ? <SwitchControl on={!!item.checked} noCheck={!!item.noCheck} p={p} /> : item.icon2 && <Icon name={item.icon2} size={22} color={p.onSurfaceVariant} />}
         </div>
       );
     }
@@ -764,7 +782,7 @@ function Body({ item, p }: { item: Item; p: Palette }) {
           }}
         >
           {tabs.map((t, i) => {
-            const on = i === 0;
+            const on = i === Math.min(item.selected ?? 0, Math.max(0, tabs.length - 1));
             const withLabel = t.label.trim().length > 0;
             return (
               <div
@@ -788,6 +806,7 @@ function Body({ item, p }: { item: Item; p: Palette }) {
                     placeItems: "center",
                     background: on ? p.secondaryContainer : "transparent",
                     color: on ? p.onSecondaryContainer : p.onSurfaceVariant,
+                    transition: "background 160ms, color 160ms",
                   }}
                 >
                   {t.icon && <Icon name={t.icon} size={22} fill={on} />}
@@ -827,7 +846,7 @@ function Body({ item, p }: { item: Item; p: Palette }) {
           }}
         >
           {tabs.map((t, i) => {
-            const on = i === 0;
+            const on = i === Math.min(item.selected ?? 0, Math.max(0, tabs.length - 1));
             const withLabel = t.label.trim().length > 0;
             return (
               <div
@@ -850,6 +869,7 @@ function Body({ item, p }: { item: Item; p: Palette }) {
                     placeItems: "center",
                     background: on ? p.secondaryContainer : "transparent",
                     color: on ? p.onSecondaryContainer : p.onSurfaceVariant,
+                    transition: "background 160ms, color 160ms",
                   }}
                 >
                   {t.icon && <Icon name={t.icon} size={22} fill={on} />}
@@ -978,7 +998,7 @@ function Body({ item, p }: { item: Item; p: Palette }) {
       return (
         <div style={{ display: "flex", alignItems: "stretch", height: "100%", position: "relative" }}>
           {tabs.map((tab, i) => {
-            const on = i === 0;
+            const on = i === Math.min(item.selected ?? 0, Math.max(0, tabs.length - 1));
             return (
               <div
                 key={i}
@@ -1061,9 +1081,7 @@ function boxStyle(item: Item, p: Palette): React.CSSProperties {
         ? { background: "transparent", color: p.onSurfaceVariant, border: `1px solid ${p.outlineVariant}` }
         : { background: p.surfaceContainerLow, color: p.onSurfaceVariant, border: "none" };
     case "card":
-      if (item.variant === "outlined") return { background: p.surface, border: `1px solid ${p.outlineVariant}` };
-      if (item.variant === "elevated") return { background: p.surfaceContainerLow, border: "none" };
-      return { background: p.surfaceContainerHighest, border: "none" };
+      return { background: p[cardFillOf(item)], border: item.variant === "outlined" ? `1px solid ${p.outlineVariant}` : "none" };
     case "textField":
       return item.variant === "filled"
         ? { background: p.surfaceContainerHighest, border: "none", color: p.onSurface }
@@ -1145,7 +1163,7 @@ export function M3Node({
 }) {
   const r = radii ?? baseRadii(item);
   const size = sizeOf(item, widths);
-  const measured = MEASURED.includes(item.kind);
+  const measured = MEASURED.includes(item.kind) && !((item.kind === "switch" || item.kind === "button") && item.size);
   const clips = !NO_BOX.includes(item.kind) && item.kind !== "textField";
 
   return (
@@ -1206,7 +1224,7 @@ export function M3Static({
 }) {
   const r = radii ?? baseRadii(item);
   const size = sizeOf(item, {});
-  const measured = MEASURED.includes(item.kind);
+  const measured = MEASURED.includes(item.kind) && !((item.kind === "switch" || item.kind === "button") && item.size);
   const clips = !NO_BOX.includes(item.kind) && item.kind !== "textField";
   return (
     <div

@@ -8,7 +8,8 @@ const isRecord = (value: unknown): value is Record<string, unknown> => typeof va
 
 const KINDS = new Set<string>(KIND_ORDER);
 
-const validTabs = (tabs: unknown) => tabs === undefined || (Array.isArray(tabs) && tabs.every((tab) => isRecord(tab) && typeof tab.label === "string" && typeof tab.icon === "string"));
+const validTabs = (tabs: unknown) =>
+  tabs === undefined || (Array.isArray(tabs) && tabs.every((tab) => isRecord(tab) && typeof tab.label === "string" && (typeof tab.icon === "string" || tab.icon === null || tab.icon === undefined)));
 
 const validCorners = (c: unknown) => c === undefined || (isRecord(c) && ["tl", "tr", "bl", "br"].every((k) => Number.isFinite(c[k])));
 
@@ -22,6 +23,7 @@ const validItem = (item: unknown) =>
   (typeof item.icon === "string" || item.icon === null) &&
   VARIANTS.some((variant) => variant.key === item.variant) &&
   (item.supporting === undefined || typeof item.supporting === "string") &&
+  (item.selected === undefined || Number.isFinite(item.selected)) &&
   (item.note === undefined || typeof item.note === "string") &&
   validTabs(item.tabs);
 

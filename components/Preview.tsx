@@ -329,6 +329,10 @@ function Screen({
             const act = it.action;
             let shown = flipped.has(it.id) ? flippedLook(it) : it;
             if (it.kind === "slider" && values[it.id] !== undefined) shown = { ...shown, value: values[it.id] };
+            const navKind = it.kind === "bottomNav" || it.kind === "navRail" || it.kind === "tabs";
+            /* bars with the same destinations are one bar to the visitor: the choice follows them across screens */
+            const navKey = navKind ? `nav:${it.kind}:${(it.tabs ?? []).map((t) => t.label).join("|")}` : "";
+            if (navKind && values[navKey] !== undefined && values[navKey] >= 0) shown = { ...shown, selected: values[navKey] };
             const tap =
               act || flips(it)
                 ? () => {
@@ -345,7 +349,17 @@ function Screen({
                 radii={radii}
                 widths={widths}
                 onTap={tap}
-                onSlot={slotActions ? (slot) => slotActions[slot] && onAction(slotActions[slot]) : undefined}
+                onSlot={
+                  slotActions || navKind
+                    ? (slot) => {
+                        /* a tapped destination lights up where it opens nothing; where it opens a
+                           screen, that screen's bar shows its own selected destination */
+                        const a = slotActions?.[slot];
+                        if (navKind && slot.startsWith("tab:")) onValue(navKey, a ? -1 : Number(slot.slice(4)));
+                        if (a) onAction(a);
+                      }
+                    : undefined
+                }
                 onValue={it.kind === "slider" ? (v) => onValue(it.id, v) : undefined}
               />
             );

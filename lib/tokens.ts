@@ -525,7 +525,7 @@ export const KIND_SPEC: Record<Kind, KindSpec> = {
     noun: "ボタン",
     category: "actions",
     paletteIcon: "buttons_alt",
-    w: 0,
+    w: 128,
     h: H,
     radius: R_FULL,
     hasVariant: true,
@@ -533,6 +533,7 @@ export const KIND_SPEC: Record<Kind, KindSpec> = {
     hasSupporting: false,
     hasIcon: true,
     connect: { axis: "x", outer: R_FULL, inner: R_INNER, family: "button" },
+    size: { min: 64, max: PHONE_W, step: 4, icon: "width", presets: [HALF_W, CONTENT_W] },
     defLabel: "ボタン",
     defIcon: "add",
   },
@@ -684,13 +685,15 @@ export const KIND_SPEC: Record<Kind, KindSpec> = {
     category: "containment",
     paletteIcon: "web_asset",
     w: CONTENT_W,
-    h: 188,
+    h: 223,
     radius: 20,
     hasVariant: true,
     hasLabel: true,
     hasSupporting: true,
     hasIcon: true,
     size: { min: 160, max: PHONE_W, step: 4, icon: "width", presets: WIDTH_PRESETS },
+    size2: { min: 96, max: PHONE_H, step: 4, icon: "height", presets: [120, 188, 280] },
+    hasFill: true,
     defLabel: "カードの見出し",
     defIcon: "image",
     defSupporting: "補足テキストがここに入ります。",
@@ -774,14 +777,15 @@ export const KIND_SPEC: Record<Kind, KindSpec> = {
     noun: "スイッチ",
     category: "inputs",
     paletteIcon: "toggle_on",
-    w: 0,
-    h: 32,
+    w: 160,
+    h: 48,
     radius: 16,
     hasVariant: false,
     hasLabel: true,
     hasSupporting: false,
     hasIcon: false,
     hasChecked: true,
+    size: { min: 120, max: PHONE_W, step: 4, icon: "width", presets: WIDTH_PRESETS },
     defLabel: "通知",
     defIcon: null,
   },
@@ -1079,6 +1083,12 @@ export type Item = {
   /** boxes only: each corner on its own, when the pairs above are not enough */
   corners?: Radii;
   tabs?: NavTab[];
+  /** navigation bars, rails and tab rows: index of the selected destination (0 when unset) */
+  selected?: number;
+  /** list items: a switch at the trailing end instead of an icon; `checked` is its state */
+  switch?: boolean;
+  /** cards: no image area at the top; `src` puts a picture in it */
+  noImage?: boolean;
   /** on/off state for switches, checkboxes and chips */
   checked?: boolean;
   /** a switch whose handle stays plain when on, without the check icon */
@@ -1203,6 +1213,9 @@ export const COLOR_TOKENS: { key: ColorToken; label: string }[] = [
 ];
 
 /** readable foreground for a chosen background token */
+/** the background a card draws when no token is set: it follows the variant */
+export const cardFillOf = (it: Item): ColorToken => it.fill ?? (it.variant === "outlined" ? "surface" : it.variant === "elevated" ? "surfaceContainerLow" : "surfaceContainerHighest");
+
 export function onToken(t: ColorToken, p: Palette): string {
   switch (t) {
     case "primary":
@@ -1494,10 +1507,11 @@ export function sizeOf(it: Item, widths: Record<string, number>) {
   const s = KIND_SPEC[it.kind];
   const n = it.size ?? s.defSize ?? s.w;
   switch (it.kind) {
+    case "switch":
     case "button":
+      return { w: it.size ?? widths[it.id] ?? s.w, h: s.h };
     case "extendedFab":
     case "chip":
-    case "switch":
     case "checkbox":
     case "splitButton":
     case "radio":
@@ -1531,7 +1545,7 @@ export function sizeOf(it: Item, widths: Record<string, number>) {
     case "divider":
       return { w: n, h: s.h };
     case "card":
-      return { w: n, h: Math.round(n * 0.5875) };
+      return { w: n, h: it.size2 ?? Math.round(n * 0.5875) };
     case "box":
       return { w: n, h: it.size2 ?? s.h };
     case "navRail":

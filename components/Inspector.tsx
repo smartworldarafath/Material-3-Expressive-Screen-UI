@@ -27,6 +27,7 @@ import {
   contentWidth,
   defaultTabsFor,
   framePresetOf,
+  cardFillOf,
   frameSizeOf,
   halfWidth,
   isPhoneFrame,
@@ -41,6 +42,30 @@ import { ButtonRun, CornerIcon, Field, IconBtn, Section, Segmented, SizePresets,
 import { AiWriteBtn } from "./AiPanel";
 import { popHistory } from "@/lib/ai";
 import { KIND_TEXT, SWIPE_TEXT, TRANSITION_TEXT, t, useLang } from "@/lib/i18n";
+
+/** A text field for a web address: what is typed stays in the box, and only a complete
+ *  http(s) address (or an emptied box) reaches the part. */
+function UrlField({ value, onChange, placeholder, p }: { value: string; onChange: (src: string | undefined) => void; placeholder: string; p: Palette }) {
+  const [text, setText] = useState(value);
+  useEffect(() => setText(value), [value]);
+  return (
+    <div onBlurCapture={() => setText(value)}>
+      <Field
+        value={text}
+        onChange={(v) => {
+          setText(v);
+          const s = v.trim();
+          /* an emptied box removes a URL; a picked file (which shows as an empty box) is left alone */
+          if (!s && value) onChange(undefined);
+          else if (/^https?:\/\/\S+$/.test(s)) onChange(s);
+        }}
+        placeholder={placeholder}
+        p={p}
+        icon="link"
+      />
+    </div>
+  );
+}
 
 export function variantsOf(kind: Kind): { key: Variant; label: string }[] {
   const variants = VARIANTS.map((v) => ({ ...v, label: t(v.key) }));
@@ -677,6 +702,9 @@ export function Inspector({
 
   const setTabLabel = (i: number, label: string) =>
     onChange({ tabs: tabs.map((t, j) => (j === i ? { ...t, label } : t)) });
+  /** bars, rails and tab rows show one destination as selected */
+  const hasSelected = item.kind === "bottomNav" || item.kind === "navRail" || item.kind === "tabs";
+  const selectedTab = Math.min(item.selected ?? 0, Math.max(0, tabs.length - 1));
 
   const hasRadius =
     item.kind === "bottomNav" ||
@@ -792,6 +820,16 @@ export function Inspector({
               const on = slotKey === `tab:${i}` && pickerOpen;
               return (
                 <div key={i} style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                  {hasSelected && (
+                    <IconBtn
+                      icon={selectedTab === i ? "radio_button_checked" : "radio_button_unchecked"}
+                      p={p}
+                      size={40}
+                      on={selectedTab === i}
+                      onClick={() => onChange({ selected: i })}
+                      title={t("selectedTab", lang)}
+                    />
+                  )}
                   {tabIcons && (
                   <button
                     onClick={() => {
@@ -828,8 +866,13 @@ export function Inspector({
         </Section>
       )}
 
-      {item.kind === "image" && !editOn && (
+      {(item.kind === "image" || item.kind === "card") && !editOn && (
         <Section id="image" icon="image" title={t("image", lang)} p={p}>
+          {item.kind === "card" && (
+            <div style={{ marginBottom: 10 }}>
+              <Toggle on={!item.noImage} onChange={(on) => onChange({ noImage: on ? undefined : true })} p={p} icon="image" label={t("imageArea", lang)} grow />
+            </div>
+          )}
           <input
             ref={fileRef}
             type="file"
@@ -870,6 +913,10 @@ export function Inspector({
             {item.src && (
               <IconBtn icon="close" p={p} size={44} onClick={() => onChange({ src: undefined })} title={t("removeImage", lang)} />
             )}
+          </div>
+          {/* a picture on the web by its address; a picked file shows as data and is not editable here */}
+          <div style={{ marginTop: 8 }}>
+            <UrlField key={item.id} value={item.src && /^https?:\/\//.test(item.src) ? item.src : ""} onChange={(src) => onChange({ src })} placeholder={t("imageUrl", lang)} p={p} />
           </div>
         </Section>
       )}
@@ -942,7 +989,14 @@ export function Inspector({
 
       {spec.hasFill && !editOn && (
         <Section id="fill" icon="format_color_fill" title={t("background", lang)} p={p}>
-          <TokenChips value={item.fill ?? "surfaceContainerLow"} onChange={(fill) => onChange({ fill })} p={p} />
+          <TokenChips
+            value={item.kind === "card" ? cardFillOf(item) : (item.fill ?? "surfaceContainerLow")}
+            onChange={(fill) => onChange({ fill })}
+            p={p}
+            none={item.kind === "card"}
+            noneOn={item.kind === "card" && !item.fill}
+            onNone={() => onChange({ fill: undefined })}
+          />
           {item.kind === "listItem" && (
             <>
               <div style={{ fontSize: 12, fontWeight: 600, color: p.onSurfaceVariant, margin: "10px 0 6px" }}>{t("iconBackground", lang)}</div>
@@ -959,9 +1013,16 @@ export function Inspector({
         </Section>
       )}
 
-      {(spec.hasChecked || spec.hasValue || spec.hasWavy || spec.hasContained) && !editOn && (
+      {(spec.hasChecked || spec.hasValue || spec.hasWavy || spec.hasContained || item.kind === "listItem") && !editOn && (
         <Section id="state" icon="tune" title={t("state", lang)} p={p}>
           <div style={{ display: "flex", flexDirection: "column", gap: 14, padding: "2px 0" }}>
+            {item.kind === "listItem" && (
+              /* a switch at the trailing end takes the place of the trailing icon */
+              <Toggle on={!!item.switch} onChange={(on) => onChange({ switch: on || undefined })} p={p} icon="toggle_on" label={t("listSwitch", lang)} grow />
+            )}
+            {item.kind === "listItem" && item.switch && (
+              <Toggle on={!!item.checked} onChange={(checked) => onChange({ checked })} p={p} icon="toggle_on" label={t("on", lang)} grow />
+            )}
             {spec.hasChecked && (
               <Toggle
                 on={!!item.checked}
@@ -1037,15 +1098,38 @@ export function Inspector({
                   unit={item.kind === "text" ? "sp" : ""}
                 />
                 {spec.size.presets && (
-                  <SizePresets
-                    values={[...new Set([...(frameSize.w !== PHONE_W && spec.size.icon === "width" && spec.size.presets.includes(CONTENT_W) ? [CONTENT_W] : []), ...spec.size.presets.map(mapWidthPreset)])].sort((a, b) => a - b)}
-                    value={item.size ?? spec.defSize ?? spec.w}
-                    min={spec.size.min}
-                    max={widthMax(spec.size.max)}
-                    onChange={(size) => onChange({ size })}
-                    p={p}
-                    labelOf={item.kind === "text" ? undefined : (v) => widthPresetLabel(v, frameSize.w)}
-                  />
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                    {(item.kind === "button" || item.kind === "switch") && (
+                      /* these two are as wide as their text unless a width was set; this chip goes back to that */
+                      <button
+                        onClick={() => onChange({ size: undefined })}
+                        aria-pressed={item.size === undefined}
+                        className="m3-press"
+                        style={{
+                          height: 28,
+                          padding: "0 12px",
+                          borderRadius: 14,
+                          border: "none",
+                          background: item.size === undefined ? p.secondaryContainer : p.surfaceContainerHigh,
+                          color: item.size === undefined ? p.onSecondaryContainer : p.onSurfaceVariant,
+                          fontSize: 12,
+                          fontWeight: 600,
+                          cursor: "pointer",
+                        }}
+                      >
+                        {t("autoWidth", lang)}
+                      </button>
+                    )}
+                    <SizePresets
+                      values={[...new Set([...(frameSize.w !== PHONE_W && spec.size.icon === "width" && spec.size.presets.includes(CONTENT_W) ? [CONTENT_W] : []), ...spec.size.presets.map(mapWidthPreset)])].sort((a, b) => a - b)}
+                      value={item.size ?? spec.defSize ?? spec.w}
+                      min={spec.size.min}
+                      max={widthMax(spec.size.max)}
+                      onChange={(size) => onChange({ size })}
+                      p={p}
+                      labelOf={item.kind === "text" ? undefined : (v) => widthPresetLabel(v, frameSize.w)}
+                    />
+                  </div>
                 )}
               </>
             )}
