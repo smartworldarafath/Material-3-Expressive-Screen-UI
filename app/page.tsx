@@ -2474,14 +2474,53 @@ export default function Page() {
     () => (layersFrame ? groups.filter((g) => frameOf.get(g.id) === layersFrame.id) : []),
     [groups, frameOf, layersFrame],
   );
+  /** A drag in the layers panel is one undo step: the snapshot is taken when it starts,
+   *  and the reorders it fires along the way record nothing more. */
+  const layerDragRef = useRef(false);
+  const onLayerDragging = (dragging: boolean) => {
+    if (dragging && !layerDragRef.current) snapshot();
+    layerDragRef.current = dragging;
+  };
+  const layerSnapshot = (key: string) => {
+    if (!layerDragRef.current) snapshotFor(key);
+  };
+
   const reorderLayers = (topFirst: string[]) => {
     const inFrame = new Set(topFirst);
     const byId = new Map(groupsRef.current.map((g) => [g.id, g]));
     const ordered = [...topFirst].reverse().map((id) => byId.get(id)).filter((g): g is Group => !!g);
     if (ordered.length !== inFrame.size) return;
-    snapshotFor("layers:" + (layersFrame?.id ?? ""));
+    layerSnapshot("layers:" + (layersFrame?.id ?? ""));
     for (const id of inFrame) instantRef.current.add(id);
     setGroups((gs) => [...gs.filter((g) => !inFrame.has(g.id)), ...ordered]);
+  };
+
+  /** The parts of one group in a new order: reading order for a connected run, back to
+   *  front for a free group. Inside a free group a hidden run keeps its slots, handed out
+   *  again in the new order, so reordering a list really moves its rows. */
+  const reorderGroupItems = (groupId: string, order: string[]) => {
+    const g = groupsRef.current.find((x) => x.id === groupId);
+    if (!g) return;
+    const byId = new Map(g.items.map((it) => [it.id, it]));
+    const items = order.map((id) => byId.get(id)).filter((it): it is Item => !!it);
+    if (items.length !== g.items.length || new Set(order).size !== order.length) return;
+    layerSnapshot("layers:items:" + groupId);
+    instantRef.current.add(groupId);
+    if (!g.free) {
+      setGroups((gs) => gs.map((x) => (x.id === groupId ? { ...x, items } : x)));
+      return;
+    }
+    const rank = new Map(items.map((it, i) => [it.id, i]));
+    const pos = { ...(g.pos ?? {}) };
+    for (const run of explodeGroup(g, widthsRef.current)) {
+      if (run.items.length < 2) continue;
+      const slots = run.items.map((it) => pos[it.id] ?? { x: 0, y: 0 });
+      const members = [...run.items].sort((a, b) => rank.get(a.id)! - rank.get(b.id)!);
+      members.forEach((it, i) => {
+        pos[it.id] = slots[i];
+      });
+    }
+    setGroups((gs) => gs.map((x) => (x.id === groupId ? { ...x, items, pos } : x)));
   };
 
   const renderGroup = (g: Group, ox: number, oy: number) => {
@@ -2821,6 +2860,7 @@ export default function Page() {
                       setSelectedFrameId(id);
                     }}
                     groups={layerGroups}
+                    widths={widths}
                     selectedIds={selectedIds}
                     onSelect={(ids, add) => {
                       setSelectedIds((cur) => (add ? [...cur.filter((x) => !ids.includes(x)), ...ids] : ids));
@@ -2829,6 +2869,8 @@ export default function Page() {
                       setRightTab("edit");
                     }}
                     onReorder={reorderLayers}
+                    onReorderItems={reorderGroupItems}
+                    onDragging={onLayerDragging}
                   />
                 )}
               </div>

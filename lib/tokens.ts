@@ -1326,10 +1326,12 @@ export function groupBounds(g: Group, widths: Record<string, number>) {
 
 /** A free group written as the runs it holds: parts of one family that still sit
  *  one GAP apart along their axis stay a connected run, everything else is a run
- *  of one. Layout logic, the prompt and ungrouping all see the same runs. */
+ *  of one. Layout logic, the prompt and ungrouping all see the same runs, in the
+ *  group's own order (later = drawn on top), which is what the layers panel edits. */
 export function explodeGroup(g: Group, widths: Record<string, number>): Group[] {
   if (!g.free) return [g];
   const placed = [...layoutOf(g, widths)].sort((a, b) => a.y - b.y || a.x - b.x);
+  const rank = new Map(g.items.map((it, i) => [it.id, i]));
   const used = new Set<string>();
   const out: Group[] = [];
   const near = (a: number, b: number) => Math.abs(a - b) <= 3;
@@ -1351,9 +1353,12 @@ export function explodeGroup(g: Group, widths: Record<string, number>): Group[] 
       run.push(next);
       last = next;
     }
-    out.push({ id: `${g.id}:${start.item.id}`, x: start.x, y: start.y, axis, items: run.map((r) => r.item) });
+    /* named after the member the group lists first, so the name survives a reorder */
+    const anchor = run.reduce((a, b) => ((rank.get(a.item.id) ?? 0) <= (rank.get(b.item.id) ?? 0) ? a : b));
+    out.push({ id: `${g.id}:${anchor.item.id}`, x: start.x, y: start.y, axis, items: run.map((r) => r.item) });
   }
-  return out;
+  const first = (r: Group) => Math.min(...r.items.map((it) => rank.get(it.id) ?? 0));
+  return out.sort((a, b) => first(a) - first(b));
 }
 
 /** corners of one part of a run: round outside, small where it meets a neighbour */
