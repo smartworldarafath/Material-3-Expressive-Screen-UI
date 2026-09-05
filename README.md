@@ -11,7 +11,8 @@
 <p align="center">
   <a href="https://smartworldarafath.github.io/Material-3-Expressive-Screen-UI/"><img alt="Live Demo" src="https://img.shields.io/badge/demo-Live%20Preview-6750A4?logo=googlechrome&logoColor=white" /></a>
   <a href="https://github.com/smartworldarafath/Material-3-Expressive-Screen-UI/actions/workflows/deploy.yml"><img alt="Deploy Status" src="https://img.shields.io/badge/Deploy%20Status-deploy-6750A4?logo=github" /></a>
-  <a href="https://github.com/smartworldarafath/Material-3-Expressive-Screen-UI/stargazers"><img alt="GitHub Stars" src="https://img.shields.io/github/stars/smartworldarafath/Material-3-Expressive-Screen-UI?style=flat&logo=github&color=6750A4" /></a>
+  <a href="https://github.com/smartworldarafath/Material-3-Expressive-Screen-UI/stargazers"><img alt="GitHub Stars" src="https://img.shields.io/badge/stars-98-6750A4?style=flat&logo=github" /></a>
+  <a href="https://github.com/smartworldarafath/Material-3-Expressive-Screen-UI/network/members"><img alt="GitHub Forks" src="https://img.shields.io/badge/forks-12-6750A4?style=flat&logo=github" /></a>
   <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/license-MIT-blue.svg" /></a>
   <a href="https://github.com/sponsors/smartworldarafath"><img alt="Become a Sponsor" src="https://img.shields.io/badge/sponsor-%E2%9D%A4-EA4AAA?logo=githubsponsors&logoColor=white" /></a>
   <img alt="Next.js" src="https://img.shields.io/badge/Next.js-16-black?logo=nextdotjs" />
