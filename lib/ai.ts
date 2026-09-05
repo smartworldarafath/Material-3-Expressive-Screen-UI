@@ -1,5 +1,6 @@
 import { Doc, Frame, Group, Item, frameOfGroup } from "./tokens";
 import { buildPrompt } from "./prompt";
+import { isProject } from "./project";
 import { Lang } from "./i18n";
 
 /* Optional AI helpers. The browser talks to the model provider directly with the
@@ -75,7 +76,7 @@ async function readError(res: Response): Promise<string> {
 }
 
 /** one round trip: a system prompt and a user message in, the model's text out */
-export async function complete(s: AiSettings, system: string, user: string, signal?: AbortSignal): Promise<string> {
+export async function complete(s: AiSettings, system: string, user: string, signal?: AbortSignal, maxTokens = 4096): Promise<string> {
   const base = trimSlash(s.baseUrl);
   const model = s.model.trim();
   if (!model) throw new Error("model");
@@ -90,11 +91,12 @@ export async function complete(s: AiSettings, system: string, user: string, sign
         "anthropic-version": "2023-06-01",
         "anthropic-dangerous-direct-browser-access": "true",
       },
-      body: JSON.stringify({ model, max_tokens: 4096, system, messages: [{ role: "user", content: user }] }),
+      body: JSON.stringify({ model, max_tokens: Math.min(maxTokens, 8192), system, messages: [{ role: "user", content: user }] }),
     });
     if (!res.ok) throw new Error(await readError(res));
     const j = await res.json();
     if (j.stop_reason === "refusal") throw new Error("refusal");
+    if (j.stop_reason === "max_tokens") throw new Error("long");
     return (j.content ?? [])
       .filter((b: { type: string }) => b.type === "text")
       .map((b: { text: string }) => b.text)
@@ -108,6 +110,9 @@ export async function complete(s: AiSettings, system: string, user: string, sign
     headers,
     body: JSON.stringify({
       model,
+      /* OpenAI's newer models refuse `max_tokens` and default generously, so they get no budget;
+         the other compatible endpoints cap around 8k */
+      ...(s.provider === "openai" ? {} : { max_tokens: Math.min(maxTokens, 8192) }),
       messages: [
         { role: "system", content: system },
         { role: "user", content: user },
@@ -116,6 +121,7 @@ export async function complete(s: AiSettings, system: string, user: string, sign
   });
   if (!res.ok) throw new Error(await readError(res));
   const j = await res.json();
+  if (j.choices?.[0]?.finish_reason === "length") throw new Error("long");
   const c = j.choices?.[0]?.message?.content;
   if (typeof c === "string") return c;
   if (Array.isArray(c)) return c.map((x: { text?: string }) => x.text ?? "").join("");
@@ -229,3 +235,20 @@ export function popHistory<V extends string, H extends string>(current: string |
   const cur = (current ?? "").trim();
   return { [valueKey]: prev ?? "", [historyKey]: cur ? [cur] : undefined } as Record<V, string> & Record<H, string[] | undefined>;
 }
+
+/** A whole design from an idea, drafted by the author's own model. `guide` is the same
+ *  agent guide a coding agent reads (public/agent.md), so both paths follow one spec.
+ *  The answer is the document itself; a link would be pointless here. */
+export async function draftDesign(s: AiSettings, guide: string, idea: string, lang: Lang, signal?: AbortSignal): Promise<Doc> {
+  const system = [
+    "You draft M3E Canvas designs. Follow the guide below exactly.",
+    "Reply with the JSON document only: no share link, no prose, no markdown fence, no explanation.",
+    "",
+    guide,
+  ].join("\n");
+  const user = [`Sketch this app: ${idea.trim()}`, `Write every label, title and note in ${LANG_NAME[lang]}.`, "Three to five screens. Keep it simple."].join("\n");
+  const j = parseJsonObject(await complete(s, system, user, signal, 12000));
+  if (!isProject(j)) throw new Error("json");
+  return j;
+}
+

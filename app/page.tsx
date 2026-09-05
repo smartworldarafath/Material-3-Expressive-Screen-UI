@@ -88,13 +88,21 @@ import { AiActionKey, AiPanel, aiErrorText } from "@/components/AiPanel";
 import { TidyState } from "@/components/ui";
 import { AiSettings, DEFAULT_AI, hasKey, isSecureUrl, loadAiSettings, proposeBehavior, proposeDescription, pushHistory, saveAiSettings } from "@/lib/ai";
 import { barSlotOf, carryFrame, pullInto, tidyFrame } from "@/lib/tidy";
-import { readProject, saveProject } from "@/lib/project";
+import { isProject, readProject, saveProject } from "@/lib/project";
+import { hasShareHash, readShareHash } from "@/lib/share";
+import { LoadingIndicator } from "@/components/Loading";
+import { draftDesign } from "@/lib/ai";
+import { ShareDialog } from "@/components/ShareMenu";
 import { ColorPanel } from "@/components/ColorPanel";
 import { MotionPanel, ShapePanel, TypePanel } from "@/components/ThemePanel";
 import { ThemeContext, ensureFontLoaded, ensureLangFontLoaded } from "@/lib/theme";
 import { BottomSheet, MobileActionBar, MobileInspector, MobileLang, MobileSettings } from "@/components/Mobile";
 import { ConfirmDialog, IconBtn, Segmented } from "@/components/ui";
 import { Lang, LangContext, SEED_TEXT, getLang, isLang, setGlobalLang, t, translateDefaultFrameName, translateDefaultText } from "@/lib/i18n";
+
+/** the screens while a model drafts: primary, tertiary and primary container, drifting */
+const DRAFT_GRADIENT = (p: Palette) => `linear-gradient(120deg, ${p.primaryContainer}, ${p.tertiaryContainer}, ${p.primary}, ${p.secondaryContainer}, ${p.primaryContainer})`;
+const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
 
 /** the dragged part's own travel: a little lag reads as weight */
 const CARRY = {
@@ -118,6 +126,8 @@ const MIN_Z = 0.25;
 const MAX_Z = 3;
 const HISTORY_MAX = 100;
 const DOC_KEY = "m3e:doc";
+/** the design a draft or a link replaced, until the author keeps or undoes it */
+const BEFORE_KEY = "m3e:doc:before";
 const DOC_LOCK = "m3e:doc:editor";
 const UI_KEY = "m3e:ui";
 
@@ -167,7 +177,10 @@ type Gesture =
     }
   | { kind: "group"; id: string; sx: number; sy: number; gx: number; gy: number; moved: boolean; overBin: boolean };
 
-type Snapshot = { groups: Group[]; frames: Frame[] };
+/** everything in a document apart from its screens and parts */
+type DocMeta = Omit<Doc, "groups" | "frames">;
+/** an undo step: the screens and parts, plus the rest of the document for steps that replaced it all */
+type Snapshot = { groups: Group[]; frames: Frame[]; meta?: DocMeta };
 
 /** a screen changing size eases the way a settling part does */
 const SIZE_TRANSITION = `width ${SETTLE_MS}ms cubic-bezier(0.2, 0, 0, 1), height ${SETTLE_MS}ms cubic-bezier(0.2, 0, 0, 1), border-radius ${SETTLE_MS}ms cubic-bezier(0.2, 0, 0, 1)`;
@@ -352,6 +365,22 @@ export default function Page() {
   const [platform, setPlatform] = useState<Platform | null>(null);
   /** a project file waiting for the author to confirm replacing the canvas */
   const [pendingImport, setPendingImport] = useState<Doc | null>(null);
+  const [shareOpen, setShareOpen] = useState(false);
+  /** the idea typed into the "ask an AI" dialog; kept here so a failed draft does not lose it */
+  const [ideaText, setIdeaText] = useState("");
+  /** a model is drafting a design right now */
+  const [draftBusy, setDraftBusy] = useState(false);
+  /** the design a draft replaced, kept until the author keeps or undoes the draft */
+  const [draftBefore, setDraftBefore] = useState<Doc | null>(null);
+  const draftBeforeRef = useRef<Doc | null>(null);
+  draftBeforeRef.current = draftBefore;
+  /** true for the moment after a design arrives, so its colours ease over */
+  const [revealing, setRevealing] = useState(false);
+  const revealTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => {
+    if (revealTimer.current) clearTimeout(revealTimer.current);
+  }, []);
+  const guideRef = useRef<string | null>(null);
 
   /* ---------- editor ui ---------- */
   const [view, setView] = useState<View>({ x: 0, y: 0, z: 1 });
@@ -448,11 +477,9 @@ export default function Page() {
   const futureRef = useRef<Snapshot[]>([]);
   const lastPatchRef = useRef<{ key: string; at: number }>({ key: "", at: 0 });
 
-  const snapshot = useCallback(() => {
-    pastRef.current.push({
-      groups: groupsRef.current,
-      frames: framesRef.current,
-    });
+  const snapshot = useCallback((withMeta = false) => {
+    setQuickUndo(false);
+    pastRef.current.push(current(withMeta));
     if (pastRef.current.length > HISTORY_MAX) pastRef.current.shift();
     futureRef.current = [];
     bumpHistory((v) => v + 1);
@@ -471,29 +498,41 @@ export default function Page() {
 
   const restore = (snap: Snapshot) => {
     for (const g of snap.groups) instantRef.current.add(g.id);
-    setGroups(snap.groups);
-    setFrames(snap.frames);
+    if (snap.meta) {
+      applyDoc({ ...snap.meta, groups: snap.groups, frames: snap.frames }, true);
+      if (!mobileRef.current) {
+        const mode = snap.meta.frame === "blank" ? "blank" : "phone";
+        setFrame(mode);
+        frameRef.current = mode;
+      }
+    } else {
+      setGroups(snap.groups);
+      setFrames(snap.frames);
+    }
     bumpHistory((v) => v + 1);
   };
 
+  /** the current step as a snapshot; `withMeta` when the step being crossed replaced the whole document */
+  const current = (withMeta: boolean): Snapshot => {
+    const { groups: _g, frames: _f, ...meta } = docRef.current;
+    return { groups: groupsRef.current, frames: framesRef.current, meta: withMeta ? meta : undefined };
+  };
+
   const undo = useCallback(() => {
+    setQuickUndo(false);
     const prev = pastRef.current.pop();
     if (!prev) return;
-    futureRef.current.push({
-      groups: groupsRef.current,
-      frames: framesRef.current,
-    });
+    futureRef.current.push(current(!!prev.meta));
     restore(prev);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const redo = useCallback(() => {
     const next = futureRef.current.pop();
     if (!next) return;
-    pastRef.current.push({
-      groups: groupsRef.current,
-      frames: framesRef.current,
-    });
+    pastRef.current.push(current(!!next.meta));
     restore(next);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -571,6 +610,13 @@ export default function Page() {
         hadDocRef.current = true;
         applyDoc(JSON.parse(d) as Partial<Doc>, false);
         // frame mode is decided by the device (media-query effect), not restored
+      }
+      const before = d ? localStorage.getItem(BEFORE_KEY) : null;
+      if (!d) localStorage.removeItem(BEFORE_KEY);
+      if (before) {
+        const value: unknown = JSON.parse(before);
+        if (isProject(value)) setDraftBefore(value);
+        else localStorage.removeItem(BEFORE_KEY);
       }
       let initialLang: Lang = "ja";
       const u = localStorage.getItem(UI_KEY);
@@ -1789,6 +1835,11 @@ export default function Page() {
     setConfirmClear(false);
     if (groupsRef.current.length === 0 && framesRef.current.length === 0)
       return;
+    setDraftBefore(null);
+    setQuickUndo(false);
+    try {
+      localStorage.removeItem(BEFORE_KEY);
+    } catch {}
     snapshot();
     setGroups([]);
     setFrames([]);
@@ -1800,6 +1851,14 @@ export default function Page() {
    *  document goes through, then starts the editor fresh on it. */
   const importDoc = (next: Doc) => {
     hadDocRef.current = true;
+    /* the whole document being replaced stays one undo away */
+    snapshot(true);
+    /* whatever was under review is over: a file, a clear or a new arrival replaces it */
+    setDraftBefore(null);
+    setQuickUndo(false);
+    try {
+      localStorage.removeItem(BEFORE_KEY);
+    } catch {}
     applyDoc(next, true);
     if (!mobileRef.current) {
       const nextFrame = next.frame === "blank" ? "blank" : "phone";
@@ -1810,11 +1869,100 @@ export default function Page() {
     setSelectedFrameId(null);
     setSelectedLinkId(null);
     setWidths({});
-    pastRef.current = [];
-    futureRef.current = [];
     lastPatchRef.current = { key: "", at: 0 };
-    bumpHistory((v) => v + 1);
     queueMicrotask(() => fitRef.current());
+  };
+
+  /* A link with a design in its hash offers it once the editor is ready to take it,
+     whether the page opened on that link or the link was pasted into this tab. */
+  useEffect(() => {
+    if (editAccess !== "editable" || typeof window === "undefined") return;
+    let active = true;
+    const offer = () => {
+      if (!hasShareHash(window.location.hash)) return;
+      void readShareHash(window.location.hash).then((next) => {
+        if (!active) return;
+        if (next) {
+          setShareOpen(false);
+          arrive(next);
+          clearShareHash();
+        } else {
+          clearShareHash();
+          showToast(t("invalidProject", getLang()), 3000, "error");
+        }
+      });
+    };
+    offer();
+    window.addEventListener("hashchange", offer);
+    return () => {
+      active = false;
+      window.removeEventListener("hashchange", offer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editAccess]);
+
+  /** Asks the author's own model for a design and puts it on the canvas. The guide it reads
+   *  is the one a coding agent reads (public/agent.md). The replaced design waits in
+   *  `draftBefore` until the author keeps or undoes the draft. */
+  /** A design that arrived from a model or a link takes the canvas with its colours easing
+   *  over; the design it replaced waits in `draftBefore` until the author keeps or undoes it. */
+  const arrive = (next: Doc) => {
+    /* the phone editor has no keep / undo buttons: a link simply opens there, undoable as usual */
+    if (mobileRef.current) {
+      importDoc(next);
+      return;
+    }
+    const before = draftBeforeRef.current ?? docRef.current;
+    setRevealing(true);
+    if (revealTimer.current) clearTimeout(revealTimer.current);
+    revealTimer.current = setTimeout(() => setRevealing(false), 900);
+    importDoc(next);
+    setDraftBefore(before);
+    try {
+      localStorage.setItem(BEFORE_KEY, JSON.stringify(before));
+    } catch {}
+  };
+
+  const startDraft = async (idea: string) => {
+    setShareOpen(false);
+    setDraftBusy(true);
+    try {
+      if (guideRef.current === null) {
+        const res = await fetch(`${BASE_PATH}/agent.md`);
+        if (!res.ok) throw new Error("guide");
+        guideRef.current = await res.text();
+      }
+      const next = await draftDesign(aiSettings, guideRef.current, idea, lang);
+      arrive(next);
+    } catch (e) {
+      const m = e instanceof Error ? e.message : "";
+      showToast(m === "json" ? t("aiErrorJson", lang) : m === "refusal" ? t("aiErrorRefusal", lang) : m === "long" ? t("aiErrorLong", lang) : t("aiError", lang), 3200, "error");
+    } finally {
+      setDraftBusy(false);
+    }
+  };
+  /** true after a kept draft until the author undoes something, so the header's undo also sits by the opener */
+  const [quickUndo, setQuickUndo] = useState(false);
+  const keepDraft = () => {
+    setDraftBefore(null);
+    setQuickUndo(true);
+    try {
+      localStorage.removeItem(BEFORE_KEY);
+    } catch {}
+  };
+  const undoDraft = () => {
+    if (draftBefore) {
+      setRevealing(true);
+      if (revealTimer.current) clearTimeout(revealTimer.current);
+      revealTimer.current = setTimeout(() => setRevealing(false), 900);
+      importDoc(draftBefore);
+    }
+    setDraftBefore(null);
+  };
+
+  /** drops the design from the URL once it has been taken or declined */
+  const clearShareHash = () => {
+    if (typeof window !== "undefined" && window.location.hash) window.history.replaceState(null, "", window.location.pathname + window.location.search);
   };
 
   const selectedFrame = useMemo(
@@ -2389,6 +2537,9 @@ export default function Page() {
     () => ({ groups, frames, paletteKey, frame, title, brief, promptEdit, platform: platform ?? undefined, customPalette: customPalette ?? undefined, dynamicColor, theme }),
     [groups, frames, paletteKey, frame, title, brief, promptEdit, platform, customPalette, dynamicColor, theme],
   );
+  /** the same document, for callbacks that were created on an earlier render */
+  const docRef = useRef(doc);
+  docRef.current = doc;
 
   /** arrows from tappable parts to the frames they open */
   const links = useMemo(() => {
@@ -2724,7 +2875,7 @@ export default function Page() {
     <LangContext.Provider value={lang}>
     <ThemeContext.Provider value={theme}>
       <div
-        className="app-root"
+        className={revealing ? "app-root m3e-reveal" : "app-root"}
         inert={editAccess !== "editable"}
         aria-hidden={editAccess !== "editable"}
         style={{
@@ -3025,7 +3176,9 @@ export default function Page() {
                           width: w + BEZEL * 2,
                           height: h + BEZEL * 2,
                           borderRadius: radius + BEZEL,
-                          background: p.inverseSurface,
+                          background: draftBusy ? DRAFT_GRADIENT(p) : p.inverseSurface,
+                          backgroundSize: draftBusy ? "300% 300%" : undefined,
+                          animation: draftBusy ? "m3e-drift 3s ease-in-out infinite" : undefined,
                           boxShadow: on
                             ? `0 0 0 3px ${p.primary}, 0 18px 50px rgba(0,0,0,0.16)`
                             : "0 18px 50px rgba(0,0,0,0.14)",
@@ -3051,6 +3204,11 @@ export default function Page() {
                           {groups
                             .filter((g) => frameOf.get(g.id) === f.id)
                             .map((g) => renderGroup(g, f.x, f.y))}
+                          {draftBusy && (
+                            <div style={{ position: "absolute", inset: 0, zIndex: 90, background: canvasBg, display: "grid", placeItems: "center" }}>
+                              <LoadingIndicator size={96} color="url(#m3e-drafting)" />
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -3137,7 +3295,7 @@ export default function Page() {
                       <path d="M0 0 L10 5 L0 10 z" fill={p.primary} />
                     </marker>
                   </defs>
-                  {links.map((l) => {
+                  {!draftBusy && links.map((l) => {
                     const on = l.id === selectedLinkId;
                     return (
                       <g key={l.id}>
@@ -3260,6 +3418,20 @@ export default function Page() {
             </div>
           </div>
 
+          {draftBusy && (
+            <div style={{ position: "absolute", width: 0, height: 0, overflow: "hidden" }} aria-hidden>
+              <svg width={0} height={0} style={{ position: "absolute" }} aria-hidden>
+                <defs>
+                  <linearGradient id="m3e-drafting" x1="0" y1="0" x2="1" y2="1">
+                    <stop offset="0%" stopColor={p.primary} />
+                    <stop offset="50%" stopColor={p.tertiaryContainer} />
+                    <stop offset="100%" stopColor={p.primaryContainer} />
+                    <animateTransform attributeName="gradientTransform" type="rotate" from="0 0.5 0.5" to="360 0.5 0.5" dur="3s" repeatCount="indefinite" />
+                  </linearGradient>
+                </defs>
+              </svg>
+            </div>
+          )}
           <Toolbar
             p={p}
             mode={mode}
@@ -3283,6 +3455,12 @@ export default function Page() {
             note={aiNote}
             onSaveProject={() => saveProject(doc)}
             onOpenProject={() => projectFileRef.current?.click()}
+            onShare={!isMobile ? () => setShareOpen(true) : undefined}
+            shareState={draftBusy ? "busy" : draftBefore ? "review" : "idle"}
+            onDraftKeep={keepDraft}
+            onDraftUndo={undoDraft}
+            onDraftSave={() => saveProject(doc)}
+            quickUndo={quickUndo}
             rightInset={showRight ? rightW : 0}
             mobile={isMobile}
             onSettings={() => setSheet(sheet === "settings" ? null : "settings")}
@@ -3548,6 +3726,23 @@ export default function Page() {
             setPendingImport(null);
           }}
         />
+
+        <ShareDialog
+          p={p}
+          doc={doc}
+          aiReady={aiReady}
+          idea={ideaText}
+          onIdea={setIdeaText}
+          open={shareOpen}
+          onClose={() => setShareOpen(false)}
+          onDraft={(idea) => void startDraft(idea)}
+          onSetupAi={() => {
+            setShareOpen(false);
+            setLeftOpen(true);
+            setLeftTab("ai");
+          }}
+        />
+
 
         <ConfirmDialog
           open={confirmClear}

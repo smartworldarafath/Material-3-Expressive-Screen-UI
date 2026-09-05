@@ -133,9 +133,44 @@ input.m3-number {
   .m3-tile {
     transition: none;
   }
-  .m3-spin {
+  .m3-spin,
+  .m3e-reveal [data-screen] > * {
     animation: none;
   }
+  .m3e-reveal,
+  .m3e-reveal * {
+    transition: none !important;
+  }
+  [style*="m3e-drift"] {
+    animation: none;
+  }
+}
+
+/* a design arriving from a model or a link: colours ease over instead of snapping,
+   and the screens fade in. The class stays on the root only for the moment it takes. */
+.m3e-reveal,
+.m3e-reveal * {
+  transition:
+    background-color 700ms ease,
+    background 700ms ease,
+    color 700ms ease,
+    border-color 700ms ease,
+    box-shadow 700ms ease,
+    fill 700ms ease !important;
+}
+@keyframes m3e-fadein {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.m3e-reveal [data-screen] > * {
+  animation: m3e-fadein 600ms cubic-bezier(0.2, 0, 0, 1) both;
+}
+
+/* the screens while a model drafts: a gradient that drifts across them */
+@keyframes m3e-drift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
 }
 
 /* the AI button while a request is in flight */
