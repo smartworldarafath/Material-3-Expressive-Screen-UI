@@ -1,7 +1,7 @@
 # Contributing to M3E Canvas
 
 Thanks for your interest. This page explains how to report problems, propose
-changes and send code. Japanese and Chinese summaries are at the end.
+changes and send code. Japanese, Chinese and Korean summaries are at the end.
 
 ## Before you start
 
@@ -85,3 +85,12 @@ A new kind touches all of these; the existing kinds are the reference:
 - 代码注释用英文。UI 文字和提示词需同时提供日文、英文、中文、韩文四种语言。
 - 提交 PR 前请运行 `npm run typecheck`、`npm test` 和 `npm run build`，CI 会执行同样的检查。
 - 贡献的代码以 MIT 许可证发布。
+
+## 한국어
+
+- 버그 보고나 작은 수정은 Issue 또는 PR로 바로 보내 주세요.
+- 새 부품, 새 패널, 프롬프트 문구 등 비교적 큰 변경은 먼저 Issue에서 상의해 주세요.
+- 질문과 아이디어는 Discussions로.
+- 코드 주석은 영어로 씁니다. UI 문구와 프롬프트 문장은 일본어·영어·중국어·한국어 네 언어 모두에 추가해 주세요.
+- PR 전에 `npm run typecheck`, `npm test`, `npm run build`를 통과시켜 주세요. CI에서도 같은 검사가 실행됩니다.
+- 기여한 코드는 MIT 라이선스로 공개됩니다.
