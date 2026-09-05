@@ -96,6 +96,16 @@ describe("isProject", () => {
     expect(isProject({ ...value, frames: [{ ...value.frames[0], ...patch }] })).toBe(false);
   });
 
+  it.each(["top", "center", "bottom", "spread"])("accepts the body placement %s", (place) => {
+    const value = doc();
+    expect(isProject({ ...value, frames: [{ ...value.frames[0], place }] })).toBe(true);
+  });
+
+  it.each(["middle", "", 0, null])("rejects an unknown body placement %j", (place) => {
+    const value = doc();
+    expect(isProject({ ...value, frames: [{ ...value.frames[0], place }] })).toBe(false);
+  });
+
   it("accepts positive fractional frame dimensions and an empty note", () => {
     const value = doc();
     expect(isProject({ ...value, frames: [{ ...value.frames[0], w: 0.5, h: 800, note: "" }] })).toBe(true);

@@ -50,3 +50,73 @@ describe("tidyFrame", () => {
     expect(tidyFrame(once!, frame, frames, {})).toBeNull();
   });
 });
+
+describe("tidyFrame placement", () => {
+  /* two rows of buttons under a top app bar, above a navigation bar */
+  const stage = () => [
+    grp("g-bar", 40, 300, [part("topAppBar", "bar")]),
+    grp("g-nav", 40, 100, [part("bottomNav", "nav")]),
+    grp("g-a", 60, 500, [part("button", "a")]),
+    grp("g-b", 60, 620, [part("button", "b")]),
+  ];
+  const rowsOf = (out: Group[]) => out.filter((g) => g.id === "g-a" || g.id === "g-b").map((g) => g.y).sort((a, b) => a - b);
+  const bodyTop = 64 + 24 + PHONE_MARGIN; // app bar with its status inset, then the margin
+  const bodyBottom = PHONE_H - (80 + NAV_BAR_H) - PHONE_MARGIN;
+
+  it("stacks the body from the top by default", () => {
+    const out = tidyFrame(stage(), frame, frames, {})!;
+    expect(rowsOf(out)[0]).toBe(bodyTop);
+  });
+
+  it("pushes the body against the bottom bar when the screen asks for it", () => {
+    const f: Frame = { ...frame, place: "bottom" };
+    const out = tidyFrame(stage(), f, [f], {})!;
+    const ys = rowsOf(out);
+    expect(ys[1] + 56).toBe(bodyBottom);
+    expect(ys[1] - ys[0]).toBe(56 + 16); // rows keep their gap
+  });
+
+  it("centers the body between the bars", () => {
+    const f: Frame = { ...frame, place: "center" };
+    const out = tidyFrame(stage(), f, [f], {})!;
+    const ys = rowsOf(out);
+    const above = ys[0] - bodyTop;
+    const below = bodyBottom - (ys[1] + 56);
+    expect(Math.abs(above - below)).toBeLessThanOrEqual(1);
+  });
+
+  it("centers a single row when asked to spread", () => {
+    const f: Frame = { ...frame, place: "spread" };
+    const one = stage().filter((g) => g.id !== "g-b");
+    const out = tidyFrame(one, f, [f], {})!;
+    const y = out.find((g) => g.id === "g-a")!.y;
+    expect(Math.abs(y - bodyTop - (bodyBottom - (y + 56)))).toBeLessThanOrEqual(1);
+  });
+
+  it("keeps the block at the top when some rows do not fit", () => {
+    const f: Frame = { ...frame, place: "bottom" };
+    /* two buttons, then a 600dp box that no longer fits under them: the buttons stack from
+     * the top as before and the box stays where it was */
+    const tall = [
+      grp("g-bar", 40, 300, [part("topAppBar", "bar")]),
+      grp("g-nav", 40, 100, [part("bottomNav", "nav")]),
+      grp("g-a", 60, 400, [part("button", "a")]),
+      grp("g-b", 60, 470, [part("button", "b")]),
+      grp("g-box", 0, 560, [{ ...part("box", "box"), size2: 600 }]),
+    ];
+    const out = tidyFrame(tall, f, [f], {})!;
+    expect(rowsOf(out)).toEqual([bodyTop, bodyTop + 56 + 16]);
+    expect(out.find((g) => g.id === "g-box")!.y).toBe(560);
+  });
+
+  it("spreads the rows with equal gaps above, between and below", () => {
+    const f: Frame = { ...frame, place: "spread" };
+    const out = tidyFrame(stage(), f, [f], {})!;
+    const ys = rowsOf(out);
+    const above = ys[0] - bodyTop;
+    const between = ys[1] - (ys[0] + 56);
+    const below = bodyBottom - (ys[1] + 56);
+    expect(Math.abs(above - between)).toBeLessThanOrEqual(1);
+    expect(Math.abs(between - below)).toBeLessThanOrEqual(1);
+  });
+});

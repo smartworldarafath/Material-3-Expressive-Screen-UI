@@ -27,6 +27,8 @@ import {
   isPlatform,
   Platform,
   Frame,
+  Place,
+  AlignKind,
   FramePreset,
   FRAME_GAP,
   FRAME_LABEL_H,
@@ -87,7 +89,7 @@ import { LangMenu } from "@/components/Menus";
 import { AiActionKey, AiPanel, aiErrorText } from "@/components/AiPanel";
 import { TidyState } from "@/components/ui";
 import { AiSettings, DEFAULT_AI, hasKey, isSecureUrl, loadAiSettings, proposeBehavior, proposeDescription, pushHistory, saveAiSettings } from "@/lib/ai";
-import { barSlotOf, carryFrame, pullInto, tidyFrame } from "@/lib/tidy";
+import { barSlotOf, bodyRect, carryFrame, pullInto, tidyFrame } from "@/lib/tidy";
 import { isProject, readProject, saveProject } from "@/lib/project";
 import { hasShareHash, readShareHash } from "@/lib/share";
 import { LoadingIndicator } from "@/components/Loading";
@@ -137,6 +139,10 @@ type Snap = { groupId: string; index: number; pull: number };
 /** alignment guide: the snapped position plus the line to draw */
 type Guide = { x?: number; y?: number; gx?: number; gy?: number };
 const GUIDE_PX = 7;
+
+/** Material's 4dp grid: a coordinate rounded to it, measured from the screen's corner */
+const GRID = 4;
+const onGrid = (v: number, origin: number) => origin + Math.round((v - origin) / GRID) * GRID;
 const FRAME_MARGIN = PHONE_MARGIN;
 
 type DragState = {
@@ -1338,15 +1344,21 @@ export default function Page() {
       const slot = targetFrame ? barSlotOf(groupsRef.current, targetFrame, framesRef.current, widthsRef.current) : null;
       const isBar = FULL_WIDTH.includes(item.kind);
       const placedItem = targetFrame && slot ? (isBar ? carryItemSize(item, { w: PHONE_W, h: PHONE_H }, { w: slot.w, h: frameSizeOf(targetFrame).h }) : fitHeight(item, frameSizeOf(targetFrame).h)) : item;
+      /* off any guide, the part settles on the 4dp grid of the screen it lands on */
+      const origin = targetFrame ?? { x: 0, y: 0 };
       const dropped: Group = {
         id: uid(),
-        x: Math.round(isBar && slot ? slot.x : rawX),
-        y: Math.round(rawY),
+        x: isBar && slot ? Math.round(slot.x) : d.guide?.gx !== undefined ? Math.round(rawX) : onGrid(rawX, origin.x),
+        y: d.guide?.gy !== undefined ? Math.round(rawY) : onGrid(rawY, origin.y),
         axis: connectSpecOf(item)?.axis ?? "x",
         items: [placedItem],
       };
-      /* a part that grew to the screen's width is kept inside it */
-      const ng = targetFrame ? pullInto(dropped, targetFrame, widthsRef.current) : dropped;
+      /* a part that grew to the screen's width is kept inside it, then settles back on the grid */
+      const pulled = targetFrame ? pullInto(dropped, targetFrame, widthsRef.current) : dropped;
+      const ng =
+        pulled === dropped
+          ? dropped
+          : { ...pulled, x: d.guide?.gx !== undefined ? pulled.x : onGrid(pulled.x, origin.x), y: d.guide?.gy !== undefined ? pulled.y : onGrid(pulled.y, origin.y) };
       setGroups((prev) =>
         prev.some((g) => g.items.some((it) => it.id === item.id))
           ? prev
@@ -1501,7 +1513,15 @@ export default function Page() {
         instantRef.current.add(g.id);
         g.overBin = inBin(e.clientX);
         setGesture({ ...g });
-        setGroups((gs) => gs.map((gr) => (gr.id === g.id ? { ...gr, x: Math.round(g.gx + dx), y: Math.round(g.gy + dy) } : gr)));
+        setGroups((gs) =>
+          gs.map((gr) => {
+            if (gr.id !== g.id) return gr;
+            /* a moved group settles on the 4dp grid of the screen it is over */
+            const moved = { ...gr, x: g.gx + dx, y: g.gy + dy };
+            const f = frameOfGroup(moved, framesRef.current, widthsRef.current);
+            return { ...moved, x: onGrid(moved.x, f?.x ?? 0), y: onGrid(moved.y, f?.y ?? 0) };
+          }),
+        );
         return;
       }
       if (g.kind === "frame") {
@@ -1789,6 +1809,85 @@ export default function Page() {
 
   /** Pull the selected parts out of their runs into one free group that keeps
    *  their positions. It takes the layer slot of the topmost run involved. */
+  /** Lines the selected parts up, or spaces them evenly. Whole groups move: a connected
+   *  run or a hand-made group is one unit, like in Tidy. Several parts line up with each
+   *  other's bounding box; a lone part lines up with the screen's body area, the box Tidy
+   *  fills between the bars. A unit that would land on another part steps away from the
+   *  edge it was aligned to until it is clear. */
+  const alignSelected = useCallback(
+    (kind: AlignKind) => {
+      const ids = new Set(selectedIds);
+      const all = groupsRef.current;
+      const units = all.filter((g) => g.items.some((it) => ids.has(it.id)));
+      if (units.length === 0) return;
+      const distributing = kind === "distributeH" || kind === "distributeV";
+      const horizontal = kind === "left" || kind === "centerH" || kind === "right" || kind === "distributeH";
+      const rects = new Map(all.map((g) => [g.id, groupBounds(g, widthsRef.current)]));
+      let bb = units.map((g) => rects.get(g.id)!).reduce((a, r) => ({ l: Math.min(a.l, r.l), t: Math.min(a.t, r.t), r: Math.max(a.r, r.r), b: Math.max(a.b, r.b) }));
+      let screenId: string | null = null;
+      if (units.length === 1) {
+        const f = frameOfGroup(units[0], framesRef.current, widthsRef.current);
+        if (!f || distributing) return;
+        screenId = f.id;
+        bb = bodyRect(all, f, framesRef.current, widthsRef.current, new Set(units.map((g) => g.id)));
+      }
+      const shift = new Map<string, { dx: number; dy: number }>();
+      if (distributing) {
+        const sorted = [...units].sort((a, b) => (horizontal ? rects.get(a.id)!.l - rects.get(b.id)!.l : rects.get(a.id)!.t - rects.get(b.id)!.t));
+        const sizes = sorted.map((g) => (horizontal ? rects.get(g.id)!.r - rects.get(g.id)!.l : rects.get(g.id)!.b - rects.get(g.id)!.t));
+        const span = horizontal ? bb.r - bb.l : bb.b - bb.t;
+        const gap = (span - sizes.reduce((s, v) => s + v, 0)) / (sorted.length - 1);
+        let pos = horizontal ? bb.l : bb.t;
+        sorted.forEach((g, i) => {
+          const r = rects.get(g.id)!;
+          shift.set(g.id, horizontal ? { dx: Math.round(pos) - r.l, dy: 0 } : { dx: 0, dy: Math.round(pos) - r.t });
+          pos += sizes[i] + gap;
+        });
+      } else {
+        /* parts that are not moving, on the same screen, that a moved unit must not land on */
+        const others = all.filter((g) => !ids.has(g.items[0].id) && !g.items.some((it) => ids.has(it.id)) && (!screenId || frameOfGroup(g, framesRef.current, widthsRef.current)?.id === screenId)).map((g) => rects.get(g.id)!);
+        const hits = (r: { l: number; t: number; r: number; b: number }) => others.filter((o) => o.l < r.r && o.r > r.l && o.t < r.b && o.b > r.t);
+        /* stepping away from the aligned edge: right of a left edge, up from a bottom edge; a centre tries both ways */
+        const dir = kind === "left" || kind === "top" ? 1 : kind === "right" || kind === "bottom" ? -1 : 0;
+        for (const g of units) {
+          const r = rects.get(g.id)!;
+          const w = r.r - r.l;
+          const h = r.b - r.t;
+          const ax = kind === "left" ? bb.l : kind === "centerH" ? Math.round((bb.l + bb.r) / 2 - w / 2) : kind === "right" ? bb.r - w : r.l;
+          const ay = kind === "top" ? bb.t : kind === "centerV" ? Math.round((bb.t + bb.b) / 2 - h / 2) : kind === "bottom" ? bb.b - h : r.t;
+          /* candidates stay inside the reference box; with no clear spot the plain alignment wins */
+          let x = ax;
+          let y = ay;
+          let clear = false;
+          for (let tries = 0, sign = dir || 1; tries < 12; tries++, sign = dir || -sign) {
+            const blocking = hits({ l: x, t: y, r: x + w, b: y + h });
+            if (!blocking.length) {
+              clear = true;
+              break;
+            }
+            const step = 8 + (horizontal ? Math.max(...blocking.map((o) => o.r - o.l)) : Math.max(...blocking.map((o) => o.b - o.t)));
+            if (horizontal) x = clamp(x + sign * step * (dir ? 1 : tries + 1), bb.l, Math.max(bb.l, bb.r - w));
+            else y = clamp(y + sign * step * (dir ? 1 : tries + 1), bb.t, Math.max(bb.t, bb.b - h));
+          }
+          if (!clear) {
+            x = ax;
+            y = ay;
+          }
+          shift.set(g.id, { dx: x - r.l, dy: y - r.t });
+        }
+      }
+      if (![...shift.values()].some((s) => s.dx || s.dy)) return;
+      snapshot();
+      setGroups((gs) =>
+        gs.map((g) => {
+          const s = shift.get(g.id);
+          return s && (s.dx || s.dy) ? { ...g, x: g.x + s.dx, y: g.y + s.dy } : g;
+        }),
+      );
+    },
+    [selectedIds, snapshot],
+  );
+
   const groupSelected = useCallback(() => {
     const ids = new Set(selectedIds);
     if (ids.size < 2) return;
@@ -2187,6 +2286,21 @@ export default function Page() {
     const after = tidyFrame(groupsRef.current, f, framesRef.current, widthsRef.current);
     if (!after) return;
     snapshot();
+    tidyRef.current = { frameId: f.id, before: groupsRef.current, after };
+    setGroups(after);
+  };
+
+
+  /** sets where Tidy puts a screen's body, then tidies it that way */
+  const setPlace = (f: Frame, place: Place) => {
+    const next: Frame = { ...f, place: place === "top" ? undefined : place };
+    /* one undo step covers both the setting and the tidy it causes */
+    snapshot();
+    const frames = framesRef.current.map((o) => (o.id === f.id ? next : o));
+    setFrames(frames);
+    tidyRef.current = null;
+    const after = tidyFrame(groupsRef.current, next, frames, widthsRef.current);
+    if (!after) return;
     tidyRef.current = { frameId: f.id, before: groupsRef.current, after };
     setGroups(after);
   };
@@ -3523,8 +3637,10 @@ export default function Page() {
             }}
             onAddFrame={addFrame}
             onPreview={() => openPreview()}
-            tidy={tidyState ?? undefined}
+            tidy={selectedIds.length > 1 ? undefined : tidyState ?? undefined}
             onTidy={tidyTarget ? () => tidy(tidyTarget) : undefined}
+            place={tidyTarget?.place}
+            onPlace={tidyTarget ? (pl) => setPlace(tidyTarget, pl) : undefined}
             note={aiNote}
             onSaveProject={() => saveProject(doc)}
             onOpenProject={() => projectFileRef.current?.click()}
@@ -3733,6 +3849,7 @@ export default function Page() {
                   frames={frames}
                   tidy={tidyState ?? "done"}
                   onTidy={() => tidy(selectedFrame)}
+                  onPlace={(pl) => setPlace(selectedFrame, pl)}
                   ai={{ ready: aiReady, reason: aiReason, busy: aiBusy && aiFrameId === selectedFrame.id, onRun: () => runAi("describe", selectedFrame), onCancel: cancelAi }}
                 />
               ) : rightTab === "edit" ? (
@@ -3753,6 +3870,7 @@ export default function Page() {
                   onChange={patchSelected}
                   onDelete={deleteSelected}
                   onDuplicate={duplicateSelected}
+                  onAlign={alignSelected}
                   multi={selectedIds.length}
                   grouped={!!selectedGroup}
                   onGroup={groupSelected}

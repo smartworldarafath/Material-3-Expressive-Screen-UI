@@ -296,6 +296,8 @@ function Tappable({
             top: "100%",
             marginTop: 4,
             padding: "8px 0",
+            maxHeight: 48 * 6 + 16,
+            overflowY: "auto",
             borderRadius: 4,
             background: p.surfaceContainer,
             color: p.onSurface,

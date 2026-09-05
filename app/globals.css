@@ -56,6 +56,8 @@ body {
 /* press feedback shared by toolbar and inspector buttons */
 .m3-press {
   transition: transform 120ms cubic-bezier(0.2, 0, 0, 1), background 120ms, color 120ms;
+  /* a fast double tap on a button must not start selecting its label */
+  user-select: none;
 }
 .m3-press:active:not(:disabled) {
   transform: scale(0.94);

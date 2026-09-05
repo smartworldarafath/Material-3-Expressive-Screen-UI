@@ -67,6 +67,7 @@ A phone screen is **412 × 892**; a desktop screen is **1280 × 800** (set `w` a
 - `note` (optional): what the screen is for, in a sentence. It goes into the prompt.
 - `bg` (optional): background token, one of `surface | surfaceContainerLow | surfaceContainer | surfaceContainerHigh | surfaceContainerHighest | primaryContainer | secondaryContainer | tertiaryContainer | primary | inverseSurface`.
 - `swipe` (optional): screens reached by swiping `left | right | up | down`.
+- `place` (optional): where the body rows sit between the bars when the screen is tidied: `top` (default) | `center` | `bottom` | `spread`. Goes into the prompt too.
 
 ### Parts (`groups`)
 

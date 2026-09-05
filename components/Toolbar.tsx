@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "motion/react";
-import { FrameMode, Palette } from "@/lib/tokens";
+import { FrameMode, Palette, Place } from "@/lib/tokens";
 import { IconBtn, Segmented, TidyButton, TidyState } from "./ui";
 import { ShareButton } from "./ShareMenu";
 import { Icon } from "./M3Node";
@@ -48,6 +48,7 @@ function Pill({ p, children }: { p: Palette; children: React.ReactNode }) {
         gap: 4,
         padding: 6,
         borderRadius: 28,
+        userSelect: "none",
         background: p.surfaceContainerLow,
         boxShadow: "0 2px 10px rgba(0,0,0,0.10), 0 0 0 1px rgba(0,0,0,0.04)",
         pointerEvents: "auto",
@@ -80,6 +81,8 @@ export function Toolbar({
   onLangSheet,
   tidy,
   onTidy,
+  place,
+  onPlace,
   note,
   onSaveProject,
   onOpenProject,
@@ -115,6 +118,8 @@ export function Toolbar({
   /** the tidy button for the screen being worked on; absent when no screen is in play */
   tidy?: TidyState;
   onTidy?: () => void;
+  place?: Place;
+  onPlace?: (place: Place) => void;
   /** a short message shown beside the tidy button for a moment */
   note?: { text: string; icon: string } | null;
   onSaveProject?: () => void;
@@ -227,7 +232,7 @@ export function Toolbar({
         </div>
         {tidy && onTidy && (
           <Pill p={p}>
-            <TidyButton state={tidy} onClick={onTidy} p={p} pill />
+            <TidyButton state={tidy} onClick={onTidy} p={p} pill place={place} onPlace={onPlace} />
           </Pill>
         )}
         <Pill p={p}>

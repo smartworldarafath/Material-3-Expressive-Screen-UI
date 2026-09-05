@@ -35,13 +35,15 @@ import {
   iconSlotsOf,
   setIconSlot,
   variantStyle,
+  Place,
+  AlignKind,
 } from "@/lib/tokens";
 import { IconPicker } from "./IconPicker";
 import { Icon } from "./M3Node";
 import { ButtonRun, CornerIcon, Field, IconBtn, Section, Segmented, SizePresets, Slider, TidyButton, TidyState, Toggle, TokenChips } from "./ui";
 import { AiWriteBtn } from "./AiPanel";
 import { popHistory } from "@/lib/ai";
-import { KIND_TEXT, SWIPE_TEXT, TRANSITION_TEXT, t, useLang } from "@/lib/i18n";
+import { KIND_TEXT, SWIPE_TEXT, TRANSITION_TEXT, UIKey, t, useLang } from "@/lib/i18n";
 
 /** A text field for a web address: what is typed stays in the box, and only a complete
  *  http(s) address (or an emptied box) reaches the part. */
@@ -348,6 +350,7 @@ export function FrameInspector({
   frames,
   tidy,
   onTidy,
+  onPlace,
   ai,
   onSize,
 }: {
@@ -363,6 +366,8 @@ export function FrameInspector({
   /** what the tidy button offers: tidy the screen, undo the last tidy, or nothing (already tidy) */
   tidy: TidyState;
   onTidy: () => void;
+  /** sets where Tidy puts the body of this screen, and tidies */
+  onPlace: (place: Place) => void;
   ai: AiHooks;
   onSize: (preset: FramePreset) => void;
 }) {
@@ -434,7 +439,7 @@ export function FrameInspector({
         <TokenChips value={frame.bg ?? "surface"} onChange={(bg) => onChange({ bg })} p={p} />
       </Section>
       <Section id="frame-tidy" icon="align_space_even" title={t("tidy", lang)} p={p}>
-        <TidyButton state={tidy} onClick={onTidy} p={p} />
+        <TidyButton state={tidy} onClick={onTidy} p={p} place={frame.place} onPlace={onPlace} />
       </Section>
       {frames.length > 1 && (
         <Section id="frame-swipe" icon="swipe" title={t("swipeTo", lang)} p={p}>
@@ -510,6 +515,79 @@ export function FrameInspector({
   );
 }
 
+/** A small picture of what an alignment does: a dashed box for the reference (the screen's
+ *  body for one part, the selection for several) and two bars placed the way the parts will be;
+ *  spacing evenly shows three bars with equal gaps. */
+function AlignGlyph({ kind, color, faint }: { kind: AlignKind; color: string; faint: string }) {
+  const bars: [number, number, number, number][] =
+    kind === "left" ? [[4, 7, 16, 6], [4, 15, 10, 6]]
+    : kind === "centerH" ? [[12, 7, 16, 6], [15, 15, 10, 6]]
+    : kind === "right" ? [[20, 7, 16, 6], [26, 15, 10, 6]]
+    : kind === "distributeH" ? [[4, 8, 6, 12], [17, 8, 6, 12], [30, 8, 6, 12]]
+    : kind === "top" ? [[12, 4, 6, 14], [22, 4, 6, 8]]
+    : kind === "centerV" ? [[12, 7, 6, 14], [22, 10, 6, 8]]
+    : kind === "bottom" ? [[12, 10, 6, 14], [22, 16, 6, 8]]
+    : [[14, 4, 12, 4], [14, 12, 12, 4], [14, 20, 12, 4]];
+  return (
+    <svg width={40} height={28} viewBox="0 0 40 28" aria-hidden>
+      <rect x={1} y={1} width={38} height={26} rx={3} fill="none" stroke={faint} strokeWidth={1} strokeDasharray="3 2" />
+      {bars.map(([x, y, w, h], i) => (
+        <rect key={i} x={x} y={y} width={w} height={h} rx={1.5} fill={color} />
+      ))}
+    </svg>
+  );
+}
+
+/** The alignment controls: one row for left / centre / right, one for top / middle / bottom,
+ *  each ending in "space evenly", which needs at least two parts. One part lines up with its
+ *  screen's body; several line up with each other. Each button draws its result. */
+function AlignSection({ single, onAlign, p }: { single: boolean; onAlign: (kind: AlignKind) => void; p: Palette }) {
+  const lang = useLang();
+  const rows: [AlignKind, UIKey][][] = [
+    [["left", "alignLeft"], ["centerH", "alignCenterH"], ["right", "alignRight"], ["distributeH", "distributeH"]],
+    [["top", "alignTop"], ["centerV", "alignCenterV"], ["bottom", "alignBottom"], ["distributeV", "distributeV"]],
+  ];
+  return (
+    <Section id="align" icon="align_horizontal_left" title={t("align", lang)} p={p}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        {rows.map((row, i) => (
+          <ButtonRun key={i}>
+            {row.map(([kind, key], j) => {
+              const off = single && kind.startsWith("distribute");
+              const outer = 22;
+              const inner = 8;
+              return (
+                <button
+                  key={kind}
+                  onClick={() => onAlign(kind)}
+                  disabled={off}
+                  title={t(key, lang)}
+                  aria-label={t(key, lang)}
+                  className="m3-press"
+                  style={{
+                    flex: 1,
+                    height: 44,
+                    border: "none",
+                    borderRadius: `${j === 0 ? outer : inner}px ${j === row.length - 1 ? outer : inner}px ${j === row.length - 1 ? outer : inner}px ${j === 0 ? outer : inner}px`,
+                    background: p.surfaceContainerHigh,
+                    cursor: off ? "default" : "pointer",
+                    display: "grid",
+                    placeItems: "center",
+                    opacity: off ? 0.38 : 1,
+                  }}
+                >
+                  <AlignGlyph kind={kind} color={off ? p.onSurfaceVariant : p.primary} faint={p.outline} />
+                </button>
+              );
+            })}
+          </ButtonRun>
+        ))}
+        <div style={{ fontSize: 12, lineHeight: 1.5, color: p.onSurfaceVariant, padding: "2px 6px 0" }}>{t(single ? "alignHintOne" : "alignHintMany", lang)}</div>
+      </div>
+    </Section>
+  );
+}
+
 export function Inspector({
   ai,
   item,
@@ -523,6 +601,7 @@ export function Inspector({
   grouped,
   onGroup,
   onUngroup,
+  onAlign,
 }: {
   /** the AI button beside the behavior field */
   ai: AiHooks;
@@ -539,6 +618,8 @@ export function Inspector({
   grouped?: boolean;
   onGroup?: () => void;
   onUngroup?: () => void;
+  /** lines the selected parts up with each other, or spaces them evenly */
+  onAlign?: (kind: AlignKind) => void;
 }) {
   const lang = useLang();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -602,6 +683,7 @@ export function Inspector({
             </span>
             <IconBtn icon="delete" p={p} danger onClick={onDelete} title={t("deleteSelection", lang)} size={32} />
           </div>
+          {onAlign && <AlignSection single={false} onAlign={onAlign} p={p} />}
           {grouped ? bigBtn("ungroup", t("ungroup", lang), onUngroup) : bigBtn("group_work", t("makeGroup", lang), onGroup)}
           <div style={{ marginTop: 10, fontSize: 12, lineHeight: 1.5, color: p.onSurfaceVariant, padding: "0 6px" }}>
             {grouped ? t("groupEditNote", lang) : `${t("groupHint", lang)} (Ctrl+G)`}
@@ -706,6 +788,11 @@ export function Inspector({
   /** bars, rails and tab rows show one destination as selected */
   const isSelect = item.kind === "select";
   const hasSelected = item.kind === "bottomNav" || item.kind === "navRail" || item.kind === "tabs" || isSelect;
+  /** drops one option; the initial value follows its row or clears when that row goes */
+  const removeOption = (i: number) => {
+    const sel = item.selected;
+    onChange({ tabs: tabs.filter((_, j) => j !== i), selected: sel === undefined ? undefined : sel === i ? undefined : sel > i ? sel - 1 : sel });
+  };
   /* a dropdown may start with nothing chosen; bars always show one destination */
   const selectedTab = isSelect && item.selected === undefined ? -1 : Math.min(item.selected ?? 0, Math.max(0, tabs.length - 1));
 
@@ -774,6 +861,8 @@ export function Inspector({
         </div>
       )}
 
+      {onAlign && !editOn && <AlignSection single onAlign={onAlign} p={p} />}
+
       {(spec.hasLabel || spec.hasSupporting) && (
         <Section id="text" icon="title" title={t("text", lang)} p={p}>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -813,13 +902,15 @@ export function Inspector({
 
       {spec.hasTabs && !editOn && (
         <Section id="tabs" icon={isSelect ? "list" : "view_column"} title={t(isSelect ? "options" : "tabs", lang)} p={p}>
-          <Segmented
-            options={(item.kind === "toolbar" ? [2, 3, 4, 5, 6] : [2, 3, 4, 5]).map((n) => ({ key: String(n), label: String(n) }))}
-            value={String(tabs.length)}
-            onChange={(k) => setTabCount(Number(k))}
-            p={p}
-            height={36}
-          />
+          {!isSelect && (
+            <Segmented
+              options={(item.kind === "toolbar" ? [2, 3, 4, 5, 6] : [2, 3, 4, 5]).map((n) => ({ key: String(n), label: String(n) }))}
+              value={String(tabs.length)}
+              onChange={(k) => setTabCount(Number(k))}
+              p={p}
+              height={36}
+            />
+          )}
           <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 10 }}>
             {tabs.map((tab, i) => {
               const on = slotKey === `tab:${i}` && pickerOpen;
@@ -864,10 +955,23 @@ export function Inspector({
                   {tabIcons && tab.icon && (
                     <IconBtn icon="close" p={p} size={40} onClick={() => onChange(setIconSlot(item, `tab:${i}`, null))} title={t("noIcon", lang)} />
                   )}
+                  {isSelect && tabs.length > 1 && (
+                    <IconBtn icon="close" p={p} size={40} onClick={() => removeOption(i)} title={t("removeOption", lang)} />
+                  )}
                 </div>
               );
             })}
           </div>
+          {isSelect && (
+            <button
+              onClick={() => onChange({ tabs: [...tabs, { ...defaultTabsFor(item.kind)[tabs.length % defaultTabsFor(item.kind).length] }] })}
+              className="m3-press"
+              style={{ marginTop: 8, height: 40, width: "100%", borderRadius: 20, border: `1px solid ${p.outline}`, background: "transparent", color: p.primary, fontSize: 13, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}
+            >
+              <Icon name="add" size={18} />
+              {t("addOption", lang)}
+            </button>
+          )}
         </Section>
       )}
 

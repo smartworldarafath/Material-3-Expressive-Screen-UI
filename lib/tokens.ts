@@ -1310,7 +1310,22 @@ export type Frame = {
   noteHistory?: string[];
   /** frame ids reached by swiping in each direction */
   swipe?: Partial<Record<SwipeDir, string>>;
+  /** where Tidy puts the body rows between the bars: from the top unless the author says otherwise */
+  place?: Place;
 };
+
+/** how Tidy stacks the body of a screen: from the top, centered, against the bottom bar, or spread out */
+export type Place = "top" | "center" | "bottom" | "spread";
+export const PLACES: { key: Place; icon: string }[] = [
+  { key: "top", icon: "vertical_align_top" },
+  { key: "center", icon: "vertical_align_center" },
+  { key: "bottom", icon: "vertical_align_bottom" },
+  { key: "spread", icon: "expand" },
+];
+export const isPlace = (v: unknown): v is Place => v === "top" || v === "center" || v === "bottom" || v === "spread";
+
+/** how a selection of parts is lined up: an edge or centre to share, or equal gaps along an axis */
+export type AlignKind = "left" | "centerH" | "right" | "distributeH" | "top" | "centerV" | "bottom" | "distributeV";
 
 export type FramePreset = "phone" | "desktop";
 export const frameSizeOf = (f: Frame) => ({ w: f.w ?? PHONE_W, h: f.h ?? PHONE_H });

@@ -9,7 +9,8 @@ import { CONTENT_W, FULL_WIDTH, Frame, Group, Item, KIND_SPEC, Kind, PHONE_MARGI
  *    navigation bar at the bottom, toolbars and snackbars hovering above it,
  *    a bottom sheet on the bottom edge), a FAB takes the bottom-right corner,
  *    a dialog is centered.
- * 3. Everything else is stacked from the top on the 16dp layout margins. Rows,
+ * 3. Everything else is stacked between the bars on the 16dp layout margins, from
+ *    the top unless the screen asks for the body centered, at the bottom or spread. Rows,
  *    hand-made groups and intentional overlaps (a badge on an icon, parts on a
  *    box) are kept as one unit, and a part keeps the side it was on. A run
  *    nearly as wide as the content sits on the margin; a text with a switch,
@@ -343,6 +344,29 @@ function evenCorners(groups: Map<string, Group>): boolean {
 }
 
 /** The tidied groups of the document, or null when `frame` is already tidy. */
+/** The area Tidy fills with body rows: inside the layout margins, beside the rails, between
+ *  the top bars and the bottom bars. Aligning a part on the screen uses the same box, so
+ *  it lands where Tidy would put it and not under a bar. */
+export function bodyRect(groups: Group[], frame: Frame, frames: Frame[], widths: Record<string, number>, except: Set<string> = new Set()): Rect {
+  const screen = frameRect(frame);
+  /* `except` names groups being moved: a bar that is itself being aligned must not shape the body */
+  const mine = groups.filter((g) => !except.has(g.id) && frameOfGroup(g, frames, widths)?.id === frame.id);
+  const units = clusters(mine, widths);
+  const onRight = (u: Unit) => (u.bb.l + u.bb.r) / 2 > (screen.l + screen.r) / 2;
+  const rails = units.filter(isRail);
+  const leftRails = rails.filter((u) => !onRight(u)).length;
+  const rightRails = rails.length - leftRails;
+  let top = screen.t;
+  for (const u of units.filter(isTop)) top += u.bb.b - u.bb.t;
+  let bottom = screen.b;
+  for (const u of units.filter(isBottomBar)) bottom -= u.bb.b - u.bb.t;
+  for (const u of units.filter(isFloatingBottom)) bottom -= PHONE_MARGIN + (u.bb.b - u.bb.t);
+  /* a crowded short screen must not turn the box inside out */
+  const l = screen.l + leftRails * RAIL_W + PHONE_MARGIN;
+  const t = top + PHONE_MARGIN;
+  return { l, t, r: Math.max(l, screen.r - rightRails * RAIL_W - PHONE_MARGIN), b: Math.max(t, bottom - PHONE_MARGIN) };
+}
+
 export function tidyFrame(groups: Group[], frame: Frame, frames: Frame[], widths: Record<string, number>): Group[] | null {
   const screen: Rect = frameRect(frame);
   const mineIds = new Set(groups.filter((g) => frameOfGroup(g, frames, widths)?.id === frame.id).map((g) => g.id));
@@ -414,16 +438,40 @@ export function tidyFrame(groups: Group[], frame: Frame, frames: Frame[], widths
     target.set(u, { l: fr.l + Math.round((frameW - (u.bb.r - u.bb.l)) / 2), t: fr.t + Math.round((frameH - (u.bb.b - u.bb.t)) / 2) });
   }
 
-  /* everything else flows from the top on the layout margins, down to the bottom bars;
-   * rows that would not fit are left where they are rather than pushed off the screen */
+  /* everything else flows in rows between the top and bottom bars, on the layout margins;
+   * rows that would not fit are left where they are rather than pushed off the screen.
+   * The rows are measured first, then the whole block is placed the way the screen asks:
+   * from the top, centered, against the bottom, or spread out with equal gaps. */
   const rows = rowsOf(units.filter((u) => !target.has(u)));
   const limit = bottom - PHONE_MARGIN;
-  let y = top + PHONE_MARGIN;
+  const start = top + PHONE_MARGIN;
+  const laid: { row: Unit[]; y: number; rowH: number }[] = [];
+  let y = start;
   let prev: Unit[] | null = null;
   for (const row of rows) {
     y += gapBefore(prev, row);
     const rowH = Math.max(...row.map((u) => u.bb.b - u.bb.t));
     if (y + rowH > limit) break;
+    laid.push({ row, y, rowH });
+    y += rowH;
+    prev = row;
+  }
+  const used = laid.length ? y - start : 0;
+  const spare = Math.max(0, limit - start - used);
+  const place = frame.place ?? "top";
+  /* spreading shares all the free height equally above, between and below the rows,
+   * in place of the rows' own gaps; a lone row spreads to the middle, like centering */
+  const heights = laid.map((r) => r.rowH);
+  /* when some rows did not fit they stay where they were, below the block, so the block
+   * stays at the top rather than moving down onto them */
+  const fits = laid.length === rows.length;
+  const spreading = fits && place === "spread" && laid.length > 1;
+  const even = spreading ? (spare + used - heights.reduce((a, h) => a + h, 0)) / (laid.length + 1) : 0;
+  const offset = !fits ? 0 : place === "center" || (place === "spread" && laid.length <= 1) ? Math.round(spare / 2) : place === "bottom" ? spare : 0;
+  let stacked = 0;
+  laid.forEach(({ row, y: rowY, rowH }, index) => {
+    const yy = spreading ? start + Math.round(even * (index + 1)) + stacked : rowY + offset;
+    stacked += rowH;
     const inner = frameW - PHONE_MARGIN * 2;
     if (row.length === 1) {
       const u = row[0];
@@ -433,14 +481,14 @@ export function tidyFrame(groups: Group[], frame: Frame, frames: Frame[], widths
        * so its edge lines up with the cards and lists above and below it */
       const wide = w >= inner * 0.7;
       const l = wide || a === "left" ? fr.l + PHONE_MARGIN : a === "right" ? fr.r - PHONE_MARGIN - w : fr.l + Math.round((frameW - w) / 2);
-      target.set(u, { l, t: y });
+      target.set(u, { l, t: yy });
     } else if (row.length === 2 && row.some(isLabel) && row.some(isControl)) {
       /* a label with its control: the label on the left margin, the control on the right, like a settings row */
       const label = row.find(isLabel)!;
       const control = row.find(isControl)!;
       const cw = control.bb.r - control.bb.l;
-      target.set(label, { l: fr.l + PHONE_MARGIN, t: y + Math.round((rowH - (label.bb.b - label.bb.t)) / 2) });
-      target.set(control, { l: fr.r - PHONE_MARGIN - cw, t: y + Math.round((rowH - (control.bb.b - control.bb.t)) / 2) });
+      target.set(label, { l: fr.l + PHONE_MARGIN, t: yy + Math.round((rowH - (label.bb.b - label.bb.t)) / 2) });
+      target.set(control, { l: fr.r - PHONE_MARGIN - cw, t: yy + Math.round((rowH - (control.bb.b - control.bb.t)) / 2) });
     } else {
       const ws = row.map((u) => u.bb.r - u.bb.l);
       const total = ws.reduce((s, w) => s + w, 0);
@@ -455,13 +503,11 @@ export function tidyFrame(groups: Group[], frame: Frame, frames: Frame[], widths
       let x = a === "right" ? fr.r - PHONE_MARGIN - packed : a === "center" ? fr.l + (frameW - packed) / 2 : fr.l + PHONE_MARGIN;
       row.forEach((u, i) => {
         const h = u.bb.b - u.bb.t;
-        target.set(u, { l: Math.round(x), t: y + Math.round((rowH - h) / 2) });
+        target.set(u, { l: Math.round(x), t: yy + Math.round((rowH - h) / 2) });
         x += ws[i] + (gaps[i] ?? 0) + extra;
       });
     }
-    y += rowH;
-    prev = row;
-  }
+  });
 
   /* apply each unit's shift to every group it holds */
   const shift = new Map<string, { dx: number; dy: number }>();
