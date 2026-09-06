@@ -272,6 +272,8 @@ export const UI = {
   noLayers: { ja: "この画面には部品がありません", en: "Nothing on this screen yet", zh: "此屏幕还没有组件" },
   showParts: { ja: "中の部品を表示", en: "Show the parts inside", zh: "显示组内组件" },
   hideParts: { ja: "中の部品を隠す", en: "Hide the parts inside", zh: "隐藏组内组件" },
+  lock: { ja: "ロック", en: "Lock", zh: "锁定" },
+  unlock: { ja: "ロック解除", en: "Unlock", zh: "解锁" },
   // prompt panel
   brief: { ja: "このアプリの説明…", en: "What this app is…", zh: "这个应用的说明…" },
   appName: { ja: "アプリの名前", en: "App name", zh: "应用名称" },
@@ -436,7 +438,7 @@ export const KO: Record<UIKey, string> = {
   useThis: "이 색상 사용", fineTune: "세부 조정", dynamicColor: "동적 색상",
   dynamicOnHint: "여기 표시된 색상은 편집기 전용입니다. 실제 기기에서는 배경화면 색상을 사용합니다.",
   dynamicOffHint: "켜면 실제 기기는 배경화면 색상을 사용하고 여기의 색상은 대체 색상이 됩니다.", closeBtn: "닫기", screens: "화면 선택",
-  noLayers: "이 화면에는 아직 부품이 없습니다", showParts: "안의 부품 표시", hideParts: "안의 부품 숨기기",
+  noLayers: "이 화면에는 아직 부품이 없습니다", showParts: "안의 부품 표시", hideParts: "안의 부품 숨기기", lock: "잠금", unlock: "잠금 해제",
   brief: "이 앱에 대한 설명…", appName: "앱 이름", targetPlatform: "구현 대상", targetAndroid: "Android 네이티브 앱으로 만들기",
   targetWeb: "브라우저에서 실행되는 웹 앱으로 만들기", copyPrompt: "프롬프트 복사", back: "뒤로", close: "닫기 (Esc)", cancel: "취소", ok: "확인",
   leading: "앞쪽", trailing: "뒤쪽", home: "홈", screenN: "화면", copySuffix: " 복사본", mobileNote: "전체 기능은 데스크톱 브라우저에서 사용할 수 있습니다",

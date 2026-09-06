@@ -37,6 +37,8 @@ function Row({
   onSelect,
   open,
   onToggle,
+  locked,
+  onLock,
   onDragging,
   children,
 }: {
@@ -50,6 +52,10 @@ function Row({
   /** set when the row can open to show what it holds */
   open?: boolean;
   onToggle?: () => void;
+  /** the group's lock, so the row shows which state it is in */
+  locked?: boolean;
+  /** flips the group's lock; set only on a whole group's row */
+  onLock?: () => void;
   onDragging: (dragging: boolean) => void;
   children?: ReactNode;
 }) {
@@ -101,6 +107,17 @@ function Row({
           <span style={{ display: "inline-flex", gap: 2, color: on ? p.onSecondaryContainer : p.primary }}>{icon}</span>
           <span style={{ fontSize: 12, fontWeight: depth === 0 ? 600 : 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</span>
         </button>
+        {onLock && (
+          <button
+            onClick={onLock}
+            title={t(locked ? "unlock" : "lock", lang)}
+            aria-pressed={locked}
+            className="m3-press"
+            style={{ width: 28, height: 28, borderRadius: 14, border: "none", background: "transparent", color: locked ? (on ? p.onSecondaryContainer : p.primary) : p.outline, cursor: "pointer", padding: 0, display: "grid", placeItems: "center", flex: "0 0 auto" }}
+          >
+            <Icon name={locked ? "lock" : "lock_open"} size={20} fill={locked} />
+          </button>
+        )}
         {onToggle && (
           <button
             onClick={onToggle}
@@ -182,6 +199,7 @@ export function LayersPanel({
   selectedIds,
   onSelect,
   onReorder,
+  onToggleLock,
   onReorderItems,
   onDragging,
 }: {
@@ -197,6 +215,8 @@ export function LayersPanel({
   onSelect: (itemIds: string[], add: boolean) => void;
   /** new order, top layer first */
   onReorder: (topFirst: string[]) => void;
+  /** flips a group's lock from its row's lock icon */
+  onToggleLock: (groupId: string) => void;
   /** a group's parts in a new order: back to front for a free group, reading order for a run */
   onReorderItems: (groupId: string, ids: string[]) => void;
   /** a drag on any level starting or ending, so the page can record one undo step for the whole drag */
@@ -327,6 +347,8 @@ export function LayersPanel({
                   onSelect={(add) => onSelect(g.items.map((it) => it.id), add)}
                   open={canOpen ? open : undefined}
                   onToggle={canOpen ? () => toggle(g.id) : undefined}
+                  locked={g.locked}
+                  onLock={() => onToggleLock(g.id)}
                   onDragging={onDragging}
                 >
                   {groupBody(g, 1)}

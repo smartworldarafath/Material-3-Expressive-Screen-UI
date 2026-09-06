@@ -120,3 +120,38 @@ describe("tidyFrame placement", () => {
     expect(Math.abs(between - below)).toBeLessThanOrEqual(1);
   });
 });
+
+describe("tidyFrame with locked groups", () => {
+  /* a locked run of two list items, with a lone list item close enough above it to fuse when unlocked */
+  const lockedRun = (): Group => ({ ...grp("g-lock", 16, 500, [part("listItem", "l1"), part("listItem", "l2")]), axis: "y", locked: true });
+  const neighbour = (): Group => grp("g-nb", 16, 412, [part("listItem", "n1")]);
+  const buttons = (): Group => grp("g-btns", 100, 60, [part("button", "b1"), part("button", "b2")]);
+  const find = (out: Group[], id: string) => out.find((g) => g.id === id)!;
+
+  it("keeps a locked group at its exact position, never merging it into a run", () => {
+    const run = lockedRun();
+    const out = tidyFrame([run, neighbour(), buttons()], frame, frames, {})!;
+    expect(find(out, "g-lock")).toEqual(run);
+  });
+
+  it("still tidies the unlocked groups as if the locked one were not there", () => {
+    const mixed = tidyFrame([lockedRun(), neighbour(), buttons()], frame, frames, {})!;
+    const solo = tidyFrame([neighbour(), buttons()], frame, frames, {})!;
+    for (const id of ["g-nb", "g-btns"]) expect(find(mixed, id)).toEqual(find(solo, id));
+    /* and tidying really did move them */
+    expect(find(mixed, "g-btns")).not.toEqual(buttons());
+    expect(find(mixed, "g-nb")).not.toEqual(neighbour());
+  });
+
+  it("merges the same runs when the group is not locked", () => {
+    const out = tidyFrame([{ ...lockedRun(), locked: undefined }, neighbour(), buttons()], frame, frames, {})!;
+    const lists = out.filter((g) => g.items.some((it) => it.kind === "listItem"));
+    expect(lists).toHaveLength(1);
+    expect(lists[0].items.map((it) => it.id).sort()).toEqual(["l1", "l2", "n1"]);
+  });
+
+  it("yields no change when every group on the screen is locked", () => {
+    const other = { ...grp("g-other", 60, 300, [part("listItem", "o1")]), locked: true };
+    expect(tidyFrame([lockedRun(), other], frame, frames, {})).toBeNull();
+  });
+});

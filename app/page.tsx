@@ -1125,6 +1125,8 @@ export default function Page() {
       setSelectedFrameId(null);
       setSelectedLinkId(null);
       setRightTab("edit");
+      /* a locked group stays selectable, but dragging it does nothing */
+      if (g.locked) return;
       const gg: Gesture = { kind: "group", id: g.id, sx: e.clientX, sy: e.clientY, gx: g.x, gy: g.y, moved: false, overBin: false };
       gestureRef.current = gg;
       setGesture(gg);
@@ -1142,6 +1144,8 @@ export default function Page() {
     setSelectedFrameId(null);
     setSelectedLinkId(null);
     setRightTab("edit");
+    /* a locked group's part stays selectable, but dragging it does nothing */
+    if (g.locked) return;
     setPressedId(item.id);
     const d: DragState = {
       item,
@@ -1680,6 +1684,8 @@ export default function Page() {
     setGroups((prev) =>
       prev
         .map((g) => {
+          /* Delete / Backspace leaves a locked group and its parts alone */
+          if (g.locked) return g;
           if (g.free) return collapseFree({ ...g, items: g.items.filter((it) => !ids.has(it.id)) }, widthsRef.current);
           let x = g.x;
           let y = g.y;
@@ -2876,6 +2882,12 @@ export default function Page() {
     setGroups((gs) => [...gs.filter((g) => !inFrame.has(g.id)), ...ordered]);
   };
 
+  /** flips a group's lock from its row's lock icon in the Layers panel */
+  const toggleGroupLock = (id: string) => {
+    snapshot();
+    setGroups((prev) => prev.map((g) => (g.id === id ? { ...g, locked: !g.locked } : g)));
+  };
+
   /** The parts of one group in a new order: reading order for a connected run, back to
    *  front for a free group. Inside a free group a hidden run keeps its slots, handed out
    *  again in the new order, so reordering a list really moves its rows. */
@@ -3252,6 +3264,7 @@ export default function Page() {
                       setRightTab("edit");
                     }}
                     onReorder={reorderLayers}
+                    onToggleLock={toggleGroupLock}
                     onReorderItems={reorderGroupItems}
                     onDragging={onLayerDragging}
                   />
