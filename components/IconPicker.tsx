@@ -3,6 +3,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Palette } from "@/lib/tokens";
 import { t, useLang } from "@/lib/i18n";
+import { IconBtn } from "./ui";
 
 type IconMeta = { n: string; p: number; t: string };
 
@@ -21,10 +22,12 @@ const SHOWN = 240;
 export function IconPicker({
   value,
   onChange,
+  onClose,
   palette,
 }: {
   value: string | null;
   onChange: (icon: string | null) => void;
+  onClose: () => void;
   palette: Palette;
 }) {
   const lang = useLang();
@@ -37,6 +40,17 @@ export function IconPicker({
 
   const refEl = useRef<HTMLSpanElement>(null);
   const probeEls = useRef<Map<string, HTMLElement>>(new Map());
+
+  useEffect(() => {
+    const key = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      // Dismiss the picker without clearing the editor's selection.
+      e.stopPropagation();
+      onClose();
+    };
+    document.addEventListener("keydown", key, true);
+    return () => document.removeEventListener("keydown", key, true);
+  }, [onClose]);
 
   useEffect(() => {
     if (cache) return;
@@ -136,6 +150,7 @@ export function IconPicker({
             search
           </span>
           <input
+            aria-label={t("searchIcons", lang)}
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder={icons ? t("searchIcons", lang) : "…"}
@@ -153,6 +168,7 @@ export function IconPicker({
             }}
           />
         </div>
+        <IconBtn icon="close" p={palette} size={40} onClick={onClose} title={t("close", lang)} />
       </div>
 
       <div
@@ -174,6 +190,8 @@ export function IconPicker({
           <button
             key={i.n}
             title={i.n}
+            aria-label={i.n}
+            aria-pressed={value === i.n}
             onClick={() => onChange(i.n)}
             style={{
               aspectRatio: "1",
