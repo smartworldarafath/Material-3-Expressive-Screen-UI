@@ -181,7 +181,7 @@ type Gesture =
       groups: { id: string; x: number; y: number }[];
       moved: boolean;
     }
-  | { kind: "group"; id: string; sx: number; sy: number; gx: number; gy: number; moved: boolean; overBin: boolean };
+  | { kind: "group"; id: string; sx: number; sy: number; gx: number; gy: number; moved: boolean; overBin: boolean; guide?: Guide | null };
 
 /** everything in a document apart from its screens and parts */
 type DocMeta = Omit<Doc, "groups" | "frames">;
@@ -1021,15 +1021,14 @@ export default function Page() {
 
   /** Canva-style alignment: edges and centres of neighbours and of the frame
    *  pull the part gently into line and draw a guide while they do. */
-  const findGuide = useCallback(
-    (item: Item, left: number, top: number): Guide | null => {
-      const sz = sizeRef(item);
+  const guideFor = useCallback(
+    (left: number, top: number, sz: { w: number; h: number }, skip: Set<string>): Guide | null => {
       const tol = GUIDE_PX / viewRef.current.z;
       const xs: number[] = [];
       const ys: number[] = [];
       for (const g of groupsRef.current) {
         for (const pl of layoutOf(g, widthsRef.current)) {
-          if (pl.item.id === item.id) continue;
+          if (skip.has(pl.item.id)) continue;
           xs.push(pl.x, pl.x + pl.w / 2, pl.x + pl.w);
           ys.push(pl.y, pl.y + pl.h / 2, pl.y + pl.h);
         }
@@ -1079,7 +1078,11 @@ export default function Page() {
         }
       return best.x === undefined && best.y === undefined ? null : best;
     },
-    [sizeRef],
+    [],
+  );
+  const findGuide = useCallback(
+    (item: Item, left: number, top: number): Guide | null => guideFor(left, top, sizeRef(item), new Set([item.id])),
+    [guideFor, sizeRef],
   );
 
   /* ---------- pointer: parts ---------- */
@@ -1551,18 +1554,26 @@ export default function Page() {
         }
         instantRef.current.add(g.id);
         g.overBin = inBin(e.clientX);
+        const gr = groupsRef.current.find((x) => x.id === g.id);
+        if (!gr) return;
+        /* a moved group lines up with its neighbours like a single part does, and off
+           any guide settles on the 4dp grid of the screen it is over; Ctrl (or Cmd)
+           skips both */
+        const moved = { ...gr, x: g.gx + dx, y: g.gy + dy };
+        const loose = e.ctrlKey || e.metaKey;
+        const b = groupBounds(moved, widthsRef.current);
+        const guide = loose || g.overBin ? null : guideFor(b.l, b.t, { w: b.r - b.l, h: b.b - b.t }, new Set(gr.items.map((it) => it.id)));
+        g.guide = guide;
         setGesture({ ...g });
-        setGroups((gs) =>
-          gs.map((gr) => {
-            if (gr.id !== g.id) return gr;
-            /* a moved group settles on the 4dp grid of the screen it is over,
-               unless Ctrl (or Cmd) is held, as when dragging a single part */
-            const moved = { ...gr, x: g.gx + dx, y: g.gy + dy };
-            if (e.ctrlKey || e.metaKey) return moved;
-            const f = frameOfGroup(moved, framesRef.current, widthsRef.current);
-            return { ...moved, x: onGrid(moved.x, f?.x ?? 0), y: onGrid(moved.y, f?.y ?? 0) };
-          }),
-        );
+        const f = frameOfGroup(moved, framesRef.current, widthsRef.current);
+        const placed = loose
+          ? moved
+          : {
+              ...moved,
+              x: guide?.x !== undefined ? Math.round(moved.x + guide.x - b.l) : onGrid(moved.x, f?.x ?? 0),
+              y: guide?.y !== undefined ? Math.round(moved.y + guide.y - b.t) : onGrid(moved.y, f?.y ?? 0),
+            };
+        setGroups((gs) => gs.map((x) => (x.id === g.id ? placed : x)));
         return;
       }
       if (g.kind === "frame") {
@@ -3105,7 +3116,7 @@ export default function Page() {
   };
 
   const showRight = rightOpen && !isMobile;
-  const guide = drag?.active ? drag.guide : null;
+  const guide = drag?.active ? drag.guide : gesture?.kind === "group" && gesture.moved ? (gesture.guide ?? null) : null;
   const visibleWorld = (() => {
     const r = canvasRef.current?.getBoundingClientRect();
     return {
