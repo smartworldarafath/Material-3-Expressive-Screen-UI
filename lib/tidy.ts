@@ -372,8 +372,9 @@ export function tidyFrame(groups: Group[], frame: Frame, frames: Frame[], widths
   const mineIds = new Set(groups.filter((g) => frameOfGroup(g, frames, widths)?.id === frame.id).map((g) => g.id));
   if (!mineIds.size) return null;
 
-  /* joining rewrites the list; the other screens' groups keep their slots */
-  const before = groups.filter((g) => mineIds.has(g.id));
+  /* joining rewrites the list; the other screens' groups keep their slots.
+   * Locked groups are finished sections: they never join, cluster or move. */
+  const before = groups.filter((g) => mineIds.has(g.id) && !g.locked);
   /* a labelled switch standing on its own on a phone screen reads as a settings row: it takes
    * the content width, label left, switch right. One on a box, in a group or on a desktop
    * screen keeps its size. */
@@ -533,11 +534,16 @@ export function tidyFrame(groups: Group[], frame: Frame, frames: Frame[], widths
   for (const m of mine) for (const it of m.items) survivorOf.set(it.id, m);
   const lastSlot = new Map<string, number>();
   groups.forEach((g, i) => {
-    if (mineIds.has(g.id)) lastSlot.set(survivorOf.get(g.items[0].id)!.id, i);
+    if (mineIds.has(g.id) && !g.locked) lastSlot.set(survivorOf.get(g.items[0].id)!.id, i);
   });
   const out: Group[] = [];
   groups.forEach((g, i) => {
     if (!mineIds.has(g.id)) {
+      out.push(g);
+      return;
+    }
+    /* a locked group keeps its position and its slot untouched */
+    if (g.locked) {
       out.push(g);
       return;
     }

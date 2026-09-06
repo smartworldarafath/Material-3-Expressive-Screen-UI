@@ -63,6 +63,11 @@ describe("shareable", () => {
     const value = { ...doc(), groups: [], frames: [] };
     expect(shareable(value)).toEqual(value);
   });
+
+  it("keeps a group's lock flag", () => {
+    const value = { ...doc(), groups: [{ ...doc().groups[0], locked: true }] };
+    expect(shareable(value).groups[0].locked).toBe(true);
+  });
 });
 
 describe("shareLink and readShareHash", () => {

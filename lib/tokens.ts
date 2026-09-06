@@ -1498,6 +1498,8 @@ export type Group = {
   y: number;
   axis: Axis;
   items: Item[];
+  /** a finished section the author locked from the Layers panel: it cannot be dragged, deleted or tidied, but stays selectable */
+  locked?: boolean;
   /** a hand-made group: parts keep their own offsets (in `pos`) and move as one layer */
   free?: boolean;
   pos?: Record<string, { x: number; y: number }>;

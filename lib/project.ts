@@ -33,6 +33,7 @@ const validGroup = (group: unknown) =>
   Number.isFinite(group.x) &&
   Number.isFinite(group.y) &&
   (group.axis === "x" || group.axis === "y") &&
+  (group.locked === undefined || typeof group.locked === "boolean") &&
   Array.isArray(group.items) &&
   group.items.length > 0 &&
   group.items.every(validItem);

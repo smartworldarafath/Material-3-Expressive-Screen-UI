@@ -50,9 +50,15 @@ describe("isProject", () => {
     expect(isProject(withItem({ variant: key }))).toBe(true);
   });
 
+  it.each([true, false])("accepts a group lock set to %s", (locked) => {
+    const value = doc();
+    expect(isProject({ ...value, groups: [{ ...value.groups[0], locked }] })).toBe(true);
+  });
+
   it.each([
     { id: 1 }, { x: NaN }, { x: Infinity }, { x: "0" }, { y: -Infinity }, { y: null },
     { axis: "z" }, { axis: undefined }, { items: [] }, { items: null }, { items: {} }, { items: [null] },
+    { locked: "yes" }, { locked: 1 }, { locked: null },
   ])("rejects invalid group fields %# %o", (patch) => {
     const value = doc();
     expect(isProject({ ...value, groups: [{ ...value.groups[0], ...patch }] })).toBe(false);
