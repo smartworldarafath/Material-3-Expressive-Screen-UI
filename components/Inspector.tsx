@@ -930,10 +930,11 @@ export function Inspector({
                   <button
                     onClick={() => {
                       setSlotKey(`tab:${i}`);
-                      setPickerOpen(true);
+                      setPickerOpen(!on);
                     }}
                     title={t("changeIcon", lang)}
                     aria-label={t("changeIcon", lang)}
+                    aria-expanded={on}
                     className="m3-press"
                     style={{
                       width: 40,
@@ -1074,6 +1075,7 @@ export function Inspector({
           <IconPicker
             value={activeSlot.value}
             onChange={(icon) => change(setIconSlot(item, activeSlot.key, icon))}
+            onClose={() => setPickerOpen(false)}
             palette={p}
           />
         </div>
