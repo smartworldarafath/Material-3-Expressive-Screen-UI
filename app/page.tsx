@@ -1199,6 +1199,10 @@ export default function Page() {
 
   useEffect(() => {
     if (!isDragging) return;
+    /* Ctrl overrides auto-snap for as long as it is held: no magnet slot, no
+       alignment guide, no 4dp grid. A pointer move carries its own ctrlKey, and
+       key events cover the moments in between when the pointer is still. */
+    let ctrlHeld = false;
 
     const move = (e: PointerEvent) => {
       const d = dragRef.current;
@@ -1206,6 +1210,7 @@ export default function Page() {
       const pt = toWorld(e.clientX, e.clientY);
       d.px = pt.x;
       d.py = pt.y;
+      ctrlHeld = e.ctrlKey;
 
       if (!d.active) {
         if (
@@ -1249,17 +1254,18 @@ export default function Page() {
       }
 
       d.overBin = inBin(e.clientX);
-      d.snap = d.overBin
-        ? null
-        : findSnap(d.item, pt.x - d.offX, pt.y - d.offY);
+      d.snap =
+        d.overBin || ctrlHeld
+          ? null
+          : findSnap(d.item, pt.x - d.offX, pt.y - d.offY);
       d.guide =
-        d.overBin || d.snap
+        d.overBin || d.snap || ctrlHeld
           ? null
           : findGuide(d.item, pt.x - d.offX, pt.y - d.offY);
       setDrag({ ...d });
     };
 
-    const up = () => {
+    const up = (e: PointerEvent) => {
       const d = dragRef.current;
       dragRef.current = null;
       setPressedId(null);
@@ -1268,6 +1274,8 @@ export default function Page() {
         setDrag(null);
         return;
       }
+
+      const loose = ctrlHeld || e.ctrlKey;
 
       const item = d.item;
       const sz = sizeRef(item);
@@ -1278,7 +1286,7 @@ export default function Page() {
         return;
       }
 
-      if (d.snap) {
+      if (!loose && d.snap) {
         const t = d.snap;
         setDrag({ ...d, snap: { ...t, pull: 1 }, settling: true });
         const commit = () => {
@@ -1312,8 +1320,9 @@ export default function Page() {
 
       const rect = canvasRect();
       const v = viewRef.current;
-      const rawX = d.guide?.x ?? d.px - d.offX;
-      const rawY = d.guide?.y ?? d.py - d.offY;
+      /* a Ctrl drop lands where the cursor is, untouched by any guide hold */
+      const rawX = loose ? d.px - d.offX : d.guide?.x ?? d.px - d.offX;
+      const rawY = loose ? d.py - d.offY : d.guide?.y ?? d.py - d.offY;
       const screenL = (rawX + sz.w) * v.z + v.x;
       const screenT = (rawY + sz.h) * v.z + v.y;
       const screenR = rawX * v.z + v.x;
@@ -1346,18 +1355,25 @@ export default function Page() {
       const placedItem = targetFrame && slot ? (isBar ? carryItemSize(item, { w: PHONE_W, h: PHONE_H }, { w: slot.w, h: frameSizeOf(targetFrame).h }) : fitHeight(item, frameSizeOf(targetFrame).h)) : item;
       /* off any guide, the part settles on the 4dp grid of the screen it lands on */
       const origin = targetFrame ?? { x: 0, y: 0 };
+      /* Ctrl keeps the pixel the cursor chose; a guide holds its whole-pixel
+         position; otherwise the axis settles on the 4dp grid as before.
+         A bar dropped on a screen keeps its own spanning rule. */
+      const settle = (onGuide: boolean, v: number, grid: number) =>
+        loose || onGuide ? Math.round(v) : onGrid(v, grid);
       const dropped: Group = {
         id: uid(),
-        x: isBar && slot ? Math.round(slot.x) : d.guide?.gx !== undefined ? Math.round(rawX) : onGrid(rawX, origin.x),
-        y: d.guide?.gy !== undefined ? Math.round(rawY) : onGrid(rawY, origin.y),
+        x: isBar && slot ? Math.round(slot.x) : settle(d.guide?.gx !== undefined, rawX, origin.x),
+        y: settle(d.guide?.gy !== undefined, rawY, origin.y),
         axis: connectSpecOf(item)?.axis ?? "x",
         items: [placedItem],
       };
       /* a part that grew to the screen's width is kept inside it, then settles back on the grid */
       const pulled = targetFrame ? pullInto(dropped, targetFrame, widthsRef.current) : dropped;
+      /* a Ctrl drop keeps whatever pullInto chose, whole pixels included;
+         otherwise a part pulled back in settles on the grid again */
       const ng =
-        pulled === dropped
-          ? dropped
+        pulled === dropped || loose
+          ? pulled
           : { ...pulled, x: d.guide?.gx !== undefined ? pulled.x : onGrid(pulled.x, origin.x), y: d.guide?.gy !== undefined ? pulled.y : onGrid(pulled.y, origin.y) };
       setGroups((prev) =>
         prev.some((g) => g.items.some((it) => it.id === item.id))
@@ -1367,6 +1383,23 @@ export default function Page() {
       setDrag(null);
     };
 
+    /* Ctrl pressed or released while the pointer is still: the drawn magnet and
+       guide must leave (or be free to return) right away, not on the next move */
+    const onCtrl = (e: KeyboardEvent, held: boolean) => {
+      if (e.key !== "Control" || e.repeat) return;
+      const d = dragRef.current;
+      if (!d) return;
+      ctrlHeld = held;
+      if (held) {
+        d.snap = null;
+        d.guide = null;
+      }
+      setDrag({ ...d });
+    };
+    const onCtrlDown = (e: KeyboardEvent) => onCtrl(e, true);
+    const onCtrlUp = (e: KeyboardEvent) => onCtrl(e, false);
+    window.addEventListener("keydown", onCtrlDown);
+    window.addEventListener("keyup", onCtrlUp);
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);
     window.addEventListener("pointercancel", up);
@@ -1374,6 +1407,8 @@ export default function Page() {
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
       window.removeEventListener("pointercancel", up);
+      window.removeEventListener("keydown", onCtrlDown);
+      window.removeEventListener("keyup", onCtrlUp);
     };
     // handlers read live state through refs, so this binds once per drag
     // eslint-disable-next-line react-hooks/exhaustive-deps
