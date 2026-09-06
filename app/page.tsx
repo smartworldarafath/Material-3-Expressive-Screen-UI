@@ -1824,8 +1824,10 @@ export default function Page() {
     (kind: AlignKind) => {
       const ids = new Set(selectedIds);
       const all = groupsRef.current;
-      const units = all.filter((g) => g.items.some((it) => ids.has(it.id)));
+      /* a locked group is left out of the alignment and stays an obstacle for the others */
+      const units = all.filter((g) => !g.locked && g.items.some((it) => ids.has(it.id)));
       if (units.length === 0) return;
+      const unitIds = new Set(units.map((g) => g.id));
       const distributing = kind === "distributeH" || kind === "distributeV";
       const horizontal = kind === "left" || kind === "centerH" || kind === "right" || kind === "distributeH";
       const rects = new Map(all.map((g) => [g.id, groupBounds(g, widthsRef.current)]));
@@ -1851,7 +1853,7 @@ export default function Page() {
         });
       } else {
         /* parts that are not moving, on the same screen, that a moved unit must not land on */
-        const others = all.filter((g) => !ids.has(g.items[0].id) && !g.items.some((it) => ids.has(it.id)) && (!screenId || frameOfGroup(g, framesRef.current, widthsRef.current)?.id === screenId)).map((g) => rects.get(g.id)!);
+        const others = all.filter((g) => !unitIds.has(g.id) && (!screenId || frameOfGroup(g, framesRef.current, widthsRef.current)?.id === screenId)).map((g) => rects.get(g.id)!);
         const hits = (r: { l: number; t: number; r: number; b: number }) => others.filter((o) => o.l < r.r && o.r > r.l && o.t < r.b && o.b > r.t);
         /* stepping away from the aligned edge: right of a left edge, up from a bottom edge; a centre tries both ways */
         const dir = kind === "left" || kind === "top" ? 1 : kind === "right" || kind === "bottom" ? -1 : 0;
@@ -1982,12 +1984,17 @@ export default function Page() {
       }
       if (selectedIds.length === 0) return;
       const ids = new Set(selectedIds);
+      /* a locked group stays where it is, even when its parts are selected */
+      const moving = new Set(
+        groupsRef.current
+          .filter((g) => !g.locked && g.items.some((it) => ids.has(it.id)))
+          .map((g) => g.id),
+      );
+      if (moving.size === 0) return;
       snapshotFor("nudge:" + selectedIds.join(","));
       setGroups((prev) =>
         prev.map((g) =>
-          g.items.some((it) => ids.has(it.id))
-            ? { ...g, x: g.x + dx, y: g.y + dy }
-            : g,
+          moving.has(g.id) ? { ...g, x: g.x + dx, y: g.y + dy } : g,
         ),
       );
     },
