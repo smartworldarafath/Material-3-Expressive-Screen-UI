@@ -67,7 +67,8 @@ Works with any AI coding tool that takes a prompt, such as Claude Code, Codex, G
 | `+` `-` `0` | Zoom in, zoom out, fit |
 | `Ctrl+Z` / `Ctrl+Shift+Z` | Undo / redo |
 | `Ctrl+D` | Duplicate |
-| Arrows (`Shift` = 10) | Nudge |
+| Arrows (`Shift` = 8dp) | Nudge |
+| `Ctrl` + drag | Move without snapping (no guides, no 4dp grid) |
 | `Delete` | Delete part or screen |
 | `P` | Preview |
 

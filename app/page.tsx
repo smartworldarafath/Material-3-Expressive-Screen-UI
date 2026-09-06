@@ -2722,7 +2722,7 @@ export default function Page() {
       }
       if (e.key.startsWith("Arrow")) {
         e.preventDefault();
-        const s = e.shiftKey ? 10 : 1;
+        const s = e.shiftKey ? 8 : 1;
         nudge(
           e.key === "ArrowLeft" ? -s : e.key === "ArrowRight" ? s : 0,
           e.key === "ArrowUp" ? -s : e.key === "ArrowDown" ? s : 0,
