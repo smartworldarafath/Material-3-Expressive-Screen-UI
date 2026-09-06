@@ -1214,7 +1214,7 @@ export default function Page() {
       const pt = toWorld(e.clientX, e.clientY);
       d.px = pt.x;
       d.py = pt.y;
-      ctrlHeld = e.ctrlKey;
+      ctrlHeld = e.ctrlKey || e.metaKey;
 
       if (!d.active) {
         if (
@@ -1279,7 +1279,7 @@ export default function Page() {
         return;
       }
 
-      const loose = ctrlHeld || e.ctrlKey;
+      const loose = ctrlHeld || e.ctrlKey || e.metaKey;
 
       const item = d.item;
       const sz = sizeRef(item);
@@ -1362,8 +1362,8 @@ export default function Page() {
       /* Ctrl keeps the pixel the cursor chose; a guide holds its whole-pixel
          position; otherwise the axis settles on the 4dp grid as before.
          A bar dropped on a screen keeps its own spanning rule. */
-      const settle = (onGuide: boolean, v: number, grid: number) =>
-        loose || onGuide ? Math.round(v) : onGrid(v, grid);
+      const settle = (onGuide: boolean, pos: number, grid: number) =>
+        loose || onGuide ? Math.round(pos) : onGrid(pos, grid);
       const dropped: Group = {
         id: uid(),
         x: isBar && slot ? Math.round(slot.x) : settle(d.guide?.gx !== undefined, rawX, origin.x),
@@ -1387,10 +1387,10 @@ export default function Page() {
       setDrag(null);
     };
 
-    /* Ctrl pressed or released while the pointer is still: the drawn magnet and
-       guide must leave (or be free to return) right away, not on the next move */
+    /* Ctrl (or Cmd on a Mac) pressed or released while the pointer is still: the drawn
+       magnet and guide must leave (or be free to return) right away, not on the next move */
     const onCtrl = (e: KeyboardEvent, held: boolean) => {
-      if (e.key !== "Control" || e.repeat) return;
+      if ((e.key !== "Control" && e.key !== "Meta") || e.repeat) return;
       const d = dragRef.current;
       if (!d) return;
       ctrlHeld = held;
@@ -1555,8 +1555,10 @@ export default function Page() {
         setGroups((gs) =>
           gs.map((gr) => {
             if (gr.id !== g.id) return gr;
-            /* a moved group settles on the 4dp grid of the screen it is over */
+            /* a moved group settles on the 4dp grid of the screen it is over,
+               unless Ctrl (or Cmd) is held, as when dragging a single part */
             const moved = { ...gr, x: g.gx + dx, y: g.gy + dy };
+            if (e.ctrlKey || e.metaKey) return moved;
             const f = frameOfGroup(moved, framesRef.current, widthsRef.current);
             return { ...moved, x: onGrid(moved.x, f?.x ?? 0), y: onGrid(moved.y, f?.y ?? 0) };
           }),
