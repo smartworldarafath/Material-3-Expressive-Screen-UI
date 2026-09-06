@@ -214,7 +214,7 @@ export const UI = {
   screenWidth: { ja: "画面いっぱい", en: "Screen width", zh: "全屏宽" },
   contentWidth: { ja: "左右 16dp の余白", en: "16dp side margins", zh: "左右 16dp 边距" },
   halfWidth: { ja: "2 列に並べる幅", en: "Half a row (two columns)", zh: "两列宽" },
-  columnWidth: { ja: "スマホ 1 画面分の幅", en: "One phone column", zh: "手机内容宽度" },
+  columnWidth: { ja: "スマホ 1 画面分の幅", en: "One phone column", zh: "手机屏幕宽度" },
   screenHeight: { ja: "画面の高さ", en: "Screen height", zh: "全屏高" },
   halfHeight: { ja: "画面の半分", en: "Half the screen", zh: "半屏高" },
   tapTo: { ja: "タップで移動", en: "Tap to open", zh: "点击跳转" },
