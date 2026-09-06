@@ -104,12 +104,12 @@ export function IconPicker({
 
   return (
     <div>
-      {/* hidden probes — measured before paint, so nothing broken ever renders */}
+      {/* Hidden probes need intrinsic text widths to distinguish missing glyphs. */}
       <div
         aria-hidden
         style={{ position: "fixed", left: -99999, top: 0, visibility: "hidden", pointerEvents: "none" }}
       >
-        <span ref={refEl} className="msr" style={{ fontSize: 24 }}>
+        <span ref={refEl} className="msr" style={{ fontSize: 24, width: "auto" }}>
           search
         </span>
         {unknown.map((c) => (
@@ -120,7 +120,7 @@ export function IconPicker({
               else probeEls.current.delete(c.n);
             }}
             className="msr"
-            style={{ fontSize: 24 }}
+            style={{ fontSize: 24, width: "auto" }}
           >
             {c.n}
           </span>
