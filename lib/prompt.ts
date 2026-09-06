@@ -286,7 +286,7 @@ function itemZh(it: Item): string {
       return `${style}卡片${it.size2 ? `（高 ${it.size2}dp）` : ""}${it.fill ? `（背景 ${it.fill}）` : ""}。${cardImage(it, "zh")}标题${q(it.label)}${hasText(it.supporting) ? `，正文${q(it.supporting!)}` : ""}`;
     }
     case "listItem":
-      return `${q(it.label)}${hasText(it.supporting) ? `（辅助文本${q(it.supporting!)}）` : ""}${it.icon ? `，前置 ${it.icon} 图标${it.iconFill === "none" ? "（无背景）" : it.iconFill ? `（背景 ${it.iconFill}）` : ""}` : ""}${it.switch ? `，末尾为开关（初始${it.checked ? "开启" : "关闭"}）` : it.icon2 ? `，后置 ${it.icon2}` : ""}${it.fill && it.fill !== "surfaceContainerLow" ? `，背景为 ${it.fill}` : ""}`;
+      return `${q(it.label)}${hasText(it.supporting) ? `（辅助文本${q(it.supporting!)}）` : ""}${it.icon ? `，前置 ${it.icon} 图标${it.iconFill === "none" ? "（无背景）" : it.iconFill ? `（背景 ${it.iconFill}）` : ""}` : ""}${it.switch ? `，后置开关（初始${it.checked ? "开启" : "关闭"}）` : it.icon2 ? `，后置 ${it.icon2}` : ""}${it.fill && it.fill !== "surfaceContainerLow" ? `，背景为 ${it.fill}` : ""}`;
     case "dialog":
       return `标题${q(it.label)}${hasText(it.supporting) ? `、正文${q(it.supporting!)}` : ""}${it.icon ? `、带 ${it.icon} 图标` : ""}的对话框（取消／确定文字按钮）`;
     case "snackbar":
@@ -1284,7 +1284,7 @@ const PH = {
     hLayout: "## 屏幕结构",
     empty: "屏幕上还没有放置任何组件。",
     screens: (names: string[]) => `共有 ${names.length} 个屏幕：${names.join("、")}。`,
-    placement: (place: Place) => (place === "center" ? "正文组件集中放在屏幕的垂直中央。" : place === "bottom" ? "正文组件靠屏幕底部（导航栏上方）放置。" : "正文组件在屏幕高度上等距分布（只有一行时垂直居中）。"),
+    placement: (place: Place) => (place === "center" ? "内容区域中的组件集中放在屏幕的垂直中央。" : place === "bottom" ? "内容区域中的组件靠屏幕底部（导航栏上方）放置。" : "内容区域中的组件在屏幕高度上等距分布（只有一行时垂直居中）。"),
     screenHead: (name: string, bg: string | undefined, has: boolean, size?: string) => `${name}屏幕${size || bg ? `（${[size, bg ? `背景为 ${bg}` : ""].filter(Boolean).join("，")}）` : ""}${has ? "从上到下依次如下（重叠的组件会特别说明）：" : "目前为空。"}`,
     loose: "放在屏幕之外的组件（公共部件或参考）：",
     freeform: "从上到下说明屏幕内容：",
