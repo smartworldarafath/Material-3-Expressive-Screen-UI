@@ -1189,6 +1189,17 @@ export function Inspector({
       {(spec.size || hasRadius) && !editOn && (
         <Section id="size" icon="straighten" title={t("size", lang)} p={p}>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {spec.hasWavy && (
+              <div role="group" aria-label={t("trackThickness", lang)} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                <div style={{ fontSize: 12, color: p.onSurfaceVariant }}>{t("trackThickness", lang)}</div>
+                <Segmented<"4" | "8">
+                  options={[{ key: "4", label: "4dp" }, { key: "8", label: "8dp" }]}
+                  value={item.trackThickness === 8 ? "8" : "4"}
+                  onChange={(v) => onChange({ trackThickness: v === "8" ? 8 : 4 })}
+                  p={p}
+                />
+              </div>
+            )}
             {spec.size && (
               <>
                 <Slider

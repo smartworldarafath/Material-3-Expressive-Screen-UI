@@ -100,7 +100,6 @@ const l1Tail = bezier(0.4, 0, 1, 1);
 const l2Head = bezier(0, 0, 0.65, 1);
 const l2Tail = bezier(0.1, 0, 0.45, 1);
 
-const STROKE = 4;
 const TRACK_GAP = 4;
 const STOP_SIZE = 4;
 const LINEAR_WAVELENGTH = 40;
@@ -126,6 +125,7 @@ export function LinearProgress({
   trackColor,
   wavy,
   value,
+  trackThickness = 4,
 }: {
   width: number;
   color: string;
@@ -133,11 +133,12 @@ export function LinearProgress({
   wavy?: boolean;
   /** 0..1, undefined = indeterminate */
   value?: number;
+  trackThickness?: 4 | 8;
 }) {
-  const height = wavy ? STROKE + LINEAR_AMPLITUDE * 2 + 2 : STROKE + 2;
+  const height = trackThickness + (wavy ? LINEAR_AMPLITUDE * 2 : 0) + 2;
   const mid = height / 2;
-  const inset = STROKE / 2;
-  const w = width - STROKE;
+  const inset = trackThickness / 2;
+  const w = width - trackThickness;
   const activeRef = useRef<SVGPathElement>(null);
   const active2Ref = useRef<SVGPathElement>(null);
   const trackRef = useRef<SVGPathElement>(null);
@@ -159,7 +160,8 @@ export function LinearProgress({
       const end = inset + w * v;
       a.setAttribute("d", wavePath(inset, end, mid, amp, phase, LINEAR_WAVELENGTH));
       b.setAttribute("d", "");
-      const trackStart = Math.min(inset + w - STOP_SIZE, end + TRACK_GAP + STROKE / 2);
+      // Both rounded caps extend half a stroke into the gap.
+      const trackStart = end + TRACK_GAP + trackThickness;
       t.setAttribute("d", wavePath(v <= 0 ? inset : trackStart, inset + w, mid, 0, 0, 1));
       return;
     }
@@ -178,15 +180,15 @@ export function LinearProgress({
     let cursor = inset;
     let d = "";
     for (const s of segs) {
-      const to = s[0] - TRACK_GAP - STROKE / 2;
+      const to = s[0] - TRACK_GAP - trackThickness;
       if (to - cursor > 0.5) d += wavePath(cursor, to, mid, 0, 0, 1);
-      cursor = Math.max(cursor, s[1] + TRACK_GAP + STROKE / 2);
+      cursor = Math.max(cursor, s[1] + TRACK_GAP + trackThickness);
     }
     if (inset + w - cursor > 0.5) d += wavePath(cursor, inset + w, mid, 0, 0, 1);
     t.setAttribute("d", d);
   });
 
-  const stroke = { fill: "none", strokeWidth: STROKE, strokeLinecap: "round" as const };
+  const stroke = { fill: "none", strokeWidth: trackThickness, strokeLinecap: "round" as const };
   return (
     <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} style={{ display: "block" }}>
       <path ref={trackRef} stroke={trackColor} {...stroke} />
@@ -239,18 +241,20 @@ export function CircularProgress({
   trackColor,
   wavy,
   value,
+  trackThickness = 4,
 }: {
   size: number;
   color: string;
   trackColor: string;
   wavy?: boolean;
   value?: number;
+  trackThickness?: 4 | 8;
 }) {
   const amp = wavy ? CIRC_AMPLITUDE : 0;
-  const r = size / 2 - STROKE / 2 - amp;
+  const r = size / 2 - trackThickness / 2 - amp;
   const c = size / 2;
   const k = Math.max(3, Math.round((2 * Math.PI * r) / CIRC_WAVELENGTH));
-  const gapDeg = ((TRACK_GAP + STROKE) / (2 * Math.PI * r)) * 360;
+  const gapDeg = ((TRACK_GAP + trackThickness) / (2 * Math.PI * r)) * 360;
   const activeRef = useRef<SVGPathElement>(null);
   const trackRef = useRef<SVGPathElement>(null);
   const start = useRef(0);
@@ -290,7 +294,7 @@ export function CircularProgress({
     t.setAttribute("d", trackTo - trackFrom > 1 ? arcPath(c, c, r, trackFrom, trackTo, 0, k, 0) : "");
   });
 
-  const stroke = { fill: "none", strokeWidth: STROKE, strokeLinecap: "round" as const };
+  const stroke = { fill: "none", strokeWidth: trackThickness, strokeLinecap: "round" as const };
   return (
     <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ display: "block" }}>
       <path ref={trackRef} stroke={trackColor} {...stroke} />
