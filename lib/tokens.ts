@@ -39,6 +39,8 @@ export const isWideRail = (it: Item) => it.railExpanded !== undefined || it.rail
 export const railWidth = (it: Item) => it.railExpanded ? RAIL_EXPANDED_W : isWideRail(it) ? RAIL_COLLAPSED_W : RAIL_W;
 /** Modal expansion overlays the body, retaining only the collapsed rail's layout slot. */
 export const railLayoutWidth = (it: Item) => it.railModal ? RAIL_COLLAPSED_W : railWidth(it);
+/** Runtime-only expansion edge: copied by item edits, never included in JSON. */
+export const railExpansionSide = Symbol("railExpansionSide");
 /** Shared drawing / hit-area geometry. The header is a 48dp menu button with an 8dp gap. */
 export function railMetrics(it: Item) {
   const wide = isWideRail(it);
@@ -1185,8 +1187,7 @@ export type Item = {
   railExpanded?: boolean;
   /** Expanded rail overlays a scrim rather than taking additional layout space. */
   railModal?: boolean;
-  /** Internal expansion anchor; a horizontal move invalidates its frame-relative offset. */
-  railAnchor?: { side: "left" | "right"; offset: number };
+  [railExpansionSide]?: "left" | "right";
   contained?: boolean;
   /** free text the author writes about what this part does */
   note?: string;

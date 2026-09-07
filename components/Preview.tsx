@@ -407,73 +407,18 @@ function Screen({
     screenRef.current?.querySelector<HTMLButtonElement>(`[data-rail-modal] [data-rail-toggle]`)?.focus();
     return () => { if (previous?.isConnected) previous.focus(); };
   }, [modalId]);
-  const renderItem = (g: Group, it: Item, i: number, corners: ReturnType<typeof freeRadii> | null) => {
-    const conn = connectSpecOf(it);
-    const n = g.free ? 1 : g.items.length;
-    const radii = g.free
-      ? (corners?.get(it.id) ?? baseRadii(it))
-      : conn && n > 1
-        ? g.axis === "x"
-          ? {
-              tl: i === 0 ? conn.outer : conn.inner,
-              bl: i === 0 ? conn.outer : conn.inner,
-              tr: i === n - 1 ? conn.outer : conn.inner,
-              br: i === n - 1 ? conn.outer : conn.inner,
-            }
-          : {
-              tl: i === 0 ? conn.outer : conn.inner,
-              tr: i === 0 ? conn.outer : conn.inner,
-              bl: i === n - 1 ? conn.outer : conn.inner,
-              br: i === n - 1 ? conn.outer : conn.inner,
-            }
-        : conn
-          ? uniformRadii(conn.outer)
-          : baseRadii(it);
-    const act = it.action;
-    let shown = flipped.has(it.id) ? flippedLook(it) : it;
-    if (it.kind === "slider" && values[it.id] !== undefined) shown = { ...shown, value: values[it.id] };
-    if (it.kind === "select" && values[it.id] !== undefined) shown = { ...shown, selected: values[it.id] };
-    const navKind = it.kind === "bottomNav" || it.kind === "navRail" || it.kind === "tabs";
-    /* bars with the same destinations are one bar to the visitor: the choice follows them across screens */
-    const navKey = navKind ? `nav:${it.kind}:${(it.tabs ?? []).map((t) => t.label).join("|")}` : "";
-    if (navKind && values[navKey] !== undefined && values[navKey] >= 0) shown = { ...shown, selected: values[navKey] };
-    const tap =
-      act || flips(it)
-        ? () => {
-            if (flips(it)) onFlip(it.id);
-            if (act) onAction(act);
-          }
-        : undefined;
-    const slotActions = it.actions;
-    return (
-      <Tappable
-        key={it.id}
-        item={shown}
-        p={p}
-        radii={it.kind === "navRail" ? baseRadii(shown) : radii}
-        widths={widths}
-        railAnimating={railMotion?.items.has(it.id)}
-        onTap={tap}
-        onSlot={
-          slotActions || navKind
-            ? (slot, animate) => {
-                /* a tapped destination lights up where it opens nothing; where it opens a
-                   screen, that screen's bar shows its own selected destination */
-                const a = slotActions?.[slot];
-                if (navKind && slot.startsWith("tab:")) onValue(navKey, a ? -1 : Number(slot.slice(4)));
-                if (it.id === modalId) closeRail(animate);
-                if (a) onAction(a);
-              }
-            : undefined
-        }
-        onValue={it.kind === "slider" ? (v) => onValue(it.id, v) : undefined}
-        onPick={it.kind === "select" ? (i) => onValue(it.id, i) : undefined}
-        menuOpen={menuId === it.id}
-        onMenu={it.kind === "select" ? (open) => setMenuId(open ? it.id : null) : undefined}
-        onRailToggle={it.kind === "navRail" && isWideRail(it) ? (animate) => changeRail(it.id, !it.railExpanded, animate) : undefined}
-      />
-    );
-  };
+  useEffect(() => {
+    if (!modalId) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      closeRail();
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  });
+
   return (
     <div
       ref={screenRef}
@@ -482,11 +427,7 @@ function Screen({
       onKeyDownCapture={(e) => {
         setRailMotion(null);
         if (!modalId) return;
-        if (e.key === "Escape") {
-          e.preventDefault();
-          e.stopPropagation();
-          closeRail();
-        } else if (e.key === "Tab") {
+        if (e.key === "Tab") {
           const buttons = Array.from(screenRef.current?.querySelectorAll<HTMLButtonElement>("[data-rail-modal] button") ?? []);
           const index = buttons.indexOf(document.activeElement as HTMLButtonElement);
           if (buttons.length && (index < 0 || (!e.shiftKey && index === buttons.length - 1) || (e.shiftKey && index === 0))) {
@@ -509,27 +450,25 @@ function Screen({
           style={{ position: "absolute", inset: 0, border: 0, padding: 0, background: "rgba(0,0,0,0.32)", zIndex: 3 }}
         />}
       </AnimatePresence>
-      {shownGroups.map((g) => {
-        const ownsModal = !!modalId && modalRailOf(g)?.id === modalId;
-        return (
+      {shownGroups.map((g) => (
         <div
           key={g.id}
           className="m3-preview-group"
           data-preview-group={g.id}
           data-rail-animate={railMotion?.groups.has(g.id) ? "group" : undefined}
-          data-rail-modal={ownsModal ? "true" : undefined}
-          role={ownsModal ? "dialog" : undefined}
-          aria-modal={ownsModal ? true : undefined}
-          aria-label={ownsModal ? t("railState", lang) : undefined}
-          inert={!!modalId && !ownsModal}
+          data-rail-modal={g.items.some((it) => it.id === modalId) ? "true" : undefined}
+          role={g.items.some((it) => it.id === modalId) ? "dialog" : undefined}
+          aria-modal={g.items.some((it) => it.id === modalId) ? true : undefined}
+          aria-label={g.items.some((it) => it.id === modalId) ? t("railState", lang) : undefined}
+          inert={!!modalId && !g.items.some((it) => it.id === modalId)}
           style={
             g.free
-              ? { position: "absolute", left: g.x - frame.x, top: g.y - frame.y, zIndex: ownsModal ? 4 : g.items.some((it) => it.id === menuId) ? 2 : undefined }
+              ? { position: "absolute", left: g.x - frame.x, top: g.y - frame.y, zIndex: g.items.some((it) => it.id === modalId) ? 4 : g.items.some((it) => it.id === menuId) ? 2 : undefined }
               : {
                   position: "absolute",
                   left: g.x - frame.x,
                   top: g.y - frame.y,
-                  zIndex: ownsModal ? 4 : g.items.some((it) => it.id === menuId) ? 2 : undefined,
+                  zIndex: g.items.some((it) => it.id === modalId) ? 4 : g.items.some((it) => it.id === menuId) ? 2 : undefined,
                   display: "flex",
                   flexDirection: g.axis === "x" ? "row" : "column",
                   alignItems: g.axis === "x" ? "center" : "stretch",
@@ -538,14 +477,81 @@ function Screen({
           }
         >
           {((corners) => g.items.map((it, i) => {
-            const node = renderItem(g, it, i, corners);
+            const conn = connectSpecOf(it);
+            const n = g.free ? 1 : g.items.length;
+            const radii = g.free
+              ? (corners?.get(it.id) ?? baseRadii(it))
+              : conn && n > 1
+                ? g.axis === "x"
+                  ? {
+                      tl: i === 0 ? conn.outer : conn.inner,
+                      bl: i === 0 ? conn.outer : conn.inner,
+                      tr: i === n - 1 ? conn.outer : conn.inner,
+                      br: i === n - 1 ? conn.outer : conn.inner,
+                    }
+                  : {
+                      tl: i === 0 ? conn.outer : conn.inner,
+                      tr: i === 0 ? conn.outer : conn.inner,
+                      bl: i === n - 1 ? conn.outer : conn.inner,
+                      br: i === n - 1 ? conn.outer : conn.inner,
+                    }
+                : conn
+                  ? uniformRadii(conn.outer)
+                  : baseRadii(it);
+            const act = it.action;
+            let shown = flipped.has(it.id) ? flippedLook(it) : it;
+            if (it.kind === "slider" && values[it.id] !== undefined) shown = { ...shown, value: values[it.id] };
+            if (it.kind === "select" && values[it.id] !== undefined) shown = { ...shown, selected: values[it.id] };
+            const navKind = it.kind === "bottomNav" || it.kind === "navRail" || it.kind === "tabs";
+            /* bars with the same destinations are one bar to the visitor: the choice follows them across screens */
+            const navKey = navKind ? `nav:${it.kind}:${(it.tabs ?? []).map((t) => t.label).join("|")}` : "";
+            if (navKind && values[navKey] !== undefined && values[navKey] >= 0) shown = { ...shown, selected: values[navKey] };
+            const tap =
+              act || flips(it)
+                ? () => {
+                    if (flips(it)) onFlip(it.id);
+                    if (act) onAction(act);
+                  }
+                : undefined;
+            const slotActions = it.actions;
+            const node = (
+              <Tappable
+                key={it.id}
+                item={shown}
+                p={p}
+                radii={radii}
+                widths={widths}
+                railAnimating={railMotion?.items.has(it.id)}
+                onTap={tap}
+                onSlot={
+                  slotActions || navKind
+                    ? (slot, animate) => {
+                        /* a tapped destination lights up where it opens nothing; where it opens a
+                           screen, that screen's bar shows its own selected destination */
+                        const a = slotActions?.[slot];
+                        if (navKind && slot.startsWith("tab:")) onValue(navKey, a ? -1 : Number(slot.slice(4)));
+                        if (it.id === modalId) closeRail(animate);
+                        if (a) onAction(a);
+                      }
+                    : undefined
+                }
+                onValue={it.kind === "slider" ? (v) => onValue(it.id, v) : undefined}
+                onPick={it.kind === "select" ? (i) => onValue(it.id, i) : undefined}
+                menuOpen={menuId === it.id}
+                onMenu={it.kind === "select" ? (open) => setMenuId(open ? it.id : null) : undefined}
+                onRailToggle={it.kind === "navRail" && isWideRail(it) ? (animate) => changeRail(it.id, !it.railExpanded, animate) : undefined}
+              />
+            );
             if (!g.free) return node;
             const o = g.pos?.[it.id] ?? { x: 0, y: 0 };
-            return <div key={it.id} style={{ position: "absolute", left: o.x, top: o.y }}>{node}</div>;
+            return (
+              <div key={it.id} style={{ position: "absolute", left: o.x, top: o.y }}>
+                {node}
+              </div>
+            );
           }))(g.free ? freeRadii(g, widths) : null)}
         </div>
-        );
-      })}
+      ))}
     </div>
   );
 }

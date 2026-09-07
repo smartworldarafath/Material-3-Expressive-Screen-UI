@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { updateRail } from "./rail";
 import { barSlotOf, bodyRect, carryFrame, railSide, tidyFrame } from "./tidy";
-import { Frame, Group, Item } from "./tokens";
+import { Frame, Group, Item, railExpansionSide } from "./tokens";
 
 const frame: Frame = { id: "f", name: "Desktop", x: 20, y: 40, w: 1280, h: 800 };
 const rail: Item = { id: "rail", kind: "navRail", label: "", icon: "menu", variant: "filled", railExpanded: false, size2: 800 };
@@ -10,6 +10,37 @@ const group = (id: string, x: number, items: Item[]): Group => ({ id, x, y: 40, 
 const stage = (right = false): Group[] => [group("rail-group", right ? 1204 : 20, [rail]), group("bar-group", right ? 20 : 116, [bar])];
 
 describe("updateRail", () => {
+  it.each([false, true])("keeps neighbouring layout slots stable through modal toggles on the right=%s", (right) => {
+    const original = [
+      group("outer", right ? 1204 : 20, [{ ...rail, railModal: true }]),
+      group("inner", right ? 1108 : 116, [{ ...rail, id: "inner-rail" }]),
+      group("body", right ? 20 : 212, [{ ...bar, size: 1088 }]),
+    ];
+    let current = original;
+    for (let i = 0; i < 3; i++) {
+      for (const railExpanded of [true, false]) {
+        current = updateRail(current, [frame], {}, "rail", { railExpanded });
+        current = tidyFrame(current, frame, [frame], {}) ?? current;
+        expect(current[1].x).toBe(original[1].x);
+        expect(current[2].x).toBe(original[2].x);
+        expect(barSlotOf(current, frame, [frame], {})).toEqual({ x: original[2].x, w: 1088 });
+        expect(tidyFrame(current, frame, [frame], {})).toBeNull();
+      }
+    }
+  });
+
+  it.each([undefined, false, true])("finds a rail after a bottom bar when carrying a frame (expanded=%s)", (railExpanded) => {
+    const layoutWidth = railExpanded === undefined ? 80 : railExpanded ? 220 : 96;
+    const original = [
+      group("bottom", 20, [{ ...bar, kind: "bottomNav", size: 1280 }]),
+      group("legacy-rail", 20, [{ ...rail, railExpanded }]),
+      group("body", 20 + layoutWidth, [{ ...bar, size: 1280 - layoutWidth }]),
+    ];
+    const out = carryFrame(original, frame, { ...frame, w: 1440 }, [frame], {}).groups;
+    // The first bottom bar still becomes an original 80dp rail, as on main.
+    expect(out.find((g) => g.id === "body")!.items[0].size).toBe(1360);
+  });
+
   it.each([false, true])("keeps a near-centre right rail's body origin when modal=%s", (railModal) => {
     const original = stage(true);
     original[0] = { ...original[0], x: 630, items: [{ ...rail, railModal }] };
@@ -17,13 +48,20 @@ describe("updateRail", () => {
     expect(expanded[0].x).toBe(506);
     expect(expanded[1].x).toBe(original[1].x);
     expect(expanded[1].items[0].size).toBe(railModal ? 1184 : 1060);
-    expect(updateRail(JSON.parse(JSON.stringify(expanded)), [frame], {}, "rail", { railExpanded: false })).toEqual(original);
+    expect(updateRail(expanded, [frame], {}, "rail", { railExpanded: false })).toEqual(original);
+    const saved = JSON.parse(JSON.stringify(expanded));
+    expect(saved[0].items[0]).not.toHaveProperty("railAnchor");
+    expect(Object.getOwnPropertySymbols(saved[0].items[0])).toEqual([]);
+    expect(railSide(saved[0], frame, {})).toBe("left");
   });
 
-  it("keeps the anchor when its frame moves and ignores it after a manual horizontal move", () => {
+  it("keeps the expansion edge after nudges or frame moves, and follows a move across the midpoint", () => {
     const original = stage(true);
     original[0] = { ...original[0], x: 630 };
     const expanded = updateRail(original, [frame], {}, "rail", { railExpanded: true });
+    const nudged = expanded.map((g, i) => i === 0 ? { ...g, x: g.x + 1 } : g);
+    expect(updateRail(nudged, [frame], {}, "rail", { railExpanded: false })[0].x).toBe(631);
+    expect(railSide(expanded[0], { ...frame, x: frame.x + 1 }, {})).toBe("right");
     const moved = expanded.map((g) => ({ ...g, x: g.x + 500 }));
     const collapsed = updateRail(moved, [{ ...frame, x: frame.x + 500 }], {}, "rail", { railExpanded: false });
     expect(collapsed).toEqual(original.map((g) => ({ ...g, x: g.x + 500 })));
@@ -31,7 +69,7 @@ describe("updateRail", () => {
     const dragged = expanded.map((g, i) => i === 0 ? { ...g, x: 30 } : g);
     const afterDrag = updateRail(dragged, [frame], {}, "rail", { railExpanded: false });
     expect(afterDrag[0].x).toBe(30);
-    expect(afterDrag[0].items[0].railAnchor).toBeUndefined();
+    expect(afterDrag[0].items[0][railExpansionSide]).toBeUndefined();
   });
 
   it("uses the saved side for body bounds, tidy and frame resizing", () => {
@@ -43,13 +81,13 @@ describe("updateRail", () => {
     expect(railSide({ ...expanded[0], x: expanded[0].x + 1e-10 }, frame, {})).toBe("right");
     const tidied = tidyFrame(expanded, frame, [frame], {})!;
     expect(tidied[0].x).toBe(1080);
-    expect(tidied[0].items[0].railAnchor).toEqual({ side: "right", offset: 1060 });
+    expect(tidied[0].items[0][railExpansionSide]).toBe("right");
     expect(updateRail(tidied, [frame], {}, "rail", { railExpanded: false })[0].x).toBe(1204);
 
     const larger = { ...frame, w: 1440 };
     const carried = carryFrame(expanded, frame, larger, [frame], {}).groups;
     expect(carried[0].x).toBe(1240);
-    expect(carried[0].items[0].railAnchor).toEqual({ side: "right", offset: 1220 });
+    expect(carried[0].items[0][railExpansionSide]).toBe("right");
     expect(updateRail(carried, [larger], {}, "rail", { railExpanded: false })[0].x).toBe(1364);
   });
 

@@ -136,7 +136,7 @@ input.m3-number {
 }
 
 /* Only geometry affected by the current rail action shares its transition. */
-[data-wide-rail] {
+[data-rail-motion] [data-wide-rail] {
   transition: outline-color 120ms !important;
 }
 [data-rail-motion] .m3-preview-group,

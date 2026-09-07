@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { railMotionTargets } from "./railView";
 import { constrainModalRails, modalRailOf, updateRail } from "./rail";
-import { Frame, Group, Item } from "./tokens";
+import { Frame, Group, Item, railExpansionSide } from "./tokens";
 
 const rail: Item = { id: "rail", kind: "navRail", label: "", icon: "menu", variant: "filled", railExpanded: false, railModal: true, size2: 500 };
 const sibling: Item = { id: "sibling", kind: "button", label: "Sibling", icon: null, variant: "filled" };
@@ -9,12 +9,12 @@ const group: Group = { id: "mixed", x: 20, y: 40, axis: "x", items: [sibling, ra
 
 describe("standalone modal rail invariant", () => {
   it.each([false, true])("collapses grouped modal rails without moving siblings (free=%s)", (free) => {
-    const mixed: Group = { ...group, free, items: [sibling, { ...rail, railExpanded: true, railAnchor: { side: "right", offset: 20 } }], pos: { rail: { x: 12, y: 18 }, sibling: { x: 120, y: 150 } } };
+    const mixed: Group = { ...group, free, items: [sibling, { ...rail, railExpanded: true, [railExpansionSide]: "right" }], pos: { rail: { x: 12, y: 18 }, sibling: { x: 120, y: 150 } } };
     const input = [mixed];
-    const before = structuredClone(input);
+    const before = input.map((g) => ({ ...g, items: g.items.map((it) => ({ ...it })) }));
     const [next] = constrainModalRails(input);
     expect(next.items[1]).toMatchObject({ railExpanded: false, railModal: false });
-    expect(next.items[1].railAnchor).toBeUndefined();
+    expect(next.items[1][railExpansionSide]).toBeUndefined();
     expect(next.items[0]).toBe(sibling);
     expect(next.pos).toBe(mixed.pos);
     expect([next.x, next.y, next.axis]).toEqual([mixed.x, mixed.y, mixed.axis]);

@@ -1,5 +1,5 @@
 import { barSlotOf, railSide } from "./tidy";
-import { Frame, Group, Item, carryItemSize, frameOfGroup, frameSizeOf, railLayoutWidth, railWidth } from "./tokens";
+import { Frame, Group, Item, carryItemSize, frameOfGroup, frameSizeOf, railExpansionSide, railLayoutWidth, railWidth } from "./tokens";
 
 /** First-version modal rails must own their group; grouping one collapses it. */
 export function constrainModalRails(groups: Group[]): Group[] {
@@ -9,7 +9,7 @@ export function constrainModalRails(groups: Group[]): Group[] {
     changed = true;
     return { ...group, items: group.items.map((it) => {
       if (it.kind !== "navRail" || !it.railModal) return it;
-      const { railAnchor: _anchor, ...item } = it;
+      const { [railExpansionSide]: _side, ...item } = it;
       return { ...item, railModal: false, railExpanded: false };
     }) };
   });
@@ -31,9 +31,9 @@ export function updateRail(groups: Group[], frames: Frame[], widths: Record<stri
   const right = standalone && frame && railSide(target, frame, widths) === "right";
   const x = right ? target.x + railWidth(item) - railWidth(updated) : target.x;
   if (standalone && frame && !item.railExpanded && updated.railExpanded) {
-    updated.railAnchor = { side: right ? "right" : "left", offset: x - frame.x };
+    updated[railExpansionSide] = right ? "right" : "left";
   } else if (!updated.railExpanded) {
-    delete updated.railAnchor;
+    delete updated[railExpansionSide];
   }
   const next = groups.map((g) => g === target ? {
     ...g,

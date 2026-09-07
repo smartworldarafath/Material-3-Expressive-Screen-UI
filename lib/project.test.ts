@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { isProject, projectFileName, readProject } from "./project";
-import { KIND_ORDER, VARIANTS, type Doc, type Item } from "./tokens";
+import { KIND_ORDER, VARIANTS, railExpansionSide, type Doc, type Item } from "./tokens";
 
 const item = (): Item => ({ id: "item", kind: "button", label: "Save", icon: null, variant: "filled" });
 const doc = (): Doc => ({
@@ -131,13 +131,13 @@ describe("projectFileName", () => {
 });
 
 describe("readProject", () => {
-  it.each(["left", "right"])("preserves a saved %s expansion anchor", async (side) => {
-    const project = withItem({ kind: "navRail", railExpanded: true, railAnchor: { side, offset: 486.5 } });
-    await expect(readProject(new File([JSON.stringify(project)], "rail.json"))).resolves.toEqual(project);
-  });
-
-  it.each([null, false, [], {}, { side: "top", offset: 12 }, { side: "left" }, { side: "right", offset: "12" }, { side: "left", offset: Infinity }])("rejects invalid expansion anchor %j", (railAnchor) => {
-    expect(isProject(withItem({ kind: "navRail", railExpanded: true, railAnchor }))).toBe(false);
+  it.each(["left", "right"])("does not persist the runtime %s expansion edge", async (side) => {
+    const project = withItem({ kind: "navRail", railExpanded: true, [railExpansionSide]: side });
+    const json = JSON.stringify(project);
+    expect(json).not.toContain("railExpansionSide");
+    expect(json).not.toContain("railAnchor");
+    const saved = await readProject(new File([json], "rail.json"));
+    expect(saved).toEqual(withItem({ kind: "navRail", railExpanded: true }));
   });
 
   it.each([undefined, false, true])("accepts optional navigation rail booleans %s without changing them", (value) => {

@@ -2574,7 +2574,7 @@ export default function Page() {
           g.free ? (
             ((corners) =>
             layoutOf(g, widths).map((pl) => (
-              <div key={pl.item.id} style={{ position: "absolute", left: pl.x - f.x, top: pl.y - f.y }}>
+              <div key={pl.item.id} style={{ position: "absolute", left: pl.x - f.x, top: pl.y - f.y, zIndex: modalRailOf(g) ? 2 : undefined }}>
                 <M3Static
                   item={pl.item}
                   palette={p}
@@ -2590,6 +2590,7 @@ export default function Page() {
               position: "absolute",
               left: g.x - f.x,
               top: g.y - f.y,
+              zIndex: modalRailOf(g) ? 2 : undefined,
               display: "flex",
               flexDirection: g.axis === "x" ? "row" : "column",
               alignItems: g.axis === "x" ? "center" : "stretch",
@@ -2617,6 +2618,9 @@ export default function Page() {
             })}
           </div>
           ),
+        )}
+        {gs.some((g) => modalRailOf(g)) && (
+          <div aria-hidden style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.32)", pointerEvents: "none", zIndex: 1 }} />
         )}
       </div>
     );

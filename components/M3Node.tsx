@@ -21,6 +21,9 @@ import {
   variantStyle,
   SETTLE_MS,
   RAIL_TOP,
+  RAIL_W,
+  RAIL_ITEM_H,
+  RAIL_GAP,
   isWideRail,
   railMetrics,
 } from "@/lib/tokens";
@@ -892,9 +895,9 @@ function Body({ item, p }: { item: Item; p: Palette }) {
             display: "flex",
             flexDirection: "column",
             alignItems: "center",
-            gap: rail.gap,
+            gap: RAIL_GAP,
             height: "100%",
-            padding: `${rail.top}px 0 ${RAIL_TOP}px`,
+            padding: `${RAIL_TOP}px 0`,
             boxSizing: "border-box",
             position: "relative",
           }}
@@ -910,9 +913,8 @@ function Body({ item, p }: { item: Item; p: Palette }) {
                   flexDirection: "column",
                   alignItems: "center",
                   gap: 4,
-                  width: rail.width - 2 * rail.inset,
-                  height: rail.itemHeight,
-                  boxSizing: "border-box",
+                  width: RAIL_W - 12,
+                  height: RAIL_ITEM_H,
                   flex: "0 0 auto",
                 }}
               >
@@ -920,7 +922,6 @@ function Body({ item, p }: { item: Item; p: Palette }) {
                   style={{
                     width: 56,
                     height: 32,
-                    flexShrink: 0,
                     borderRadius: scaleR(16),
                     display: "grid",
                     placeItems: "center",
@@ -1209,7 +1210,6 @@ function boxStyle(item: Item, p: Palette): React.CSSProperties {
         : { background: p.surface, border: `1px solid ${p.outline}`, color: p.onSurface };
     case "topAppBar":
     case "bottomNav":
-      return { background: p.surfaceContainer, border: "none", color: p.onSurface };
     case "navRail":
       return { background: p.surfaceContainer, border: "none", color: p.onSurface };
     case "toolbar":

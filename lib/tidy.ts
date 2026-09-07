@@ -1,4 +1,4 @@
-import { CONTENT_W, FULL_WIDTH, Frame, Group, Item, KIND_SPEC, Kind, PHONE_MARGIN, railWidth, railLayoutWidth, canJoin, isPhoneFrame, scaleR, carryItemSize, connectSpecOf, frameOfGroup, frameRect, frameSizeOf, groupBounds, isExpanded } from "./tokens";
+import { CONTENT_W, FULL_WIDTH, Frame, Group, Item, KIND_SPEC, Kind, PHONE_MARGIN, RAIL_COLLAPSED_W, railExpansionSide, railWidth, railLayoutWidth, canJoin, isPhoneFrame, scaleR, carryItemSize, connectSpecOf, frameOfGroup, frameRect, frameSizeOf, groupBounds, isExpanded } from "./tokens";
 
 /* Rule-based layout for one screen. Nothing here is guessed by a model.
  *
@@ -230,7 +230,8 @@ export function carryFrame(groups: Group[], frame: Frame, to: Frame, frames: Fra
     if (!expanded && it.kind === "navRail") return { ...it, kind: "bottomNav", size: after.w, size2: undefined, radiusTop: it.radiusBottom, radiusBottom: it.radiusTop };
     return it;
   };
-  const railBefore = navGroup && standsAlone(navGroup, "navRail") ? railLayoutWidth(navGroup.items[0]) : 0;
+  const existingRail = mine.find((g) => standsAlone(g, "navRail"));
+  const railBefore = existingRail ? railLayoutWidth(existingRail.items[0]) : 0;
   const railAfter = expanded && navGroup ? railLayoutWidth(swapNav(navGroup, navGroup.items[0])) : 0;
   /* a rail keeps the side it stood on; one that grows out of a bar starts on the left */
   const side = navGroup && standsAlone(navGroup, "navRail") ? railSide(navGroup, frame, widths) : "left";
@@ -246,9 +247,6 @@ export function carryFrame(groups: Group[], frame: Frame, to: Frame, frames: Fra
       const isRail = g === navGroup && railAfter > 0;
       const items = g.items.map((it) => swapNav(g, carryItemSize(it, isRail ? from : fromBody, isRail ? after : toBody)));
       const x = isRail ? (side === "right" ? to.x + after.w - railWidth(items[0]) : to.x) : g.x + leftAfter - leftBefore;
-      if (isRail && items[0].railExpanded && items[0].railAnchor) {
-        items[0] = { ...items[0], railAnchor: { side, offset: x - to.x } };
-      }
       return pullInto({ ...g, x, items }, to, widths);
     }
     const dx = o ? moved.get(o) : undefined;
@@ -257,14 +255,15 @@ export function carryFrame(groups: Group[], frame: Frame, to: Frame, frames: Fra
   return { frames: nextFrames, groups: tidyFrame(resized, to, nextFrames, widths) ?? resized };
 }
 
-/** The saved expansion edge, or the side nearest the rail's middle after a move. */
+/** Keep the expanded rail's collapsed footprint on its original edge until moved across the midpoint. */
 export function railSide(g: Group, frame: Frame, widths: Record<string, number>): "left" | "right" {
   const item = g.items[0];
-  const anchor = item.railAnchor;
-  /* A saved expansion keeps its outer edge through collapse, even across the
-   * midpoint. Moving the rail horizontally makes its new position authoritative. */
-  if (g.items.length === 1 && item.railExpanded && anchor && Math.abs(g.x - frame.x - anchor.offset) < 0.001) return anchor.side;
   const fr = frameRect(frame);
+  const side = item[railExpansionSide];
+  if (g.items.length === 1 && item.railExpanded && side) {
+    const middle = g.x + (side === "right" ? railWidth(item) - RAIL_COLLAPSED_W / 2 : RAIL_COLLAPSED_W / 2);
+    return middle > (fr.l + fr.r) / 2 ? "right" : "left";
+  }
   const bb = groupBounds(g, widths);
   return (bb.l + bb.r) / 2 > (fr.l + fr.r) / 2 ? "right" : "left";
 }
@@ -410,25 +409,21 @@ export function tidyFrame(groups: Group[], frame: Frame, frames: Frame[], widths
 
   /* a navigation rail stands on the edge it is nearer to, left or right (a second one beside it);
    * the rest of the screen is the body between them */
-  const rails = units.filter(isRail).sort((a, b) => a.bb.l - b.bb.l || a.bb.t - b.bb.t);
   const onRight = (u: Unit) => railSide(mine.find((g) => g.id === u.ids[0])!, frame, widths) === "right";
+  const slotLeft = (u: Unit) => onRight(u) ? u.bb.r - railLayoutWidth(u.probe) : u.bb.l;
+  const rails = units.filter(isRail).sort((a, b) => slotLeft(a) - slotLeft(b) || a.bb.t - b.bb.t);
   const leftRails = rails.filter((u) => !onRight(u));
   const rightRails = rails.filter(onRight).reverse();
   let leftWidth = 0;
   let rightWidth = 0;
-  let leftVisualWidth = 0;
-  let rightVisualWidth = 0;
-  /* Rails must not overlap each other, even when their modal expansion overlays
-   * the body. Keep visible occupancy separate from the body's reserved width. */
+  /* Only the modal rail overhangs its reserved slot; neighbours keep their layout positions. */
   leftRails.forEach((u) => {
-    target.set(u, { l: screen.l + leftVisualWidth, t: screen.t });
-    leftVisualWidth += railWidth(u.probe);
+    target.set(u, { l: screen.l + leftWidth, t: screen.t });
     leftWidth += railLayoutWidth(u.probe);
   });
   rightRails.forEach((u) => {
     /* A modal rail overlays the body, but its visible outer edge stays on the screen. */
-    target.set(u, { l: screen.r - rightVisualWidth - railWidth(u.probe), t: screen.t });
-    rightVisualWidth += railWidth(u.probe);
+    target.set(u, { l: screen.r - rightWidth - railWidth(u.probe), t: screen.t });
     rightWidth += railLayoutWidth(u.probe);
   });
   const fr: Rect = { ...screen, l: screen.l + leftWidth, r: screen.r - rightWidth };
@@ -547,11 +542,7 @@ export function tidyFrame(groups: Group[], frame: Frame, frames: Frame[], widths
       if (!s || (s.dx === 0 && s.dy === 0)) return [g.id, g] as const;
       moved = true;
       const x = g.x + s.dx;
-      const item = g.items[0];
-      const items = g.items.length === 1 && item.kind === "navRail" && item.railExpanded && item.railAnchor
-        ? [{ ...item, railAnchor: { side: railSide(g, frame, widths), offset: x - frame.x } }]
-        : g.items;
-      return [g.id, { ...g, x, y: g.y + s.dy, items }] as const;
+      return [g.id, { ...g, x, y: g.y + s.dy }] as const;
     }),
   );
   for (const u of units) if (snapEdges(u, placed, widths)) moved = true;
