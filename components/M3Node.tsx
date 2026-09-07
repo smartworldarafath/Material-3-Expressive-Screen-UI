@@ -14,6 +14,8 @@ import {
   STATUS_BAR_H,
   baseRadii,
   cardFillOf,
+  cardImagePosOf,
+  cardImageSizeOf,
   onToken,
   scaleR,
   sizeOf,
@@ -476,39 +478,57 @@ function Body({ item, p }: { item: Item; p: Palette }) {
       );
 
     case "card": {
-      const cw = item.size ?? 320;
-      return (
+      const pos = cardImagePosOf(item);
+      const hasImage = !item.noImage;
+      const picture = item.src ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={item.src} alt="" draggable={false} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+      ) : (
+        item.icon && <Icon name={item.icon} size={34} />
+      );
+      const media = (style: React.CSSProperties) => (
         <div
           style={{
-            padding: 12,
-            height: "100%",
-            display: "flex",
-            flexDirection: "column",
-            gap: 8,
-            boxSizing: "border-box",
+            borderRadius: scaleR(14),
+            background: p.primaryContainer,
+            color: p.onPrimaryContainer,
+            display: "grid",
+            placeItems: "center",
+            flex: "0 0 auto",
+            overflow: "hidden",
+            ...style,
           }}
         >
-          {!item.noImage && (
-            <div
-              style={{
-                height: Math.round(cw * 0.28),
-                borderRadius: scaleR(14),
-                background: p.primaryContainer,
-                color: p.onPrimaryContainer,
-                display: "grid",
-                placeItems: "center",
-                flex: "0 0 auto",
-                overflow: "hidden",
-              }}
-            >
-              {item.src ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={item.src} alt="" draggable={false} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
-              ) : (
-                item.icon && <Icon name={item.icon} size={34} />
+          {picture}
+        </div>
+      );
+      if (hasImage && pos === "background") {
+        /* Full-bleed media behind the text. A photo carries M3's fixed image scrim so the
+         * text stays readable in either mode; the placeholder keeps its container pair. */
+        const overPhoto = !!item.src;
+        return (
+          <div style={{ position: "relative", height: "100%", boxSizing: "border-box", display: "flex", flexDirection: "column", justifyContent: "flex-end" }}>
+            <div style={{ position: "absolute", inset: 0, background: p.primaryContainer, color: p.onPrimaryContainer, display: "grid", placeItems: "center" }}>
+              {picture}
+            </div>
+            {overPhoto && <div style={{ position: "absolute", inset: 0, background: "linear-gradient(rgba(0,0,0,0) 40%, rgba(0,0,0,0.65))" }} />}
+            <div style={{ position: "relative", padding: 12, display: "flex", flexDirection: "column", gap: 8 }}>
+              {hasLabel && (
+                <div style={{ fontSize: 16, fontWeight: w(600, 700), color: overPhoto ? "#fff" : p.onPrimaryContainer, ...ellipsis }}>{item.label}</div>
+              )}
+              {hasSupporting && (
+                <div style={{ fontSize: 13, lineHeight: 1.5, color: overPhoto ? "#fff" : p.onPrimaryContainer, opacity: 0.85, overflow: "hidden" }}>
+                  {item.supporting}
+                </div>
               )}
             </div>
-          )}
+          </div>
+        );
+      }
+      /* top: the image band above the text; leading / trailing: a full-height column beside it */
+      const side = hasImage && (pos === "leading" || pos === "trailing");
+      const text = (
+        <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 8, justifyContent: side ? "center" : undefined }}>
           {hasLabel && (
             <div style={{ fontSize: 16, fontWeight: w(600, 700), color: item.fill ? onToken(item.fill, p) : p.onSurface, ...ellipsis }}>{item.label}</div>
           )}
@@ -517,6 +537,22 @@ function Body({ item, p }: { item: Item; p: Palette }) {
               {item.supporting}
             </div>
           )}
+        </div>
+      );
+      return (
+        <div
+          style={{
+            padding: 12,
+            height: "100%",
+            display: "flex",
+            flexDirection: side ? "row" : "column",
+            gap: side ? 12 : 8,
+            boxSizing: "border-box",
+          }}
+        >
+          {hasImage && pos !== "trailing" && media(side ? { width: cardImageSizeOf(item), alignSelf: "stretch" } : { height: cardImageSizeOf(item) })}
+          {text}
+          {hasImage && pos === "trailing" && media({ width: cardImageSizeOf(item), alignSelf: "stretch" })}
         </div>
       );
     }

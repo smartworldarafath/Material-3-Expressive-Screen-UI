@@ -90,6 +90,51 @@ describe("progress track thickness", () => {
   });
 });
 
+describe("card image placement", () => {
+  afterEach(() => setGlobalLang("ja"));
+
+  /* the phrase the layout section must carry for each placement */
+  const PLACEMENT: Record<Lang, Record<string, string>> = {
+    ja: { top: "上部に", leading: "先頭側（全高）に", trailing: "末尾側（全高）に", background: "背景全面に" },
+    en: { top: "on top", leading: "filling the leading side", trailing: "filling the trailing side", background: "as a full-bleed background" },
+    zh: { top: "顶部是", leading: "左侧（全高）是", trailing: "右侧（全高）是", background: "整张卡片的背景是" },
+    ko: { top: "위쪽에", leading: "앞쪽(전체 높이)에", trailing: "뒤쪽(전체 높이)에", background: "배경 전체에" },
+  };
+  const SIZED: Record<Lang, { top: string; side: string }> = {
+    ja: { top: "（高さ 96dp）", side: "（幅 96dp）" },
+    en: { top: "(96dp tall)", side: "(96dp wide)" },
+    zh: { top: "（高 96dp）", side: "（宽 96dp）" },
+    ko: { top: "(높이 96dp)", side: "(너비 96dp)" },
+  };
+  /* the screen-layout section alone — the card's own style note also names the placements —
+   * for a card standing in its own group so its full sentence is written out */
+  function cardLayout(lang: Lang, patch: Partial<Item>) {
+    setGlobalLang(lang);
+    const doc = fixture();
+    doc.groups = [{ id: "g-card", x: 16, y: 100, axis: "x", items: [{ ...makeItem("card"), ...patch }] }];
+    const prompt = buildPrompt(doc, {}, undefined, lang);
+    return prompt.slice(prompt.indexOf(SECTIONS[lang][2]), prompt.indexOf(SECTIONS[lang][4]));
+  }
+
+  it.each(LANGS)("says where the image area sits, treating no placement as the top, in %s", (lang) => {
+    for (const pos of [undefined, "top", "leading", "trailing", "background"] as const) {
+      expect(cardLayout(lang, { imagePos: pos }), `${lang} ${pos}`).toContain(PLACEMENT[lang][pos ?? "top"]);
+    }
+  });
+
+  it.each(LANGS)("spells out a sized image area but keeps a background image unsized in %s", (lang) => {
+    expect(cardLayout(lang, { imageSize: 96 })).toContain(SIZED[lang].top);
+    expect(cardLayout(lang, { imagePos: "leading", imageSize: 96 })).toContain(SIZED[lang].side);
+    const background = cardLayout(lang, { imagePos: "background", imageSize: 96 });
+    expect(background).not.toContain(SIZED[lang].top);
+    expect(background).not.toContain(SIZED[lang].side);
+  });
+
+  it.each(LANGS)("stays silent about the image area when it is turned off in %s", (lang) => {
+    expect(cardLayout(lang, { noImage: true, imagePos: "background" })).not.toContain(PLACEMENT[lang].background);
+  });
+});
+
 describe("buildPrompt color output", () => {
   afterEach(() => setGlobalLang("ja")); // restore the module default
 

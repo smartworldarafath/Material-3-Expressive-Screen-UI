@@ -50,6 +50,10 @@ import {
   defaultPlatformOf,
   isPlatform,
   makeItem,
+  cardImagePosOf,
+  cardImageSizeOf,
+  isCardImagePos,
+  CARD_SIDE_IMAGE_W,
   Frame,
   Item,
   NavTab,
@@ -336,6 +340,32 @@ describe("makeItem", () => {
     expect(box.size2).toBe(220);
     expect(box.radiusTop).toBe(28);
     expect(box.radiusBottom).toBe(28);
+  });
+});
+
+describe("card image placement helpers", () => {
+  it("accepts exactly the four placements", () => {
+    for (const pos of ["top", "leading", "trailing", "background"]) expect(isCardImagePos(pos)).toBe(true);
+    for (const bad of [undefined, null, "bottom", "left", 3]) expect(isCardImagePos(bad)).toBe(false);
+  });
+
+  it("keeps sketches saved before placement existed on top", () => {
+    expect(cardImagePosOf(makeItem("card"))).toBe("top");
+    expect(cardImagePosOf({ ...makeItem("card"), imagePos: "background" })).toBe("background");
+  });
+
+  it("defaults the top image to 28% of the card's width and a side column to the standard width", () => {
+    const card = makeItem("card");
+    expect(cardImageSizeOf(card)).toBe(Math.round(CONTENT_W * 0.28));
+    expect(cardImageSizeOf({ ...card, size: 200 })).toBe(Math.round(200 * 0.28));
+    expect(cardImageSizeOf({ ...card, imagePos: "leading" })).toBe(CARD_SIDE_IMAGE_W);
+    expect(cardImageSizeOf({ ...card, imagePos: "trailing" })).toBe(CARD_SIDE_IMAGE_W);
+  });
+
+  it("keeps a size the author set, whatever the placement", () => {
+    const card = { ...makeItem("card"), imageSize: 120 };
+    expect(cardImageSizeOf(card)).toBe(120);
+    expect(cardImageSizeOf({ ...card, imagePos: "leading" })).toBe(120);
   });
 });
 

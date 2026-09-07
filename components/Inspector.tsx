@@ -32,7 +32,10 @@ import {
   contentWidth,
   defaultTabsFor,
   framePresetOf,
+  CardImagePos,
   cardFillOf,
+  cardImagePosOf,
+  cardImageSizeOf,
   frameSizeOf,
   halfWidth,
   isPhoneFrame,
@@ -990,6 +993,37 @@ export function Inspector({
           {item.kind === "card" && (
             <div style={{ marginBottom: 10 }}>
               <Toggle on={!item.noImage} onChange={(on) => onChange({ noImage: on ? undefined : true })} p={p} icon="image" label={t("imageArea", lang)} grow />
+            </div>
+          )}
+          {item.kind === "card" && !item.noImage && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 10 }}>
+              <div role="group" aria-label={t("imagePosition", lang)}>
+                <Segmented<CardImagePos>
+                  options={[
+                    { key: "top", icon: "vertical_align_top", title: t("imageTop", lang) },
+                    { key: "leading", icon: "align_horizontal_left", title: t("imageLeading", lang) },
+                    { key: "trailing", icon: "align_horizontal_right", title: t("imageTrailing", lang) },
+                    { key: "background", icon: "wallpaper", title: t("background", lang) },
+                  ]}
+                  value={cardImagePosOf(item)}
+                  onChange={(pos) => onChange({ imagePos: pos === "top" ? undefined : pos })}
+                  p={p}
+                  height={36}
+                />
+              </div>
+              {cardImagePosOf(item) !== "background" && (
+                /* the image area's one free dimension: its height on top, its width at a side */
+                <Slider
+                  icon={cardImagePosOf(item) === "top" ? "height" : "width"}
+                  title={t(cardImagePosOf(item) === "top" ? "height" : "width", lang)}
+                  value={cardImageSizeOf(item)}
+                  min={40}
+                  max={320}
+                  step={4}
+                  onChange={(imageSize) => onChange({ imageSize })}
+                  p={p}
+                />
+              )}
             </div>
           )}
           <input

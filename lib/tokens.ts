@@ -1176,8 +1176,12 @@ export type Item = {
   selected?: number;
   /** list items: a switch at the trailing end instead of an icon; `checked` is its state */
   switch?: boolean;
-  /** cards: no image area at the top; `src` puts a picture in it */
+  /** cards: no image area; `src` puts a picture in it */
   noImage?: boolean;
+  /** cards: where the image area sits — the top when unset, a full-height side column, or the whole background behind the text */
+  imagePos?: CardImagePos;
+  /** cards: the image area's size in dp — its height on top, its width at a side; a background image fills the card */
+  imageSize?: number;
   /** on/off state for switches, checkboxes and chips */
   checked?: boolean;
   /** a switch whose handle stays plain when on, without the check icon */
@@ -1311,6 +1315,21 @@ export const COLOR_TOKENS: { key: ColorToken; label: string }[] = [
 /** readable foreground for a chosen background token */
 /** the background a card draws when no token is set: it follows the variant */
 export const cardFillOf = (it: Item): ColorToken => it.fill ?? (it.variant === "outlined" ? "surface" : it.variant === "elevated" ? "surfaceContainerLow" : "surfaceContainerHighest");
+
+/** where a card's image area sits; sketches saved before placement existed stay on top */
+export type CardImagePos = "top" | "leading" | "trailing" | "background";
+export const isCardImagePos = (v: unknown): v is CardImagePos => v === "top" || v === "leading" || v === "trailing" || v === "background";
+export const cardImagePosOf = (it: Item): CardImagePos => it.imagePos ?? "top";
+
+/** default width of a card's side image column (an M3 horizontal-card thumbnail) */
+export const CARD_SIDE_IMAGE_W = 80;
+/** the image area's extent in dp: the author's value, else 28% of the card's width
+ *  on top or the standard column on a side; a background image fills the card */
+export function cardImageSizeOf(it: Item): number {
+  if (it.imageSize !== undefined) return it.imageSize;
+  if (cardImagePosOf(it) !== "top") return CARD_SIDE_IMAGE_W;
+  return Math.round((it.size ?? KIND_SPEC.card.defSize ?? KIND_SPEC.card.w) * 0.28);
+}
 
 export function onToken(t: ColorToken, p: Palette): string {
   switch (t) {

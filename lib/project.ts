@@ -1,4 +1,4 @@
-import { Doc, KIND_ORDER, Kind, VARIANTS, isPlace, isPlatform, isTrackThickness } from "./tokens";
+import { Doc, KIND_ORDER, Kind, VARIANTS, isCardImagePos, isPlace, isPlatform, isTrackThickness } from "./tokens";
 
 /* A project file is the Doc as JSON, nothing more. Reading one back only checks
  * the shape the editor relies on; the same migrations that run on a saved
@@ -19,6 +19,8 @@ const validItem = (item: unknown) =>
   (item.railExpanded === undefined || typeof item.railExpanded === "boolean") &&
   (item.railModal === undefined || typeof item.railModal === "boolean") &&
   (item.trackThickness === undefined || isTrackThickness(item.trackThickness)) &&
+  (item.imagePos === undefined || isCardImagePos(item.imagePos)) &&
+  (item.imageSize === undefined || Number.isFinite(item.imageSize)) &&
   typeof item.id === "string" &&
   typeof item.kind === "string" &&
   KINDS.has(item.kind as Kind) &&
