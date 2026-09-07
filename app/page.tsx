@@ -90,6 +90,7 @@ import { AiActionKey, AiPanel, aiErrorText } from "@/components/AiPanel";
 import { TidyState } from "@/components/ui";
 import { AiSettings, DEFAULT_AI, hasKey, isSecureUrl, loadAiSettings, proposeBehavior, proposeDescription, pushHistory, saveAiSettings } from "@/lib/ai";
 import { barSlotOf, bodyRect, carryFrame, pullInto, tidyFrame } from "@/lib/tidy";
+import { constrainModalRails, modalRailOf, updateRail } from "@/lib/rail";
 import { isProject, readProject, saveProject } from "@/lib/project";
 import { hasShareHash, readShareHash } from "@/lib/share";
 import { LoadingIndicator } from "@/components/Loading";
@@ -334,7 +335,11 @@ const LEFT_TABS: { key: LeftTab; icon: string; title: "parts" | "layers" | "colo
 export default function Page() {
   /* ---------- document ---------- */
   const [editAccess, setEditAccess] = useState<"checking" | "editable" | "readonly">("checking");
-  const [groups, setGroups] = useState<Group[]>(seed);
+  const [groups, setGroupState] = useState<Group[]>(seed);
+  /* Enforce the standalone-modal rule for imports, grouping, undo and all edits. */
+  const setGroups = useCallback((next: Group[] | ((prev: Group[]) => Group[])) => {
+    setGroupState((prev) => constrainModalRails(typeof next === "function" ? next(prev) : next));
+  }, []);
   const [frames, setFrames] = useState<Frame[]>(SEED_FRAMES);
   const [paletteKey, setPaletteKey] = useState("purple");
   const [customPalette, setCustomPalette] = useState<Palette | null>(null);
@@ -589,6 +594,8 @@ export default function Page() {
   /** Puts a stored or opened document into the editor. Fields a partial document
    *  leaves out keep their current value, or go back to the default when `reset`. */
   const applyDoc = (doc: Partial<Doc>, reset: boolean) => {
+    setPreviewId(null);
+    viewBeforePreview.current = null;
     const frames = Array.isArray(doc.frames) ? doc.frames : framesRef.current;
     if (Array.isArray(doc.groups)) setGroups(migrateGroups(doc.groups, frames));
     if (Array.isArray(doc.frames)) setFrames(doc.frames);
@@ -1718,7 +1725,7 @@ export default function Page() {
     }
     snapshotFor(id + ":" + Object.keys(patch).join(","));
     setGroups((prev) =>
-      prev.map((g) => {
+      "railExpanded" in patch || "railModal" in patch ? updateRail(prev, framesRef.current, widthsRef.current, id, patch) : prev.map((g) => {
         const idx = g.items.findIndex((it) => it.id === id);
         if (idx < 0) return g;
         const next = { ...g.items[idx], ...patch };
@@ -2598,7 +2605,7 @@ export default function Page() {
           g.free ? (
             ((corners) =>
             layoutOf(g, widths).map((pl) => (
-              <div key={pl.item.id} style={{ position: "absolute", left: pl.x - f.x, top: pl.y - f.y }}>
+              <div key={pl.item.id} style={{ position: "absolute", left: pl.x - f.x, top: pl.y - f.y, zIndex: modalRailOf(g) ? 2 : undefined }}>
                 <M3Static
                   item={pl.item}
                   palette={p}
@@ -2614,6 +2621,7 @@ export default function Page() {
               position: "absolute",
               left: g.x - f.x,
               top: g.y - f.y,
+              zIndex: modalRailOf(g) ? 2 : undefined,
               display: "flex",
               flexDirection: g.axis === "x" ? "row" : "column",
               alignItems: g.axis === "x" ? "center" : "stretch",
@@ -2641,6 +2649,9 @@ export default function Page() {
             })}
           </div>
           ),
+        )}
+        {gs.some((g) => modalRailOf(g)) && (
+          <div aria-hidden style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.32)", pointerEvents: "none", zIndex: 1 }} />
         )}
       </div>
     );
@@ -3001,6 +3012,7 @@ export default function Page() {
   };
 
   const renderGroup = (g: Group, ox: number, oy: number) => {
+    const modalRail = modalRailOf(g);
     if (g.free) {
       const instantG = instantRef.current.has(g.id);
       const allOn = g.items.every((it) => selectedSet.has(it.id));
@@ -3011,7 +3023,7 @@ export default function Page() {
           initial={false}
           animate={{ x: g.x - ox, y: g.y - oy }}
           transition={instantG ? INSTANT : OPEN}
-          style={{ position: "absolute", left: 0, top: 0 }}
+          style={{ position: "absolute", left: 0, top: 0, zIndex: modalRail ? 2 : undefined }}
         >
           {layoutOf(g, widths).map((pl) => (
             <div key={pl.item.id} style={{ position: "absolute", left: pl.x - g.x, top: pl.y - g.y }}>
@@ -3071,6 +3083,7 @@ export default function Page() {
         }}
         transition={instant ? INSTANT : OPEN}
         style={{
+          zIndex: modalRail ? 2 : undefined,
           position: "absolute",
           left: 0,
           top: 0,
@@ -3570,6 +3583,9 @@ export default function Page() {
                           {groups
                             .filter((g) => frameOf.get(g.id) === f.id)
                             .map((g) => renderGroup(g, f.x, f.y))}
+                          {groups.some((g) => frameOf.get(g.id) === f.id && modalRailOf(g)) && (
+                            <div aria-hidden style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.32)", pointerEvents: "none", zIndex: 1 }} />
+                          )}
                           {draftBusy && (
                             <div style={{ position: "absolute", inset: 0, zIndex: 90, background: canvasBg, display: "grid", placeItems: "center" }}>
                               <LoadingIndicator size={96} color="url(#m3e-drafting)" />
@@ -3993,6 +4009,7 @@ export default function Page() {
                     onCancel: cancelAi,
                   }}
                   item={selectedIds.length > 1 ? null : selected}
+                  railStandalone={groups.some((g) => g.items.length === 1 && g.items[0].id === selected?.id)}
                   frame={selectedPartFrame}
                   palette={p}
                   frames={frame === "phone" ? frames : []}

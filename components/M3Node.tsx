@@ -1,6 +1,6 @@
 "use client";
 
-import { motion } from "motion/react";
+import { motion, useReducedMotion } from "motion/react";
 import {
   FAB_MENU_GAP,
   FAB_MENU_ITEM_H,
@@ -21,14 +21,17 @@ import {
   variantStyle,
   SETTLE_MS,
   progressThickness,
-  RAIL_W,
   RAIL_TOP,
+  RAIL_W,
   RAIL_ITEM_H,
   RAIL_GAP,
+  isWideRail,
+  railMetrics,
 } from "@/lib/tokens";
 import { CircularProgress, LinearProgress, LoadingIndicator } from "./Loading";
 import { t, useLang } from "@/lib/i18n";
 import { useTheme } from "@/lib/theme";
+import { railSelectedLabelColor } from "@/lib/color";
 
 /** weight of a heading or label: heavier under the emphasized type setting */
 const useWeight = () => {
@@ -867,6 +870,26 @@ function Body({ item, p }: { item: Item; p: Palette }) {
 
     case "navRail": {
       const tabs = item.tabs ?? [];
+      const wide = isWideRail(item);
+      const expanded = !!item.railExpanded;
+      const rail = railMetrics(item);
+      if (wide) return (
+        <div style={{ position: "relative", height: "100%" }}>
+          <div className="m3-rail-geometry" style={{ position: "absolute", left: rail.headerLeft, top: RAIL_TOP, width: 48, height: 48, display: "grid", placeItems: "center", color: p.onSurfaceVariant }}>
+            <Icon name={expanded ? "menu_open" : "menu"} size={24} />
+          </div>
+          {tabs.map((tab, i) => {
+            const on = i === Math.min(item.selected ?? 0, Math.max(0, tabs.length - 1));
+            return <div key={i} className="m3-rail-geometry" style={{ position: "absolute", left: rail.inset, top: rail.top + i * (rail.itemHeight + rail.gap), width: rail.width - rail.inset * 2, height: rail.itemHeight }}>
+              <div className="m3-rail-geometry" style={{ position: "absolute", left: expanded ? 0 : 8, top: 0, width: expanded ? rail.width - rail.inset * 2 : 56, height: expanded ? 56 : 32, borderRadius: expanded ? 28 : 16, background: on ? p.secondaryContainer : "transparent" }} />
+              <div className="m3-rail-geometry" style={{ position: "absolute", left: 0, top: 0, width: 24, height: 24, transform: `translate(${expanded ? 16 : 24}px, ${expanded ? 16 : 4}px)`, color: on ? p.onSecondaryContainer : p.onSurfaceVariant }}>
+                {tab.icon && <Icon name={tab.icon} size={24} fill={on} />}
+              </div>
+              {tab.label.trim() && <span className="m3-rail-geometry" style={{ position: "absolute", left: expanded ? 48 : 0, top: expanded ? 18 : 36, width: expanded ? rail.width - 88 : 72, textAlign: expanded ? "left" : "center", fontSize: expanded ? 14 : 12, lineHeight: "20px", fontWeight: on ? w(600, 700) : w(400, 500), color: on ? railSelectedLabelColor(p, expanded) : p.onSurfaceVariant, ...ellipsis }}>{tab.label}</span>}
+            </div>;
+          })}
+        </div>
+      );
       return (
         <div
           style={{
@@ -1221,6 +1244,8 @@ function boxStyle(item: Item, p: Palette): React.CSSProperties {
 function shadowOf(item: Item): string {
   if (NO_BOX.includes(item.kind)) return "none";
   switch (item.kind) {
+    case "navRail":
+      return item.railModal && item.railExpanded ? "0 2px 6px rgba(0,0,0,0.16), 0 1px 2px rgba(0,0,0,0.10)" : "none";
     case "button":
     case "iconButton":
     case "extendedFab":
@@ -1266,6 +1291,9 @@ export function M3Node({
   interactive?: boolean;
   onPointerDown?: (e: React.PointerEvent) => void;
 }) {
+  const reducedMotion = useReducedMotion();
+  const instantRail = reducedMotion && item.kind === "navRail" && isWideRail(item);
+  const radiusTransition = instantRail ? { duration: 0 } : RADIUS_TWEEN;
   const r = radii ?? baseRadii(item);
   const size = sizeOf(item, widths);
   const measured = MEASURED.includes(item.kind) && !((item.kind === "switch" || item.kind === "button") && item.size);
@@ -1275,6 +1303,7 @@ export function M3Node({
     <motion.div
       data-node={item.id}
       data-kind={item.kind}
+      data-wide-rail={item.kind === "navRail" && isWideRail(item) ? "true" : undefined}
       onPointerDown={onPointerDown}
       initial={false}
       animate={{
@@ -1285,11 +1314,11 @@ export function M3Node({
         scale: pressed ? 0.97 : 1,
       }}
       transition={{
-        borderTopLeftRadius: RADIUS_TWEEN,
-        borderBottomLeftRadius: RADIUS_TWEEN,
-        borderTopRightRadius: RADIUS_TWEEN,
-        borderBottomRightRadius: RADIUS_TWEEN,
-        scale: { type: "spring", stiffness: 700, damping: 30, mass: 0.5 },
+        borderTopLeftRadius: radiusTransition,
+        borderBottomLeftRadius: radiusTransition,
+        borderTopRightRadius: radiusTransition,
+        borderBottomRightRadius: radiusTransition,
+        scale: instantRail ? { duration: 0 } : { type: "spring", stiffness: 700, damping: 30, mass: 0.5 },
       }}
       style={{
         ...boxStyle(item, palette),

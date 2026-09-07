@@ -90,7 +90,7 @@ describe("progress track thickness", () => {
   });
 });
 
-describe("buildPrompt structure", () => {
+describe("buildPrompt color output", () => {
   afterEach(() => setGlobalLang("ja")); // restore the module default
 
   it.each(LANGS)("emits the actual secondary color in both modes and every contrast level in %s", (lang) => {
@@ -103,6 +103,98 @@ describe("buildPrompt structure", () => {
       }
     }
   });
+});
+
+describe("navigation rail expansion", () => {
+  afterEach(() => setGlobalLang("ja"));
+
+  it.each(LANGS)("exports imported mixed-group modal rails as collapsed standard rails in %s", (lang) => {
+    const doc = fixture();
+    doc.groups = [{ id: "mixed", x: 16, y: 24, axis: "x", free: true,
+      items: [{ ...makeItem("navRail"), railExpanded: true, railModal: true }, makeItem("button")],
+    }];
+    const before = structuredClone(doc);
+    const prompt = buildPrompt(doc, {}, undefined, lang);
+    const layout = prompt.slice(prompt.indexOf(SECTIONS[lang][2]), prompt.indexOf(SECTIONS[lang][4]));
+    expect(layout).toContain("WideNavigationRail");
+    expect(layout).toContain("96dp");
+    expect(layout).not.toContain("ModalWideNavigationRail");
+    expect(layout).not.toContain("220dp");
+    expect(doc).toEqual(before);
+  });
+
+  it.each(LANGS)("exports only the selected rail state and presentation in %s", (lang) => {
+    const expandedText = { ja: "展開状態", en: "NavigationRail, expanded,", zh: "展开状态", ko: "펼친 상태" }[lang];
+    const collapsedText = { ja: "折りたたみ状態", en: "NavigationRail, collapsed,", zh: "折叠状态", ko: "접힌 상태" }[lang];
+    const modalText = { ja: "モーダル型：展開時", en: "modal overlay:", zh: "模态覆盖：", ko: "모달 오버레이:" }[lang];
+    const nonModalText = { ja: "非モーダル型：現在", en: "non-modal layout:", zh: "非模态布局：", ko: "비모달 레이아웃:" }[lang];
+    for (const platform of ["android", "web"] as const) {
+      for (const railExpanded of [false, true]) {
+        for (const railModal of [false, true]) {
+          const doc = fixture(platform);
+          doc.groups = [{ id: "rail", x: 0, y: 0, axis: "x", items: [
+            { ...makeItem("navRail"), railExpanded, railModal, selected: 1, tabs: [{ icon: "home", label: "Home" }, { icon: "star", label: "Saved" }] },
+          ] }];
+          const prompt = buildPrompt(doc, {}, undefined, lang);
+          if (lang === "ja") {
+            expect(prompt).not.toContain("スクラム");
+            expect(prompt).toContain("スクリム");
+          }
+          const layout = prompt.slice(prompt.indexOf(SECTIONS[lang][2]), prompt.indexOf(SECTIONS[lang][4]));
+          expect(layout).toContain(railExpanded ? expandedText : collapsedText);
+          expect(layout).not.toContain(railExpanded ? collapsedText : expandedText);
+          expect(layout).toContain(railModal ? modalText : nonModalText);
+          expect(layout).not.toContain(railModal ? nonModalText : modalText);
+          expect(layout).toContain(`${railExpanded ? 220 : 96}dp`);
+          expect(layout).toContain(railModal ? "ModalWideNavigationRail" : "WideNavigationRail");
+          expect(layout).toContain({ ja: "「Saved」が選択状態", en: '"Saved" is selected', zh: "“Saved”为选中状态", ko: '"Saved" 선택됨' }[lang]);
+          const styles = styleBullets(prompt, lang).join("\n");
+          expect(styles).toContain("220dp");
+          expect(styles).toContain("96dp");
+          expect(styles).not.toMatch(/\bsurface\b/);
+          expect(styles).toMatch(/\bsecondary\b/);
+          expect(styles).toContain("surfaceContainer");
+          expect(styles).toContain("onSecondaryContainer");
+          expect(styles).toContain("4.5:1");
+          expect(styles).toContain("onSurface");
+          expect(styles).not.toContain("80dp");
+        }
+      }
+    }
+  });
+
+  it.each(LANGS)("retains legacy rail output and handles mixed generations in %s", (lang) => {
+    const doc = fixture();
+    doc.groups = [{ id: "legacy", x: 0, y: 0, axis: "x", items: [
+      { ...makeItem("navRail"), railExpanded: undefined, railModal: undefined },
+    ] }];
+    const legacy = buildPrompt(doc, {}, undefined, lang);
+    expect(legacy).not.toContain("WideNavigationRail");
+    expect(styleBullets(legacy, lang).join("\n")).toContain("80dp");
+    expect(styleBullets(legacy, lang).join("\n")).not.toContain("220dp");
+    doc.groups.push({ id: "expanded", x: 200, y: 0, axis: "x", items: [{ ...makeItem("navRail"), railExpanded: true }] });
+    const styles = styleBullets(buildPrompt(doc, {}, undefined, lang), lang).join("\n");
+    expect(styles).toContain("80dp");
+    expect(styles).toContain("220dp");
+  });
+
+  it.each(LANGS)("treats a modal-only setting as a collapsed expressive rail in %s", (lang) => {
+    const doc = fixture();
+    doc.groups = [{ id: "modal", x: 0, y: 0, axis: "x", items: [
+      { ...makeItem("navRail"), railExpanded: undefined, railModal: true },
+    ] }];
+    const prompt = buildPrompt(doc, {}, undefined, lang);
+    const layout = prompt.slice(prompt.indexOf(SECTIONS[lang][2]), prompt.indexOf(SECTIONS[lang][4]));
+    expect(layout).toContain("ModalWideNavigationRail");
+    expect(layout).toContain("96dp");
+    expect(layout).not.toContain("220dp");
+    expect(styleBullets(prompt, lang).join("\n")).toContain("220dp");
+    expect(styleBullets(prompt, lang).join("\n")).not.toContain("80dp");
+  });
+});
+
+describe("buildPrompt structure", () => {
+  afterEach(() => setGlobalLang("ja")); // restore the module default
 
   it.each(LANGS)("orders its sections the same way in %s", (lang) => {
     expect(headings(build(lang))).toEqual(SECTIONS[lang]);

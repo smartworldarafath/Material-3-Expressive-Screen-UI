@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Item } from "@/lib/tokens";
-import { AnimatePresence, animate, motion, useMotionValue, useTransform } from "motion/react";
+import { AnimatePresence, animate, motion, useMotionValue, useTransform, useReducedMotion } from "motion/react";
 import type { TargetAndTransition, Variants } from "motion/react";
 import {
   Action,
@@ -34,15 +34,16 @@ import {
   normalizeTheme,
   toggleIcon,
   uniformRadii,
-  RAIL_W,
   RAIL_TOP,
-  RAIL_ITEM_H,
-  RAIL_GAP,
+  isWideRail,
+  railMetrics,
   sizeOf,
 } from "@/lib/tokens";
 import { Icon, M3Node } from "./M3Node";
 import { IconBtn } from "./ui";
 import { t, useLang } from "@/lib/i18n";
+import { constrainModalRails, modalRailOf, updateRail } from "@/lib/rail";
+import { railMotionTargets } from "@/lib/railView";
 
 const EASE = [0.2, 0, 0, 1] as const;
 const SLIDE_MS = 0.42;
@@ -148,6 +149,8 @@ function Tappable({
   onPick,
   menuOpen,
   onMenu,
+  onRailToggle,
+  railAnimating,
 }: {
   item: Item;
   p: Palette;
@@ -155,7 +158,7 @@ function Tappable({
   widths: Record<string, number>;
   onTap?: () => void;
   /** per-slot targets on bars */
-  onSlot?: (slot: string) => void;
+  onSlot?: (slot: string, animate?: boolean) => void;
   /** live value for sliders */
   onValue?: (v: number) => void;
   /** an option chosen from a dropdown's menu */
@@ -163,7 +166,10 @@ function Tappable({
   /** whether this dropdown's menu is the open one; the screen keeps at most one open */
   menuOpen?: boolean;
   onMenu?: (open: boolean) => void;
+  onRailToggle?: (animate: boolean) => void;
+  railAnimating?: boolean;
 }) {
+  const lang = useLang();
   const [pressed, setPressed] = useState(false);
   const [hot, setHot] = useState<string | null>(null);
   const menu = !!menuOpen;
@@ -207,9 +213,11 @@ function Tappable({
       slots.push({ key: `tab:${i}`, style: { left: `${(i / n) * 100}%`, width: `${100 / n}%`, top: 0, bottom: item.kind === "bottomNav" ? NAV_BAR_H : 0, borderRadius: 16 } });
   }
   if (onSlot && item.kind === "navRail") {
+    const rail = railMetrics(item);
+    if (onRailToggle) slots.push({ key: "railToggle", style: { left: rail.headerLeft, top: RAIL_TOP, width: 48, height: 48, borderRadius: 24 } });
     const n = item.tabs?.length ?? 0;
     for (let i = 0; i < n; i++)
-      slots.push({ key: `tab:${i}`, style: { left: 6, width: RAIL_W - 12, top: RAIL_TOP + i * (RAIL_ITEM_H + RAIL_GAP), height: RAIL_ITEM_H, borderRadius: 16 } });
+      slots.push({ key: `tab:${i}`, style: { left: rail.inset, width: rail.width - 2 * rail.inset, top: rail.top + i * (rail.itemHeight + rail.gap), height: rail.itemHeight, borderRadius: item.railExpanded ? 28 : 16 } });
   }
   if (onSlot && item.kind === "toolbar") {
     const n = item.tabs?.length ?? 0;
@@ -224,6 +232,7 @@ function Tappable({
   return (
     <div
       ref={ref}
+      data-rail-animate={railAnimating ? "item" : undefined}
       onPointerDown={(e) => {
         if (onValue) {
           e.stopPropagation();
@@ -262,9 +271,16 @@ function Tappable({
           }}
         />
       )}
-      {slots.map((s) => (
-        <div
+      {slots.map((s) => {
+        const Slot = onRailToggle ? "button" : "div";
+        return <Slot
           key={s.key}
+          type={onRailToggle ? "button" : undefined}
+          className={onRailToggle ? "m3-rail-hit" : undefined}
+          data-rail-toggle={s.key === "railToggle" ? item.id : undefined}
+          aria-label={onRailToggle ? (s.key === "railToggle" ? t(item.railExpanded ? "collapseNavigation" : "expandNavigation", lang) : item.tabs?.[Number(s.key.slice(4))]?.label) : undefined}
+          aria-expanded={s.key === "railToggle" ? !!item.railExpanded : undefined}
+          aria-current={onRailToggle && s.key === `tab:${item.selected ?? 0}` ? "page" : undefined}
           onPointerDown={(e) => {
             e.stopPropagation();
             setHot(s.key);
@@ -274,17 +290,21 @@ function Tappable({
           onPointerLeave={() => setHot(null)}
           onClick={(e) => {
             e.stopPropagation();
-            onSlot!(s.key);
+            if (s.key === "railToggle") onRailToggle?.(e.detail !== 0);
+            else onSlot!(s.key, e.detail !== 0);
           }}
           style={{
             position: "absolute",
+            border: "none",
+            padding: 0,
+            color: p.primary,
             cursor: "pointer",
             background: hot === s.key ? `color-mix(in srgb, ${p.onSurface} 12%, transparent)` : "transparent",
             transition: "background 120ms",
             ...s.style,
           }}
-        />
-      ))}
+        />;
+      })}
       {onPick && menu && (
         /* the dropdown's menu, under the field: surfaceContainer, 48dp items, the chosen one tinted */
         <div
@@ -359,19 +379,116 @@ function Screen({
 }) {
   /* the dropdown whose menu is open, if any; its group is lifted above the rest */
   const [menuId, setMenuId] = useState<string | null>(null);
+  const [railStates, setRailStates] = useState<Record<string, boolean>>({});
+  const [railMotion, setRailMotion] = useState<(ReturnType<typeof railMotionTargets> & { animate: boolean }) | null>(null);
+  const lang = useLang();
+  const reducedMotion = useReducedMotion();
+  const screenRef = useRef<HTMLDivElement>(null);
+  const shownGroups = useMemo(() => Object.entries(railStates).reduce(
+    (current, [id, railExpanded]) => updateRail(current, [frame], widths, id, { railExpanded }), constrainModalRails(groups),
+  ), [groups, frame, widths, railStates]);
+  const modalIds = new Set(shownGroups.flatMap((g) => { const rail = modalRailOf(g); return rail ? [rail.id] : []; }));
+  const hasModal = modalIds.size > 0;
+  const changeRail = (id: string, railExpanded: boolean, animate: boolean) => {
+    const next = updateRail(shownGroups, [frame], widths, id, { railExpanded });
+    setRailMotion({ ...railMotionTargets(shownGroups, next, widths, id), animate: animate && !reducedMotion });
+    setRailStates((prev) => ({ ...prev, [id]: railExpanded }));
+  };
+  const closeRails = (animate = false) => {
+    if (!hasModal) return;
+    const next = [...modalIds].reduce((current, id) => updateRail(current, [frame], widths, id, { railExpanded: false }), shownGroups);
+    setRailMotion({ ...railMotionTargets(shownGroups, next, widths, [...modalIds][0]), animate: animate && !reducedMotion });
+    setRailStates((prev) => ({ ...prev, ...Object.fromEntries([...modalIds].map((id) => [id, false])) }));
+  };
+  useEffect(() => {
+    if (!railMotion) return;
+    if (!railMotion.animate) {
+      // Keep transition suppression through the immediate geometry paint only.
+      // Removing it in the same render would restore M3Node's inline transition.
+      let nextFrame = 0;
+      const firstFrame = requestAnimationFrame(() => {
+        nextFrame = requestAnimationFrame(() => setRailMotion(null));
+      });
+      return () => {
+        cancelAnimationFrame(firstFrame);
+        cancelAnimationFrame(nextFrame);
+      };
+    }
+    const timer = window.setTimeout(() => setRailMotion(null), 260);
+    return () => window.clearTimeout(timer);
+  }, [railMotion]);
+  useEffect(() => { setRailMotion(null); }, [groups, frame, widths]);
+  useEffect(() => {
+    if (!hasModal) return;
+    const previous = document.activeElement as HTMLElement | null;
+    screenRef.current?.querySelector<HTMLButtonElement>(`[data-rail-modal] [data-rail-toggle]`)?.focus();
+    return () => { if (previous?.isConnected) previous.focus(); };
+  }, [hasModal]);
+  useEffect(() => {
+    if (hasModal && !document.activeElement?.closest("[data-rail-modal]")) {
+      screenRef.current?.querySelector<HTMLButtonElement>("[data-rail-modal] [data-rail-toggle]")?.focus();
+    }
+  }, [shownGroups, hasModal]);
+  useEffect(() => {
+    if (!hasModal) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Tab") {
+        e.stopImmediatePropagation();
+        const buttons = Array.from(screenRef.current?.querySelectorAll<HTMLButtonElement>("[data-rail-modal] button") ?? []);
+        const index = buttons.indexOf(document.activeElement as HTMLButtonElement);
+        if (index < 0 || (!e.shiftKey && index === buttons.length - 1) || (e.shiftKey && index === 0)) {
+          e.preventDefault();
+          buttons[e.shiftKey ? buttons.length - 1 : 0]?.focus();
+        }
+        return;
+      }
+      if (e.key !== "Escape") return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      closeRails();
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  });
+
   return (
-    <div style={{ position: "absolute", inset: 0, background: p[frame.bg ?? "surface"], overflow: "hidden" }}>
-      {groups.map((g) => (
+    <div
+      ref={screenRef}
+      data-rail-motion={railMotion?.animate ? "true" : undefined}
+      role={hasModal ? "dialog" : undefined}
+      aria-modal={hasModal ? true : undefined}
+      aria-label={hasModal ? t("railState", lang) : undefined}
+      onPointerDown={(e) => { if (hasModal) e.stopPropagation(); }}
+      style={{ position: "absolute", inset: 0, background: p[frame.bg ?? "surface"], overflow: "hidden" }}
+    >
+      <AnimatePresence>
+        {hasModal && <motion.button
+          key="rail-scrim"
+          data-rail-scrim
+          aria-label={t("collapseNavigation", lang)}
+          tabIndex={-1}
+          onClick={(e) => closeRails(e.detail !== 0)}
+          initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+          transition={{ duration: reducedMotion ? 0 : 0.18 }}
+          style={{ position: "absolute", inset: 0, border: 0, padding: 0, background: "rgba(0,0,0,0.32)", zIndex: 3 }}
+        />}
+      </AnimatePresence>
+      {shownGroups.map((g) => (
         <div
           key={g.id}
+          className="m3-preview-group"
+          data-preview-group={g.id}
+          data-rail-animate={railMotion?.groups.has(g.id) ? "group" : undefined}
+          data-rail-modal={g.items.some((it) => modalIds.has(it.id)) ? "true" : undefined}
+          inert={hasModal && !g.items.some((it) => modalIds.has(it.id))}
           style={
             g.free
-              ? { position: "absolute", left: g.x - frame.x, top: g.y - frame.y, zIndex: g.items.some((it) => it.id === menuId) ? 2 : undefined }
+              ? { position: "absolute", left: g.x - frame.x, top: g.y - frame.y, zIndex: g.items.some((it) => modalIds.has(it.id)) ? 4 : g.items.some((it) => it.id === menuId) ? 2 : undefined }
               : {
                   position: "absolute",
                   left: g.x - frame.x,
                   top: g.y - frame.y,
-                  zIndex: g.items.some((it) => it.id === menuId) ? 2 : undefined,
+                  zIndex: g.items.some((it) => modalIds.has(it.id)) ? 4 : g.items.some((it) => it.id === menuId) ? 2 : undefined,
                   display: "flex",
                   flexDirection: g.axis === "x" ? "row" : "column",
                   alignItems: g.axis === "x" ? "center" : "stretch",
@@ -424,14 +541,16 @@ function Screen({
                 p={p}
                 radii={radii}
                 widths={widths}
+                railAnimating={railMotion?.items.has(it.id)}
                 onTap={tap}
                 onSlot={
                   slotActions || navKind
-                    ? (slot) => {
+                    ? (slot, animate) => {
                         /* a tapped destination lights up where it opens nothing; where it opens a
                            screen, that screen's bar shows its own selected destination */
                         const a = slotActions?.[slot];
                         if (navKind && slot.startsWith("tab:")) onValue(navKey, a ? -1 : Number(slot.slice(4)));
+                        if (modalIds.has(it.id)) closeRails(animate);
                         if (a) onAction(a);
                       }
                     : undefined
@@ -440,6 +559,7 @@ function Screen({
                 onPick={it.kind === "select" ? (i) => onValue(it.id, i) : undefined}
                 menuOpen={menuId === it.id}
                 onMenu={it.kind === "select" ? (open) => setMenuId(open ? it.id : null) : undefined}
+                onRailToggle={it.kind === "navRail" && isWideRail(it) ? (animate) => changeRail(it.id, !it.railExpanded, animate) : undefined}
               />
             );
             if (!g.free) return node;

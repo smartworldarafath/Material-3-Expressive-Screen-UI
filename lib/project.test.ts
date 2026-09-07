@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { isProject, projectFileName, readProject } from "./project";
-import { KIND_ORDER, VARIANTS, type Doc, type Item } from "./tokens";
+import { updateRail } from "./rail";
+import { KIND_ORDER, VARIANTS, railExpansionSide, type Doc, type Item } from "./tokens";
 
 const item = (): Item => ({ id: "item", kind: "button", label: "Save", icon: null, variant: "filled" });
 const doc = (): Doc => ({
@@ -131,6 +132,38 @@ describe("projectFileName", () => {
 });
 
 describe("readProject", () => {
+  it.each(["left", "right"])("does not persist the runtime %s expansion edge", async (side) => {
+    const authored: Item = { ...item(), kind: "navRail", railExpanded: false, railModal: true, size2: 800,
+      selected: 1, tabs: [{ icon: "home", label: "Home" }, { icon: "star", label: "Saved" }], note: "Keep my destinations",
+    };
+    const original = doc();
+    original.frames = [{ ...original.frames[0], w: 1280, h: 800 }];
+    original.groups = [{ ...original.groups[0], x: side === "left" ? 0 : 1184, y: -10, items: [authored] }];
+    const project = { ...original, groups: updateRail(original.groups, original.frames, {}, authored.id, { railExpanded: true }) };
+    const expanded = project.groups[0].items[0];
+    expect(expanded[railExpansionSide]).toBe(side);
+    expect(Reflect.ownKeys(expanded)).toContain(railExpansionSide);
+    const json = JSON.stringify(project);
+    const saved = await readProject(new File([json], "rail.json"));
+    const expectedItem = { ...authored, railExpanded: true };
+    expect(saved).not.toBeNull();
+    expect(Reflect.ownKeys(saved!.groups[0].items[0])).toEqual(Reflect.ownKeys(expectedItem));
+    expect(saved).toEqual({ ...original, groups: [{ ...original.groups[0], x: side === "left" ? 0 : 1060, items: [expectedItem] }] });
+  });
+
+  it.each([undefined, false, true])("accepts optional navigation rail booleans %s without changing them", (value) => {
+    const project = withItem({ kind: "navRail", railExpanded: value, railModal: value });
+    const before = structuredClone(project);
+    expect(isProject(project)).toBe(true);
+    expect(project).toEqual(before);
+  });
+
+  it.each(["railExpanded", "railModal"])("rejects non-boolean navigation rail field %s", (field) => {
+    for (const value of [null, 0, 1, "true", "false", {}, []]) {
+      expect(isProject(withItem({ kind: "navRail", [field]: value }))).toBe(false);
+    }
+  });
+
   it.each([undefined, 2, 4, 8, 16])("preserves progress thickness %s in project files", async (trackThickness) => {
     const value = withItem({ kind: "linearProgress", wavy: true, trackThickness });
     await expect(readProject(new File([JSON.stringify(value)], "progress.json"))).resolves.toEqual(value);
