@@ -1136,7 +1136,7 @@ export function Inspector({
               options={[
                 { key: "start", icon: "vertical_align_top", label: t("imageTop", lang) },
                 { key: "center", icon: "vertical_align_center", label: t("placeCenter", lang) },
-                { key: "end", icon: "vertical_align_bottom", label: t("placeBottom", lang) },
+                { key: "end", icon: "vertical_align_bottom", label: t("bottom", lang) },
               ]}
               value={cardContentAlignOf(item)}
               onChange={(contentAlign) => onChange({ contentAlign: contentAlign === "start" ? undefined : contentAlign })}
