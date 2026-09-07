@@ -92,10 +92,9 @@ describe("preview screen modal lifecycle", () => {
   });
   afterEach(() => vi.unstubAllGlobals());
 
-  it.each(["peek", "exiting"])("keeps the %s screen inert and free of modal side effects", (kind) => {
-    const element = screenElement(kind === "peek");
-    if (kind === "peek") expect(element.props.active).toBe(false);
-    else hooks.present = false;
+  it("keeps the peek screen inert and free of modal side effects", () => {
+    const element = screenElement(true);
+    expect(element.props.active).toBe(false);
     const tree = renderScreen(element);
     attach(tree);
     const cleanup = runEffects();
@@ -108,7 +107,7 @@ describe("preview screen modal lifecycle", () => {
     expect(previous.focus).not.toHaveBeenCalled();
   });
 
-  it("focuses and registers keyboard handling only while the screen is active", () => {
+  it("focuses and registers keyboard handling while the screen is active", () => {
     const element = screenElement();
     const tree = renderScreen(element);
     attach(tree);
@@ -116,11 +115,32 @@ describe("preview screen modal lifecycle", () => {
     expect(tree.props).toMatchObject({ inert: false, role: "dialog", "aria-modal": true });
     expect(toggle.focus).toHaveBeenCalledOnce();
     expect(addEventListener).toHaveBeenCalledWith("keydown", expect.any(Function), true);
+    cleanup();
+    expect(removeEventListener).toHaveBeenCalledWith("keydown", addEventListener.mock.calls[0][1], true);
+  });
+
+  it("deactivates a mounted modal without reclaiming focus when it exits", () => {
+    const element = screenElement();
+    attach(renderScreen(element));
+    const cleanup = runEffects();
+    expect(toggle.focus).toHaveBeenCalledOnce();
+    expect(addEventListener).toHaveBeenCalledWith("keydown", expect.any(Function), true);
+    const listener = addEventListener.mock.calls[0][1];
+    vi.clearAllMocks();
+
     hooks.present = false;
-    renderScreen(element);
+    const exiting = renderScreen(element);
+    expect(exiting.props).toMatchObject({ inert: true, "aria-hidden": true });
+    expect(exiting.props.role).toBeUndefined();
+    expect(exiting.props["aria-modal"]).toBeUndefined();
     cleanup();
     expect(previous.focus).not.toHaveBeenCalled();
-    expect(removeEventListener).toHaveBeenCalledWith("keydown", addEventListener.mock.calls[0][1], true);
+    expect(removeEventListener).toHaveBeenCalledWith("keydown", listener, true);
+    const cleanupExiting = runEffects();
+    expect(toggle.focus).not.toHaveBeenCalled();
+    expect(addEventListener).not.toHaveBeenCalled();
+    cleanupExiting();
+    expect(previous.focus).not.toHaveBeenCalled();
   });
 
   it.each(["connected", "inert", "disconnected"])("restores a %s previous target only when safe on modal dismissal", (status) => {
