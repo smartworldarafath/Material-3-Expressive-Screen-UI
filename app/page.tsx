@@ -591,7 +591,8 @@ export default function Page() {
     if (Array.isArray(doc.frames)) setFrames(doc.frames);
     if (typeof doc.paletteKey === "string" && doc.paletteKey) setPaletteKey(doc.paletteKey);
     else if (reset) setPaletteKey("purple");
-    if (doc.customPalette && typeof doc.customPalette.primary === "string") setCustomPalette(doc.customPalette);
+    /* normalize once so a scheme saved before the secondary role gets it and keeps it on re-save */
+    if (doc.customPalette && typeof doc.customPalette.primary === "string") setCustomPalette(paletteOf("custom", doc.customPalette));
     else if (reset) setCustomPalette(null);
     if (typeof doc.dynamicColor === "boolean") setDynamicColor(doc.dynamicColor);
     else if (reset) setDynamicColor(false);

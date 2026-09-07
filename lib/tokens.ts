@@ -101,7 +101,8 @@ const ERROR = {
   onErrorContainer: "#410E0B",
 };
 
-export const PALETTES: Palette[] = [
+/* presets are authored without secondary; it is derived from the seed below */
+const PRESETS: Omit<Palette, "secondary">[] = [
   {
     key: "purple",
     label: "Purple",
@@ -277,7 +278,8 @@ export const PALETTES: Palette[] = [
     inverseOnSurface: "#F4EFF4",
     ...ERROR,
   },
-].map((p) => ({ ...p, secondary: schemeFromSeed(p.primary, p.label, { keepChroma: true }).secondary }));
+];
+export const PALETTES: Palette[] = PRESETS.map((p) => ({ ...p, secondary: schemeFromSeed(p.primary, p.label, { keepChroma: true }).secondary }));
 
 /* ---------- theme: the four expressive axes ---------- */
 export type ShapeScale = "square" | "rounded" | "full";
