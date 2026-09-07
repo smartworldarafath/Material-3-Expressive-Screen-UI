@@ -420,6 +420,16 @@ function Screen({
   useEffect(() => {
     if (!hasModal) return;
     const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Tab") {
+        e.stopImmediatePropagation();
+        const buttons = Array.from(screenRef.current?.querySelectorAll<HTMLButtonElement>("[data-rail-modal] button") ?? []);
+        const index = buttons.indexOf(document.activeElement as HTMLButtonElement);
+        if (index < 0 || (!e.shiftKey && index === buttons.length - 1) || (e.shiftKey && index === 0)) {
+          e.preventDefault();
+          buttons[e.shiftKey ? buttons.length - 1 : 0]?.focus();
+        }
+        return;
+      }
       if (e.key !== "Escape") return;
       e.preventDefault();
       e.stopImmediatePropagation();
@@ -437,18 +447,6 @@ function Screen({
       aria-modal={hasModal ? true : undefined}
       aria-label={hasModal ? t("railState", lang) : undefined}
       onPointerDown={(e) => { if (hasModal) e.stopPropagation(); }}
-      onKeyDownCapture={(e) => {
-        setRailMotion(null);
-        if (!hasModal) return;
-        if (e.key === "Tab") {
-          const buttons = Array.from(screenRef.current?.querySelectorAll<HTMLButtonElement>("[data-rail-modal] button") ?? []);
-          const index = buttons.indexOf(document.activeElement as HTMLButtonElement);
-          if (buttons.length && (index < 0 || (!e.shiftKey && index === buttons.length - 1) || (e.shiftKey && index === 0))) {
-            e.preventDefault();
-            buttons[e.shiftKey ? buttons.length - 1 : 0].focus();
-          }
-        }
-      }}
       style={{ position: "absolute", inset: 0, background: p[frame.bg ?? "surface"], overflow: "hidden" }}
     >
       <AnimatePresence>

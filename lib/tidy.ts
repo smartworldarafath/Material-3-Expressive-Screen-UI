@@ -226,8 +226,11 @@ export function carryFrame(groups: Group[], frame: Frame, to: Frame, frames: Fra
   const navGroup = mine.find((g) => standsAlone(g, "bottomNav") || standsAlone(g, "navRail"));
   const swapNav = (g: Group, it: Item): Item => {
     if (g !== navGroup) return it;
-    if (expanded && it.kind === "bottomNav") return { ...it, kind: "navRail", size: undefined, size2: after.h, radiusTop: it.radiusBottom, radiusBottom: it.radiusTop };
-    if (!expanded && it.kind === "navRail") return { ...it, kind: "bottomNav", size: after.w, size2: undefined, radiusTop: it.radiusBottom, radiusBottom: it.radiusTop };
+    if (expanded && it.kind === "bottomNav") return { ...it, kind: "navRail", railExpanded: false, size: undefined, size2: after.h, radiusTop: it.radiusBottom, radiusBottom: it.radiusTop };
+    if (!expanded && it.kind === "navRail") {
+      const { railExpanded: _expanded, railModal: _modal, [railExpansionSide]: _side, ...bar } = it;
+      return { ...bar, kind: "bottomNav", size: after.w, size2: undefined, radiusTop: it.radiusBottom, radiusBottom: it.radiusTop };
+    }
     return it;
   };
   /* a rail keeps the side it stood on; one that grows out of a bar starts on the left */

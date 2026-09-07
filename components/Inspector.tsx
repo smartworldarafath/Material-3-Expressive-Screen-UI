@@ -24,7 +24,11 @@ import {
   VARIANTS,
   Variant,
   actionSlotsOf,
-  baseRadii,
+  TRACK_DEFAULT,
+  TRACK_MAX,
+  TRACK_MIN,
+  maxRingThickness,
+  progressThickness,
   contentWidth,
   defaultTabsFor,
   framePresetOf,
@@ -1237,6 +1241,18 @@ export function Inspector({
       {(spec.size || hasRadius) && !editOn && (
         <Section id="size" icon="straighten" title={t("size", lang)} p={p}>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {spec.hasWavy && (
+              <Slider
+                icon="line_weight"
+                title={t("trackThickness", lang)}
+                value={progressThickness(item)}
+                min={TRACK_MIN}
+                max={item.kind === "circularProgress" ? maxRingThickness(item.size ?? spec.w) : TRACK_MAX}
+                step={1}
+                onChange={(trackThickness) => onChange({ trackThickness: trackThickness === TRACK_DEFAULT ? undefined : trackThickness })}
+                p={p}
+              />
+            )}
             {spec.size && (
               <>
                 <Slider
@@ -1368,7 +1384,7 @@ export function Inspector({
                 <Slider
                   iconNode={<CornerIcon side={item.kind === "navRail" ? "left" : "top"} />}
                   title={t(item.kind === "navRail" ? "cornerLeft" : "cornerTop", lang)}
-                  value={item.kind === "navRail" ? baseRadii(item).tl : (item.radiusTop ?? 0)}
+                  value={item.radiusTop ?? 0}
                   min={0}
                   max={40}
                   step={1}
@@ -1378,7 +1394,7 @@ export function Inspector({
                 <Slider
                   iconNode={<CornerIcon side={item.kind === "navRail" ? "right" : "bottom"} />}
                   title={t(item.kind === "navRail" ? "cornerRight" : "cornerBottom", lang)}
-                  value={item.kind === "navRail" ? baseRadii(item).tr : (item.radiusBottom ?? 0)}
+                  value={item.radiusBottom ?? 0}
                   min={0}
                   max={40}
                   step={1}

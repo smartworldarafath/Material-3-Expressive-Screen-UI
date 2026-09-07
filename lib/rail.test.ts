@@ -10,6 +10,24 @@ const group = (id: string, x: number, items: Item[]): Group => ({ id, x, y: 40, 
 const stage = (right = false): Group[] => [group("rail-group", right ? 1204 : 20, [rail]), group("bar-group", right ? 20 : 116, [bar])];
 
 describe("updateRail", () => {
+  it("removes rail-only state when converting to a bottom bar and preserves navigation intent", () => {
+    const originalItem: Item = { ...rail, railExpanded: true, railModal: true, [railExpansionSide]: "right", tabs: [{ icon: "home", label: "Home" }], selected: 0, actions: { "tab:0": { to: "home", transition: "fade" } }, radiusTop: 8, radiusBottom: 16 };
+    const original = [group("nav", 1080, [originalItem])];
+    const phone = { ...frame, w: 412 };
+    const compact = carryFrame(original, frame, phone, [frame], {}).groups;
+    const item = compact[0].items[0];
+    expect(item).not.toHaveProperty("railExpanded");
+    expect(item).not.toHaveProperty("railModal");
+    expect(item[railExpansionSide]).toBeUndefined();
+    expect(item).toMatchObject({ kind: "bottomNav", tabs: originalItem.tabs, selected: 0, actions: originalItem.actions, radiusTop: 16, radiusBottom: 8 });
+    expect(JSON.stringify(item)).not.toContain("railExpanded");
+    expect(JSON.stringify(item)).not.toContain("railModal");
+    const restored = carryFrame(compact, phone, frame, [phone], {}).groups[0].items[0];
+    expect(restored).toMatchObject({ kind: "navRail", railExpanded: false, tabs: originalItem.tabs, selected: 0, actions: originalItem.actions, radiusTop: 8, radiusBottom: 16 });
+    expect(restored).not.toHaveProperty("railModal");
+    expect(restored[railExpansionSide]).toBeUndefined();
+  });
+
   it.each([[100, 600, "right"], [1200, -600, "left"]] as const)("ignores the empty free-group origin at %s", (x, offset, side) => {
     const original = [{ ...group("free", x, [rail]), free: true, pos: { rail: { x: offset, y: 0 } } }];
     expect(railSide(original[0], frame, {})).toBe(side);
@@ -82,8 +100,9 @@ describe("updateRail", () => {
       group("body", 20 + layoutWidth, [{ ...bar, size: 1280 - layoutWidth }]),
     ];
     const out = carryFrame(original, frame, { ...frame, w: 1440 }, [frame], {}).groups;
-    // The first bottom bar still becomes an original 80dp rail, as on main.
-    expect(out.find((g) => g.id === "body")!.items[0].size).toBe(1360 - layoutWidth);
+    // Only the first bottom bar becomes a new, collapsed 96dp expressive rail.
+    expect(out.find((g) => g.id === "bottom")!.items[0].railExpanded).toBe(false);
+    expect(out.find((g) => g.id === "body")!.items[0].size).toBe(1344 - layoutWidth);
   });
 
   it.each([false, true])("keeps a near-centre right rail's body origin when modal=%s", (railModal) => {

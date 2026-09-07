@@ -1011,7 +1011,7 @@ export const KIND_SPEC: Record<Kind, KindSpec> = {
     hasIcon: false,
     hasValue: true,
     hasWavy: true,
-    size: { min: 24, max: 120, step: 4, icon: "open_in_full", presets: [24, 40, 48, 64] },
+    size: { min: 24, max: 120, step: 4, icon: "open_in_full", presets: [24, 40, 48, 52, 64] },
     defLabel: "",
     defIcon: null,
     defSize: 48,
@@ -1190,6 +1190,8 @@ export type Item = {
   /** Expanded rail overlays a scrim rather than taking additional layout space. */
   railModal?: boolean;
   [railExpansionSide]?: "left" | "right";
+  /** Progress track thickness in dp (TRACK_MIN..TRACK_MAX); omitted uses the standard 4dp stroke. */
+  trackThickness?: number;
   contained?: boolean;
   /** free text the author writes about what this part does */
   note?: string;
@@ -1623,6 +1625,19 @@ export function makeItem(kind: Kind): Item {
 
 /** Content-sized kinds are measured in the DOM; the rest derive from spec + size. */
 export const MEASURED: Kind[] = ["button", "extendedFab", "chip", "switch", "checkbox", "text", "splitButton", "radio", "badge"];
+
+/** Progress track thickness range in dp; Material's standard bar is 4 and its thick bar 8. */
+export const TRACK_MIN = 2;
+export const TRACK_MAX = 16;
+export const TRACK_DEFAULT = 4;
+/** A ring can only be so thick before its gap swallows it: a sixth of the diameter, never under 4. */
+export const maxRingThickness = (size: number) => Math.max(TRACK_DEFAULT, Math.min(TRACK_MAX, Math.floor(size / 6)));
+export const isTrackThickness = (v: unknown): v is number => typeof v === "number" && Number.isInteger(v) && v >= TRACK_MIN && v <= TRACK_MAX;
+/** The thickness actually drawn: a ring caps the value by its own diameter. */
+export const progressThickness = (it: Item): number => {
+  const v = isTrackThickness(it.trackThickness) ? it.trackThickness : TRACK_DEFAULT;
+  return it.kind === "circularProgress" ? Math.min(v, maxRingThickness(it.size ?? KIND_SPEC.circularProgress.w)) : v;
+};
 
 export function sizeOf(it: Item, widths: Record<string, number>) {
   const s = KIND_SPEC[it.kind];

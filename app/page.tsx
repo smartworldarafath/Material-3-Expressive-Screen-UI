@@ -594,6 +594,8 @@ export default function Page() {
   /** Puts a stored or opened document into the editor. Fields a partial document
    *  leaves out keep their current value, or go back to the default when `reset`. */
   const applyDoc = (doc: Partial<Doc>, reset: boolean) => {
+    setPreviewId(null);
+    viewBeforePreview.current = null;
     const frames = Array.isArray(doc.frames) ? doc.frames : framesRef.current;
     if (Array.isArray(doc.groups)) setGroups(migrateGroups(doc.groups, frames));
     if (Array.isArray(doc.frames)) setFrames(doc.frames);
@@ -830,8 +832,9 @@ export default function Page() {
       y: (clientY - (r?.top ?? 0) - v.y) / v.z,
     };
   };
+  /* only the open left panel accepts a drop for deletion; the narrow rail never does */
   const inBin = (clientX: number) =>
-    !mobileRef.current && clientX >= 0 && clientX <= (leftOpenRef.current ? leftWRef.current : RAIL_W);
+    !mobileRef.current && leftOpenRef.current && clientX >= 0 && clientX <= leftWRef.current;
 
   const setZoomAt = useCallback((nz: number, cx?: number, cy?: number) => {
     const r = canvasRect();
@@ -1270,7 +1273,8 @@ export default function Page() {
         return;
       }
 
-      d.overBin = inBin(e.clientX);
+      /* a part being added from the palette has nothing to delete yet; dropping it back there just cancels */
+      d.overBin = !d.fromPalette && inBin(e.clientX);
       d.snap =
         d.overBin || ctrlHeld
           ? null
@@ -3154,6 +3158,7 @@ export default function Page() {
   };
 
   const showRight = rightOpen && !isMobile;
+  const overBin = (!!drag?.active && drag.overBin) || (gesture?.kind === "group" && gesture.overBin);
   const guide = drag?.active ? drag.guide : gesture?.kind === "group" && gesture.moved ? (gesture.guide ?? null) : null;
   const visibleWorld = (() => {
     const r = canvasRef.current?.getBoundingClientRect();
@@ -3225,9 +3230,88 @@ export default function Page() {
           </div>
         )}
 
+
+        {/* the part in flight rides above every panel so it stays visible while crossing them */}
+        {drag?.active && (() => {
+          const r = canvasRect();
+          return (
+            <div aria-hidden style={{ position: "fixed", inset: 0, pointerEvents: "none", zIndex: 60, overflow: "hidden" }}>
+              <div
+                style={{
+                  position: "absolute",
+                  left: 0,
+                  top: 0,
+                  transform: `translate(${(r?.left ?? 0) + view.x}px, ${(r?.top ?? 0) + view.y}px) scale(${view.z})`,
+                  transformOrigin: "0 0",
+                  fontFamily: fontFamilyOf(theme.font, lang),
+                }}
+              >
+      {/* the part in flight */}
+      {drag?.active && (
+        <motion.div
+          style={{
+            position: "absolute",
+            left: 0,
+            top: 0,
+            x: sx,
+            y: sy,
+            pointerEvents: "none",
+            zIndex: 50,
+          }}
+          animate={{
+            opacity: drag.overBin ? 0.4 : 1,
+            scale: drag.overBin ? 0.84 : 1,
+          }}
+          transition={{
+            type: "spring",
+            stiffness: 520,
+            damping: 34,
+            mass: 0.6,
+          }}
+        >
+          <M3Node
+            item={drag.item}
+            palette={p}
+            widths={widths}
+            dragging
+            radii={(() => {
+              const conn = connectSpecOf(drag.item);
+              if (!conn || !drag.snap) return baseRadii(drag.item);
+              const g = groupsRef.current.find(
+                (x) => x.id === drag.snap!.groupId,
+              );
+              const mm = (g?.items.length ?? 0) + 1;
+              const k = drag.snap.index;
+              return runRadii(
+                conn.axis,
+                k === 0,
+                k === mm - 1,
+                k > 0,
+                k < mm - 1,
+                drag.snap.pull,
+                conn.outer,
+                conn.inner,
+              );
+            })()}
+          />
+        </motion.div>
+      )}
+              </div>
+            </div>
+          );
+        })()}
+
         {/* ---- left: rail + parts / layers ---- */}
         {!isMobile && (
           <aside style={{ ...panelStyle, width: leftOpen ? leftW : RAIL_W, flexDirection: "row", transition: "width 200ms cubic-bezier(0.2, 0, 0, 1)" }}>
+            {/* dropping a canvas part anywhere on this side deletes it, whichever tab is open */}
+            {overBin && (
+              <div style={{ position: "absolute", inset: 0, zIndex: 5, background: "rgba(179,38,30,0.10)", display: "grid", placeItems: "center", pointerEvents: "none", color: p.error }}>
+                <div style={{ width: 72, height: 72, borderRadius: 36, background: p.errorContainer, color: p.onErrorContainer, display: "grid", placeItems: "center", boxShadow: "0 4px 14px rgba(0,0,0,0.14)" }}>
+                  <Icon name="delete" size={34} />
+                </div>
+              </div>
+            )}
             <div
               onPointerEnter={() => setRailHover(true)}
               onPointerLeave={() => setRailHover(false)}
@@ -3315,7 +3399,6 @@ export default function Page() {
                       )
                     }
                     onPartPointerDown={onPartPointerDown}
-                    overBin={(!!drag?.active && drag.overBin) || (gesture?.kind === "group" && gesture.overBin)}
                   />
                 ) : leftTab === "color" ? (
                   <ColorPanel
@@ -3518,56 +3601,6 @@ export default function Page() {
                 .filter((g) => !frameOf.has(g.id))
                 .map((g) => renderGroup(g, 0, 0))}
 
-              {/* the part in flight */}
-              {drag?.active && (
-                <motion.div
-                  style={{
-                    position: "absolute",
-                    left: 0,
-                    top: 0,
-                    x: sx,
-                    y: sy,
-                    pointerEvents: "none",
-                    zIndex: 50,
-                  }}
-                  animate={{
-                    opacity: drag.overBin ? 0.4 : 1,
-                    scale: drag.overBin ? 0.84 : 1,
-                  }}
-                  transition={{
-                    type: "spring",
-                    stiffness: 520,
-                    damping: 34,
-                    mass: 0.6,
-                  }}
-                >
-                  <M3Node
-                    item={drag.item}
-                    palette={p}
-                    widths={widths}
-                    dragging
-                    radii={(() => {
-                      const conn = connectSpecOf(drag.item);
-                      if (!conn || !drag.snap) return baseRadii(drag.item);
-                      const g = groupsRef.current.find(
-                        (x) => x.id === drag.snap!.groupId,
-                      );
-                      const mm = (g?.items.length ?? 0) + 1;
-                      const k = drag.snap.index;
-                      return runRadii(
-                        conn.axis,
-                        k === 0,
-                        k === mm - 1,
-                        k > 0,
-                        k < mm - 1,
-                        drag.snap.pull,
-                        conn.outer,
-                        conn.inner,
-                      );
-                    })()}
-                  />
-                </motion.div>
-              )}
 
               {links.length > 0 && (
                 <svg

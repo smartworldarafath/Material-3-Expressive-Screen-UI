@@ -303,7 +303,7 @@ describe("expandable rail layout", () => {
     }
   });
 
-  it.each([false, true])("restores an expanded rail through a phone round trip when modal=%s", (railModal) => {
+  it.each([false, true])("creates a collapsed expressive rail after a phone round trip when modal=%s", (railModal) => {
     const layoutWidth = railModal ? 96 : 220;
     const rail = group("rail", desk.x, desk.y, [{ ...navRail("r"), railExpanded: true, railModal, size2: DESKTOP_H }]);
     const bar = group("bar", desk.x + layoutWidth, desk.y, [{ ...topBar("b"), size: DESKTOP_W - layoutWidth }]);
@@ -312,9 +312,10 @@ describe("expandable rail layout", () => {
     expect(compact.find((g) => g.id === "rail")?.items[0].kind).toBe("bottomNav");
     expect(compact.find((g) => g.id === "bar")?.items[0].size).toBe(PHONE_W);
     const restored = carryFrame(compact, phone, desk, [phone], widths).groups;
-    expect(restored.find((g) => g.id === "rail")?.items[0]).toMatchObject({ kind: "navRail", railExpanded: true, railModal });
-    expect(restored.find((g) => g.id === "bar")?.items[0].size).toBe(DESKTOP_W - layoutWidth);
-    expect(restored.find((g) => g.id === "bar")?.x).toBe(desk.x + layoutWidth);
+    expect(restored.find((g) => g.id === "rail")?.items[0]).toMatchObject({ kind: "navRail", railExpanded: false });
+    expect(restored.find((g) => g.id === "rail")?.items[0]).not.toHaveProperty("railModal");
+    expect(restored.find((g) => g.id === "bar")?.items[0].size).toBe(DESKTOP_W - 96);
+    expect(restored.find((g) => g.id === "bar")?.x).toBe(desk.x + 96);
   });
 });
 

@@ -20,6 +20,7 @@ import {
   variantShadow,
   variantStyle,
   SETTLE_MS,
+  progressThickness,
   RAIL_TOP,
   RAIL_W,
   RAIL_ITEM_H,
@@ -1022,6 +1023,7 @@ function Body({ item, p }: { item: Item; p: Palette }) {
           color={p.primary}
           trackColor={p.secondaryContainer}
           wavy={item.wavy}
+          trackThickness={progressThickness(item)}
           value={item.value === undefined ? undefined : item.value / 100}
         />
       );
@@ -1034,6 +1036,7 @@ function Body({ item, p }: { item: Item; p: Palette }) {
             color={p.primary}
             trackColor={p.secondaryContainer}
             wavy={item.wavy}
+            trackThickness={progressThickness(item)}
             value={item.value === undefined ? undefined : item.value / 100}
           />
         </div>
