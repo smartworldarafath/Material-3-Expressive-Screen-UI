@@ -84,10 +84,10 @@ describe("linear track thickness", () => {
     }
   });
 
-  it.each([4, 8])("draws %idp strokes with a separate 4dp stop", (trackThickness) => {
+  it.each([4, 8])("draws %idp strokes with a stop as tall as the track", (trackThickness) => {
     const svg = render(LinearProgress, { value: 0.5, trackThickness });
     expect(svg.children.slice(0, 3).map((child) => child.strokeWidth)).toEqual(Array(3).fill(trackThickness));
-    expect(svg.children[3]).toMatchObject({ type: "circle", r: 2, cx: 240 - trackThickness / 2 - 2 });
+    expect(svg.children[3]).toMatchObject({ type: "circle", r: trackThickness / 2, cx: 240 - trackThickness });
     expect(svg.frame(0).height).toBe(trackThickness + 2);
   });
 
@@ -95,6 +95,7 @@ describe("linear track thickness", () => {
     const svg = render(LinearProgress, { value: 0.5, trackThickness: 8 });
     expect(svg.children[1].d).toBe("M4.00 5.00L120.00 5.00");
     expect(svg.children[0].d).toBe("M132.00 5.00L236.00 5.00");
-    expect(render(LinearProgress, { value: 1, trackThickness: 8 }).children[0].d).toBe("");
+    /* a stub of track stays under the stop indicator, as at 4dp */
+    expect(render(LinearProgress, { value: 1, trackThickness: 8 }).children[0].d).toBe("M228.00 5.00L236.00 5.00");
   });
 });

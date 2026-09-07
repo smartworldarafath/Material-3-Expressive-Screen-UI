@@ -131,12 +131,12 @@ describe("projectFileName", () => {
 });
 
 describe("readProject", () => {
-  it.each([undefined, 4, 8])("preserves progress thickness %s in project files", async (trackThickness) => {
+  it.each([undefined, 2, 4, 8, 16])("preserves progress thickness %s in project files", async (trackThickness) => {
     const value = withItem({ kind: "linearProgress", wavy: true, trackThickness });
     await expect(readProject(new File([JSON.stringify(value)], "progress.json"))).resolves.toEqual(value);
   });
 
-  it.each([0, 6, -8, "8", null])("rejects invalid progress thickness %j", async (trackThickness) => {
+  it.each([0, 1, 17, 4.5, -8, "8", null])("rejects invalid progress thickness %j", async (trackThickness) => {
     const value = withItem({ kind: "circularProgress", trackThickness });
     await expect(readProject(new File([JSON.stringify(value)], "progress.json"))).resolves.toBeNull();
   });

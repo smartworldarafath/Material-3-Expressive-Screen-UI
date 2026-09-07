@@ -74,7 +74,7 @@ describe("progress track thickness", () => {
   it.each(LANGS)("describes the selected thickness, including the legacy default, in %s", (lang) => {
     const label = { ja: "トラックの太さ", en: "track thickness", zh: "轨道粗细", ko: "트랙 두께" }[lang];
     for (const kind of ["linearProgress", "circularProgress"] as const) {
-      for (const trackThickness of [undefined, 4, 8] as const) {
+      for (const trackThickness of [undefined, 4, 6, 8] as const) {
         const doc = fixture();
         doc.groups = [{ id: "progress", x: 16, y: 100, axis: "x", items: [
           { ...makeItem(kind), wavy: true, trackThickness },
@@ -82,8 +82,9 @@ describe("progress track thickness", () => {
         const prompt = buildPrompt(doc, {}, undefined, lang);
         const layout = prompt.slice(prompt.indexOf(SECTIONS[lang][2]), prompt.indexOf(SECTIONS[lang][4]));
         const thicknessText = (value: number) => lang === "en" ? `${value}dp ${label}` : `${label} ${value}dp`;
-        expect(layout).toContain(thicknessText(trackThickness ?? 4));
-        expect(layout).not.toContain(thicknessText(trackThickness === 8 ? 4 : 8));
+        /* only a non-default thickness is spelled out; 4dp is what the style note already states */
+        if (trackThickness && trackThickness !== 4) expect(layout).toContain(thicknessText(trackThickness));
+        else expect(layout).not.toContain(label);
       }
     }
   });

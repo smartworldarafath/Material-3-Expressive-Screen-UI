@@ -129,8 +129,8 @@ Sizes are in dp; `size` is the width unless noted. Content width inside the phon
 | `divider` | divider | | 380 × 16 |
 | `badge` | badge | `label` (empty for a dot) | |
 | `loadingIndicator` | M3 Expressive loading indicator | `contained` | 48 × 48 |
-| `linearProgress` | linear progress | `value` or omit for indeterminate, `wavy` | 380 × 24 |
-| `circularProgress` | circular progress | `value` or omit, `wavy` | 48 × 48 |
+| `linearProgress` | linear progress | `value` or omit for indeterminate, `wavy`, `trackThickness` 2 to 16 (omit for 4) | 380 × 24 |
+| `circularProgress` | circular progress | `value` or omit, `wavy`, `trackThickness` 2 to 16, capped at a sixth of `size` | 48 × 48 |
 
 Fields that any part may carry:
 

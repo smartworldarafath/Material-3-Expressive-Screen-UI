@@ -24,6 +24,11 @@ import {
   VARIANTS,
   Variant,
   actionSlotsOf,
+  TRACK_DEFAULT,
+  TRACK_MAX,
+  TRACK_MIN,
+  maxRingThickness,
+  progressThickness,
   contentWidth,
   defaultTabsFor,
   framePresetOf,
@@ -1190,15 +1195,16 @@ export function Inspector({
         <Section id="size" icon="straighten" title={t("size", lang)} p={p}>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {spec.hasWavy && (
-              <div role="group" aria-label={t("trackThickness", lang)} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                <div style={{ fontSize: 12, color: p.onSurfaceVariant }}>{t("trackThickness", lang)}</div>
-                <Segmented<"4" | "8">
-                  options={[{ key: "4", label: "4dp" }, { key: "8", label: "8dp" }]}
-                  value={item.trackThickness === 8 ? "8" : "4"}
-                  onChange={(v) => onChange({ trackThickness: v === "8" ? 8 : 4 })}
-                  p={p}
-                />
-              </div>
+              <Slider
+                icon="line_weight"
+                title={t("trackThickness", lang)}
+                value={progressThickness(item)}
+                min={TRACK_MIN}
+                max={item.kind === "circularProgress" ? maxRingThickness(item.size ?? spec.w) : TRACK_MAX}
+                step={1}
+                onChange={(trackThickness) => onChange({ trackThickness: trackThickness === TRACK_DEFAULT ? undefined : trackThickness })}
+                p={p}
+              />
             )}
             {spec.size && (
               <>

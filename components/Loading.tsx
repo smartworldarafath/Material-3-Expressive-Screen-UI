@@ -101,7 +101,6 @@ const l2Head = bezier(0, 0, 0.65, 1);
 const l2Tail = bezier(0.1, 0, 0.45, 1);
 
 const TRACK_GAP = 4;
-const STOP_SIZE = 4;
 const LINEAR_WAVELENGTH = 40;
 const LINEAR_AMPLITUDE = 3;
 const WAVE_SPEED = 40; // px per second
@@ -133,14 +132,16 @@ export function LinearProgress({
   wavy?: boolean;
   /** 0..1, undefined = indeterminate */
   value?: number;
-  trackThickness?: 4 | 8;
+  trackThickness?: number;
 }) {
   const height = trackThickness + (wavy ? LINEAR_AMPLITUDE * 2 : 0) + 2;
   const mid = height / 2;
   const inset = trackThickness / 2;
   const w = width - trackThickness;
-  // Preserve the original 4dp gaps; the 8dp track accounts for both round caps.
+  // Preserve the original 4dp gaps; any other thickness accounts for both round caps.
   const gapInset = trackThickness === 4 ? trackThickness / 2 : trackThickness;
+  // The stop indicator is as tall as the track, as Material draws it.
+  const stop = trackThickness;
   const activeRef = useRef<SVGPathElement>(null);
   const active2Ref = useRef<SVGPathElement>(null);
   const trackRef = useRef<SVGPathElement>(null);
@@ -162,9 +163,8 @@ export function LinearProgress({
       const end = inset + w * v;
       a.setAttribute("d", wavePath(inset, end, mid, amp, phase, LINEAR_WAVELENGTH));
       b.setAttribute("d", "");
-      const trackStart = trackThickness === 4
-        ? Math.min(inset + w - STOP_SIZE, end + TRACK_GAP + gapInset)
-        : end + TRACK_GAP + gapInset;
+      // a stub of track always remains under the stop indicator
+      const trackStart = Math.min(inset + w - stop, end + TRACK_GAP + gapInset);
       t.setAttribute("d", wavePath(v <= 0 ? inset : trackStart, inset + w, mid, 0, 0, 1));
       return;
     }
@@ -198,7 +198,7 @@ export function LinearProgress({
       <path ref={activeRef} stroke={color} {...stroke} />
       <path ref={active2Ref} stroke={color} {...stroke} />
       {value !== undefined && (
-        <circle cx={width - inset - STOP_SIZE / 2} cy={mid} r={STOP_SIZE / 2} fill={color} />
+        <circle cx={width - inset - stop / 2} cy={mid} r={stop / 2} fill={color} />
       )}
     </svg>
   );
@@ -251,7 +251,7 @@ export function CircularProgress({
   trackColor: string;
   wavy?: boolean;
   value?: number;
-  trackThickness?: 4 | 8;
+  trackThickness?: number;
 }) {
   const amp = wavy ? CIRC_AMPLITUDE : 0;
   const r = size / 2 - trackThickness / 2 - amp;
