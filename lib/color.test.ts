@@ -43,6 +43,15 @@ describe("hexToRgb / rgbToHex", () => {
 describe("schemeFromSeed", () => {
   const seed = "#6750A4";
 
+  it.each([false, true])("keeps secondary labels readable across contrast levels (dark=%s)", (dark) => {
+    for (const contrast of ["standard", "medium", "high"] as const) {
+      const p = schemeFromSeed(seed, "Custom", { dark, contrast });
+      expect(isHex(p.secondary)).toBe(true);
+      expect(Math.abs(toneOf(p.secondary) - toneOf(p.secondaryContainer))).toBeGreaterThan(45);
+    }
+    expect(toneOf(schemeFromSeed(seed, "Custom", { dark }).secondary)).toBeCloseTo(dark ? 80 : 40, 0);
+  });
+
   it("honours the dark option: surfaces go dark, text on them light", () => {
     const light = schemeFromSeed(seed);
     const dark = schemeFromSeed(seed, "Custom", { dark: true });

@@ -40,6 +40,7 @@ const palette: Palette = {
   primaryContainer: "#EADDFF",
   onPrimaryContainer: "#21005D",
   inversePrimary: "#D0BCFF",
+  secondary: "#625B71",
   secondaryContainer: "#E8DEF8",
   onSecondaryContainer: "#1D192B",
   tertiaryContainer: "#FFD8E4",
