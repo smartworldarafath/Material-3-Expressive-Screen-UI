@@ -402,6 +402,18 @@ function Screen({
   };
   useEffect(() => {
     if (!railMotion) return;
+    if (!railMotion.animate) {
+      // Keep transition suppression through the immediate geometry paint only.
+      // Removing it in the same render would restore M3Node's inline transition.
+      let nextFrame = 0;
+      const firstFrame = requestAnimationFrame(() => {
+        nextFrame = requestAnimationFrame(() => setRailMotion(null));
+      });
+      return () => {
+        cancelAnimationFrame(firstFrame);
+        cancelAnimationFrame(nextFrame);
+      };
+    }
     const timer = window.setTimeout(() => setRailMotion(null), 260);
     return () => window.clearTimeout(timer);
   }, [railMotion]);
