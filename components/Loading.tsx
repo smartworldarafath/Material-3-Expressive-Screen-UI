@@ -139,6 +139,8 @@ export function LinearProgress({
   const mid = height / 2;
   const inset = trackThickness / 2;
   const w = width - trackThickness;
+  // Preserve the original 4dp gaps; the 8dp track accounts for both round caps.
+  const gapInset = trackThickness === 4 ? trackThickness / 2 : trackThickness;
   const activeRef = useRef<SVGPathElement>(null);
   const active2Ref = useRef<SVGPathElement>(null);
   const trackRef = useRef<SVGPathElement>(null);
@@ -160,8 +162,9 @@ export function LinearProgress({
       const end = inset + w * v;
       a.setAttribute("d", wavePath(inset, end, mid, amp, phase, LINEAR_WAVELENGTH));
       b.setAttribute("d", "");
-      // Both rounded caps extend half a stroke into the gap.
-      const trackStart = end + TRACK_GAP + trackThickness;
+      const trackStart = trackThickness === 4
+        ? Math.min(inset + w - STOP_SIZE, end + TRACK_GAP + gapInset)
+        : end + TRACK_GAP + gapInset;
       t.setAttribute("d", wavePath(v <= 0 ? inset : trackStart, inset + w, mid, 0, 0, 1));
       return;
     }
@@ -180,9 +183,9 @@ export function LinearProgress({
     let cursor = inset;
     let d = "";
     for (const s of segs) {
-      const to = s[0] - TRACK_GAP - trackThickness;
+      const to = s[0] - TRACK_GAP - gapInset;
       if (to - cursor > 0.5) d += wavePath(cursor, to, mid, 0, 0, 1);
-      cursor = Math.max(cursor, s[1] + TRACK_GAP + trackThickness);
+      cursor = Math.max(cursor, s[1] + TRACK_GAP + gapInset);
     }
     if (inset + w - cursor > 0.5) d += wavePath(cursor, inset + w, mid, 0, 0, 1);
     t.setAttribute("d", d);
