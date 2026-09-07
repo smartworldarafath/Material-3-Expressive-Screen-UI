@@ -37,6 +37,7 @@ import {
   CardImagePos,
   CardImageRatio,
   cardContentAlignOf,
+  cardDefaultFillOf,
   cardFillOf,
   cardGapOf,
   cardImageFitOf,
@@ -44,10 +45,12 @@ import {
   cardImageSizeOf,
   cardPaddingOf,
   cardTextAlignOf,
+  cardVariantPatch,
   frameSizeOf,
   halfWidth,
   isPhoneFrame,
   isWideRail,
+  onToken,
   toggleIcon,
   iconSlotsOf,
   setIconSlot,
@@ -1216,7 +1219,7 @@ export function Inspector({
                 label={v.label}
                 p={p}
                 on={shown.variant === v.key}
-                onClick={() => change({ variant: v.key })}
+                onClick={() => change(item.kind === "card" && !editOn ? cardVariantPatch(v.key) : { variant: v.key })}
               />
             ))}
           </div>
@@ -1232,6 +1235,10 @@ export function Inspector({
             none={item.kind === "card"}
             noneOn={item.kind === "card" && !item.fill}
             onNone={() => onChange({ fill: undefined })}
+            noneColor={item.kind === "card" ? p[cardDefaultFillOf(item.variant)] : undefined}
+            noneTextColor={item.kind === "card" ? onToken(cardDefaultFillOf(item.variant), p) : undefined}
+            noneIcon={item.kind === "card" ? "restart_alt" : undefined}
+            noneLabel={item.kind === "card" ? t("variantDefault", lang) : undefined}
           />
           {item.kind === "listItem" && (
             <>

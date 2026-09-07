@@ -668,6 +668,10 @@ export function TokenChips({
   none,
   noneOn,
   onNone,
+  noneColor,
+  noneTextColor,
+  noneIcon = "block",
+  noneLabel,
 }: {
   value: ColorToken;
   onChange: (t: ColorToken) => void;
@@ -676,6 +680,11 @@ export function TokenChips({
   none?: boolean;
   noneOn?: boolean;
   onNone?: () => void;
+  /** a fallback option may represent a real computed color rather than transparency */
+  noneColor?: string;
+  noneTextColor?: string;
+  noneIcon?: string;
+  noneLabel?: string;
 }) {
   const lang = useLang();
   return (
@@ -683,8 +692,8 @@ export function TokenChips({
       {none && (
         <button
           onClick={onNone}
-          title={t("noBackground", lang)}
-          aria-label={t("noBackground", lang)}
+          title={noneLabel ?? t("noBackground", lang)}
+          aria-label={noneLabel ?? t("noBackground", lang)}
           aria-pressed={noneOn}
           className="m3-press"
           style={{
@@ -694,15 +703,15 @@ export function TokenChips({
             border: `1px solid ${p.outlineVariant}`,
             padding: 0,
             cursor: "pointer",
-            background: "transparent",
-            color: p.onSurfaceVariant,
+            background: noneColor ?? "transparent",
+            color: noneTextColor ?? p.onSurfaceVariant,
             display: "grid",
             placeItems: "center",
             outline: noneOn ? `2px solid ${p.primary}` : "2px solid transparent",
             outlineOffset: 2,
           }}
         >
-          <Icon name="block" size={16} />
+          <Icon name={noneIcon} size={16} />
         </button>
       )}
       {COLOR_TOKENS.map((t) => {

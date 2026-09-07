@@ -51,12 +51,15 @@ import {
   isPlatform,
   makeItem,
   cardContentAlignOf,
+  cardDefaultFillOf,
+  cardFillOf,
   cardGapOf,
   cardImageFitOf,
   cardImagePosOf,
   cardImageSizeOf,
   cardPaddingOf,
   cardTextAlignOf,
+  cardVariantPatch,
   isCardAlign,
   isCardImageFit,
   isCardImagePos,
@@ -354,6 +357,15 @@ describe("makeItem", () => {
 });
 
 describe("card image placement helpers", () => {
+  it("uses each variant's M3 palette role until the author overrides it", () => {
+    expect(cardDefaultFillOf("tonal")).toBe("surfaceContainerHighest");
+    expect(cardDefaultFillOf("elevated")).toBe("surfaceContainerLow");
+    expect(cardDefaultFillOf("outlined")).toBe("surface");
+    expect(cardFillOf({ ...makeItem("card"), variant: "elevated" })).toBe("surfaceContainerLow");
+    expect(cardFillOf({ ...makeItem("card"), variant: "outlined", fill: "primaryContainer" })).toBe("primaryContainer");
+    expect(cardVariantPatch("outlined")).toEqual({ variant: "outlined", fill: undefined });
+  });
+
   it("accepts exactly the four placements", () => {
     for (const pos of ["top", "leading", "trailing", "background"]) expect(isCardImagePos(pos)).toBe(true);
     for (const bad of [undefined, null, "bottom", "left", 3]) expect(isCardImagePos(bad)).toBe(false);

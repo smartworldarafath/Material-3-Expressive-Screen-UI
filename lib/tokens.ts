@@ -1324,7 +1324,11 @@ export const COLOR_TOKENS: { key: ColorToken; label: string }[] = [
 
 /** readable foreground for a chosen background token */
 /** the background a card draws when no token is set: it follows the variant */
-export const cardFillOf = (it: Item): ColorToken => it.fill ?? (it.variant === "outlined" ? "surface" : it.variant === "elevated" ? "surfaceContainerLow" : "surfaceContainerHighest");
+export const cardDefaultFillOf = (variant: Variant): ColorToken =>
+  variant === "outlined" ? "surface" : variant === "elevated" ? "surfaceContainerLow" : "surfaceContainerHighest";
+export const cardFillOf = (it: Item): ColorToken => it.fill ?? cardDefaultFillOf(it.variant);
+/** choosing a card variant restores its canonical container role; a later swatch choice is an explicit override */
+export const cardVariantPatch = (variant: Variant): Pick<Item, "variant" | "fill"> => ({ variant, fill: undefined });
 
 /** where a card's image area sits; sketches saved before placement existed stay on top */
 export type CardImagePos = "top" | "leading" | "trailing" | "background";

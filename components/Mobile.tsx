@@ -19,14 +19,18 @@ import {
   ShapeScale,
   Theme,
   cardContentAlignOf,
+  cardDefaultFillOf,
+  cardFillOf,
   cardGapOf,
   cardImageFitOf,
   cardImagePosOf,
   cardImageSizeOf,
   cardPaddingOf,
   cardTextAlignOf,
+  cardVariantPatch,
   defaultTabsFor,
   iconSlotsOf,
+  onToken,
   setIconSlot,
 } from "@/lib/tokens";
 import { ensureFontLoaded } from "@/lib/theme";
@@ -34,7 +38,7 @@ import { KIND_TEXT, LANGS, Lang, t, useLang } from "@/lib/i18n";
 import { IconPicker } from "./IconPicker";
 import { Icon } from "./M3Node";
 import { VariantSwatch, variantsOf } from "./Inspector";
-import { Field, IconBtn, Segmented, SizePresets, Slider, Toggle } from "./ui";
+import { Field, IconBtn, Segmented, SizePresets, Slider, Toggle, TokenChips } from "./ui";
 
 /** Sheet that slides up from the bottom edge; the canvas above stays usable.
  *  Dragging the handle moves the sheet with the finger; a flick or a long pull closes it. */
@@ -449,9 +453,26 @@ export function MobileInspector({
         <Row icon="palette" label={t("style", lang)} p={p}>
           <div className="no-scrollbar" style={{ display: "flex", gap: 6, overflowX: "auto", padding: "3px 3px 6px" }}>
             {variants.map((v) => (
-              <VariantSwatch key={v.key} v={v.key} label={v.label} p={p} on={item.variant === v.key} onClick={() => onChange({ variant: v.key })} />
+              <VariantSwatch key={v.key} v={v.key} label={v.label} p={p} on={item.variant === v.key} onClick={() => onChange(item.kind === "card" ? cardVariantPatch(v.key) : { variant: v.key })} />
             ))}
           </div>
+        </Row>
+      )}
+
+      {item.kind === "card" && (
+        <Row icon="format_color_fill" label={t("background", lang)} p={p}>
+          <TokenChips
+            value={cardFillOf(item)}
+            onChange={(fill) => onChange({ fill })}
+            p={p}
+            none
+            noneOn={!item.fill}
+            onNone={() => onChange({ fill: undefined })}
+            noneColor={p[cardDefaultFillOf(item.variant)]}
+            noneTextColor={onToken(cardDefaultFillOf(item.variant), p)}
+            noneIcon="restart_alt"
+            noneLabel={t("variantDefault", lang)}
+          />
         </Row>
       )}
 
