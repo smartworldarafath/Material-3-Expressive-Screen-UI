@@ -116,8 +116,7 @@ function tonesFor(dark: boolean, contrast: Contrast): Tones {
     if (dark) Object.assign(t, { primary: 85, onPrimaryContainer: 95, onSecondaryContainer: 95, onTertiaryContainer: 95, onSurfaceVariant: 85, outline: 70, outlineVariant: 50 });
     else Object.assign(t, { primary: 30, onPrimaryContainer: 20, onSecondaryContainer: 20, onTertiaryContainer: 20, onSurfaceVariant: 25, outline: 40, outlineVariant: 65 });
   } else if (contrast === "high") {
-    /* The high-contrast container reverses tone; its selected label follows it. */
-    t.secondary = dark ? 0 : 100;
+    t.secondary = dark ? 95 : 20;
     if (dark) Object.assign(t, { primary: 95, onPrimary: 0, primaryContainer: 80, onPrimaryContainer: 0, secondaryContainer: 80, onSecondaryContainer: 0, tertiaryContainer: 80, onTertiaryContainer: 0, onSurface: 100, onSurfaceVariant: 95, outline: 90, outlineVariant: 90 });
     else Object.assign(t, { primary: 20, primaryContainer: 30, onPrimaryContainer: 100, secondaryContainer: 30, onSecondaryContainer: 100, tertiaryContainer: 30, onTertiaryContainer: 100, onSurface: 0, onSurfaceVariant: 10, outline: 20, outlineVariant: 20 });
   }

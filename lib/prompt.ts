@@ -775,6 +775,7 @@ function paletteLines(p: Palette): string[] {
       ["onPrimaryContainer", p.onPrimaryContainer],
     ]),
     row([
+      ["secondary", p.secondary],
       ["secondaryContainer", p.secondaryContainer],
       ["onSecondaryContainer", p.onSecondaryContainer],
       ["tertiaryContainer", p.tertiaryContainer],

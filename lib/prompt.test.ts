@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { Lang, setGlobalLang } from "./i18n";
 import { buildPrompt } from "./prompt";
-import { BACK_TARGET, Doc, Item, Platform, defaultTabs, makeItem } from "./tokens";
+import { BACK_TARGET, DEFAULT_THEME, Doc, Item, Platform, defaultTabs, makeItem, paletteOf } from "./tokens";
 
 const LANGS: Lang[] = ["ja", "en", "zh", "ko"];
 
@@ -70,6 +70,17 @@ const QUOTED: Record<Lang, { label: string; others: string[] }> = {
 
 describe("buildPrompt structure", () => {
   afterEach(() => setGlobalLang("ja")); // restore the module default
+
+  it.each(LANGS)("emits the actual secondary color in both modes and every contrast level in %s", (lang) => {
+    for (const contrast of ["standard", "medium", "high"] as const) {
+      const doc = { ...fixture(), theme: { ...DEFAULT_THEME, bothModes: true, contrast } };
+      const prompt = buildPrompt(doc, {}, undefined, lang);
+      for (const dark of [false, true]) {
+        const p = paletteOf(doc.paletteKey, undefined, { ...doc.theme, dark });
+        expect(prompt).toContain(`secondary ${p.secondary} / secondaryContainer`);
+      }
+    }
+  });
 
   it.each(LANGS)("orders its sections the same way in %s", (lang) => {
     expect(headings(build(lang))).toEqual(SECTIONS[lang]);
