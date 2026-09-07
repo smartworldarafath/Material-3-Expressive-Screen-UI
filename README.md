@@ -90,6 +90,10 @@ Bug reports, part requests and pull requests are welcome. [CONTRIBUTING.md](CONT
 
 M3E Canvas is free and MIT-licensed, and stays that way. If it saves you time, you can [sponsor the work on GitHub](https://github.com/sponsors/lnkiai); it pays for the hours that go into new parts, the prompt, and reviewing contributions. No feature is behind sponsorship.
 
+Thanks to the sponsors who keep this going:
+
+- [Yspritan](https://github.com/YspritanHyzygy)
+
 ## Credits
 
 - Loading indicator shapes and animation model: [material-components-android](https://github.com/material-components/material-components-android) (Apache-2.0) via [Aler1x/m3-loading-indicator](https://github.com/Aler1x/m3-loading-indicator). See `NOTICE`.
@@ -155,6 +159,10 @@ npm run build      # ./out に静的書き出し
 
 M3E Canvas は無料で MIT ライセンスのまま続けます。時間の節約になったら、[GitHub Sponsors](https://github.com/sponsors/lnkiai) で開発を支えてもらえると助かります。新しい部品、プロンプトの調整、貢献のレビューにかかる時間に充てます。支援の有無で使える機能は変わりません。
 
+開発を支えてくださっているスポンサーの方々に感謝します。
+
+- [Yspritan](https://github.com/YspritanHyzygy)
+
 ### ライセンス
 
 MIT © lnkiai
@@ -210,6 +218,10 @@ npm run build      # 静态导出到 ./out
 
 M3E Canvas 免费且采用 MIT 许可证，今后也不会改变。如果它为你节省了时间，欢迎在 [GitHub Sponsors](https://github.com/sponsors/lnkiai) 上支持开发；这些支持将用于新组件、提示词的打磨和审阅贡献所花的时间。没有任何功能因赞助而受限。
 
+感谢支持本项目的赞助者：
+
+- [Yspritan](https://github.com/YspritanHyzygy)
+
 ### 许可证
 
 MIT © lnkiai
@@ -264,6 +276,10 @@ npm run build      # ./out 에 정적 내보내기
 ### 후원
 
 M3E Canvas는 무료이며 MIT 라이선스로 계속 유지됩니다. 시간을 아끼는 데 도움이 되었다면 [GitHub Sponsors](https://github.com/sponsors/lnkiai)에서 개발을 후원해 주세요. 새 부품, 프롬프트 다듬기, 기여 검토에 드는 시간에 쓰입니다. 후원 여부로 기능이 달라지지 않습니다.
+
+개발을 이어갈 수 있게 후원해 주신 분들께 감사드립니다.
+
+- [Yspritan](https://github.com/YspritanHyzygy)
 
 ### 라이선스
 

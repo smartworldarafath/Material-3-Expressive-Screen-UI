@@ -503,6 +503,7 @@ export function Section({
   children,
   right,
   defaultOpen = true,
+  onToggle,
 }: {
   id: string;
   icon: string;
@@ -511,6 +512,8 @@ export function Section({
   children: React.ReactNode;
   right?: React.ReactNode;
   defaultOpen?: boolean;
+  /** called after the user opens or collapses the section by hand */
+  onToggle?: (open: boolean) => void;
 }) {
   const [open, setOpen] = useState(defaultOpen);
   useEffect(() => {
@@ -520,12 +523,12 @@ export function Section({
     } catch {}
   }, [id]);
   const toggle = () => {
-    setOpen((o) => {
-      try {
-        localStorage.setItem(`m3e:sec:${id}`, o ? "0" : "1");
-      } catch {}
-      return !o;
-    });
+    const next = !open;
+    try {
+      localStorage.setItem(`m3e:sec:${id}`, next ? "1" : "0");
+    } catch {}
+    setOpen(next);
+    onToggle?.(next);
   };
   return (
     <div style={{ marginBottom: 10 }}>
