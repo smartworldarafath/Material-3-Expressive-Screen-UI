@@ -999,6 +999,7 @@ function Body({ item, p }: { item: Item; p: Palette }) {
           color={p.primary}
           trackColor={p.secondaryContainer}
           wavy={item.wavy}
+          trackThickness={item.trackThickness}
           value={item.value === undefined ? undefined : item.value / 100}
         />
       );
@@ -1011,6 +1012,7 @@ function Body({ item, p }: { item: Item; p: Palette }) {
             color={p.primary}
             trackColor={p.secondaryContainer}
             wavy={item.wavy}
+            trackThickness={item.trackThickness}
             value={item.value === undefined ? undefined : item.value / 100}
           />
         </div>

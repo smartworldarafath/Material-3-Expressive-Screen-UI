@@ -990,7 +990,7 @@ export const KIND_SPEC: Record<Kind, KindSpec> = {
     hasIcon: false,
     hasValue: true,
     hasWavy: true,
-    size: { min: 24, max: 120, step: 4, icon: "open_in_full", presets: [24, 40, 48, 64] },
+    size: { min: 24, max: 120, step: 4, icon: "open_in_full", presets: [24, 40, 48, 52, 64] },
     defLabel: "",
     defIcon: null,
     defSize: 48,
@@ -1164,6 +1164,8 @@ export type Item = {
   /** 0..100 for sliders and determinate progress; undefined = indeterminate */
   value?: number;
   wavy?: boolean;
+  /** Progress track thickness in dp; omitted uses the standard 4dp stroke. */
+  trackThickness?: 4 | 8;
   contained?: boolean;
   /** free text the author writes about what this part does */
   note?: string;
