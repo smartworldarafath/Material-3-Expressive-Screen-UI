@@ -136,13 +136,10 @@ input.m3-number {
 }
 
 /* Only geometry affected by the current rail action shares its transition. */
-[data-rail-motion] [data-wide-rail] {
-  transition: outline-color 120ms !important;
-}
-[data-rail-motion] .m3-preview-group,
-[data-rail-motion] [data-node],
-[data-rail-motion] .m3-rail-geometry,
-[data-rail-motion] .m3-rail-hit {
+[data-rail-animate="group"],
+[data-rail-animate="item"] > [data-node],
+[data-rail-animate="item"] .m3-rail-geometry,
+[data-rail-animate="item"] .m3-rail-hit {
   transition: none !important;
 }
 [data-rail-motion="true"] [data-rail-animate="group"] {

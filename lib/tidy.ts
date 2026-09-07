@@ -1,4 +1,4 @@
-import { CONTENT_W, FULL_WIDTH, Frame, Group, Item, KIND_SPEC, Kind, PHONE_MARGIN, RAIL_COLLAPSED_W, railExpansionSide, railWidth, railLayoutWidth, canJoin, isPhoneFrame, scaleR, carryItemSize, connectSpecOf, frameOfGroup, frameRect, frameSizeOf, groupBounds, isExpanded } from "./tokens";
+import { CONTENT_W, FULL_WIDTH, Frame, Group, Item, KIND_SPEC, Kind, PHONE_MARGIN, RAIL_COLLAPSED_W, railExpansionSide, railWidth, railLayoutWidth, canJoin, isPhoneFrame, scaleR, carryItemSize, connectSpecOf, frameOfGroup, frameRect, frameSizeOf, groupBounds, layoutOf, isExpanded } from "./tokens";
 
 /* Rule-based layout for one screen. Nothing here is guessed by a model.
  *
@@ -219,7 +219,7 @@ export function carryFrame(groups: Group[], frame: Frame, to: Frame, frames: Fra
   /* The navigation bar of a compact screen is the rail of an expanded one, and back: M3 has
    * no rail below 840dp and no bar above it, so a rail placed on a phone becomes a bar too.
    * Only a bar or rail standing on its own is swapped, and only the first of them: one
-   * inside a hand-made group is part of that group's drawing, and a screen has one rail. */
+   * inside a hand-made group is part of that group's drawing. Other standalone rails keep their kind. */
   const expanded = isExpanded(after.w);
   const mine = groups.filter((g) => owner.get(g.id) === frame.id);
   const standsAlone = (g: Group, kind: Kind) => g.items.length === 1 && g.items[0].kind === kind;
@@ -230,23 +230,28 @@ export function carryFrame(groups: Group[], frame: Frame, to: Frame, frames: Fra
     if (!expanded && it.kind === "navRail") return { ...it, kind: "bottomNav", size: after.w, size2: undefined, radiusTop: it.radiusBottom, radiusBottom: it.radiusTop };
     return it;
   };
-  const existingRail = mine.find((g) => standsAlone(g, "navRail"));
-  const railBefore = existingRail ? railLayoutWidth(existingRail.items[0]) : 0;
-  const railAfter = expanded && navGroup ? railLayoutWidth(swapNav(navGroup, navGroup.items[0])) : 0;
   /* a rail keeps the side it stood on; one that grows out of a bar starts on the left */
   const side = navGroup && standsAlone(navGroup, "navRail") ? railSide(navGroup, frame, widths) : "left";
-  const leftBefore = side === "left" ? railBefore : 0;
-  const leftAfter = side === "left" ? railAfter : 0;
+  const railSlots = (swap: boolean) => mine.reduce((slot, g) => {
+    if (g.items.length !== 1) return slot;
+    const item = swap ? swapNav(g, g.items[0]) : g.items[0];
+    if (item.kind !== "navRail") return slot;
+    const w = railLayoutWidth(item);
+    const right = g.items[0].kind === "navRail" && railSide(g, frame, widths) === "right";
+    return { total: slot.total + w, left: slot.left + (right ? 0 : w) };
+  }, { total: 0, left: 0 });
+  const beforeSlots = railSlots(false);
+  const afterSlots = railSlots(true);
   /* parts live in the body beside the rail: their widths follow the body, and their
    * positions are measured from its left edge, on both ends of the change */
-  const fromBody = { w: from.w - railBefore, h: from.h };
-  const toBody = { w: after.w - railAfter, h: after.h };
+  const fromBody = { w: from.w - beforeSlots.total, h: from.h };
+  const toBody = { w: after.w - afterSlots.total, h: after.h };
   const resized = groups.map((g) => {
     const o = owner.get(g.id);
     if (o === frame.id) {
-      const isRail = g === navGroup && railAfter > 0;
+      const isRail = g === navGroup && expanded;
       const items = g.items.map((it) => swapNav(g, carryItemSize(it, isRail ? from : fromBody, isRail ? after : toBody)));
-      const x = isRail ? (side === "right" ? to.x + after.w - railWidth(items[0]) : to.x) : g.x + leftAfter - leftBefore;
+      const x = isRail ? (side === "right" ? to.x + after.w - railWidth(items[0]) : to.x) : g.x + afterSlots.left - beforeSlots.left;
       return pullInto({ ...g, x, items }, to, widths);
     }
     const dx = o ? moved.get(o) : undefined;
@@ -259,7 +264,8 @@ export function carryFrame(groups: Group[], frame: Frame, to: Frame, frames: Fra
 export function railSide(g: Group, frame: Frame, widths: Record<string, number>): "left" | "right" {
   const item = g.items[0];
   const fr = frameRect(frame);
-  const bb = groupBounds(g, widths);
+  const placed = g.items.length === 1 ? layoutOf(g, widths)[0] : undefined;
+  const bb = placed ? { l: placed.x, r: placed.x + placed.w } : groupBounds(g, widths);
   const side = item[railExpansionSide];
   if (g.items.length === 1 && item.railExpanded && side) {
     const middle = side === "right" ? bb.r - RAIL_COLLAPSED_W / 2 : bb.l + RAIL_COLLAPSED_W / 2;

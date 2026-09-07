@@ -1,6 +1,6 @@
 "use client";
 
-import { motion } from "motion/react";
+import { motion, useReducedMotion } from "motion/react";
 import {
   FAB_MENU_GAP,
   FAB_MENU_ITEM_H,
@@ -1288,6 +1288,9 @@ export function M3Node({
   interactive?: boolean;
   onPointerDown?: (e: React.PointerEvent) => void;
 }) {
+  const reducedMotion = useReducedMotion();
+  const instantRail = reducedMotion && item.kind === "navRail" && isWideRail(item);
+  const radiusTransition = instantRail ? { duration: 0 } : RADIUS_TWEEN;
   const r = radii ?? baseRadii(item);
   const size = sizeOf(item, widths);
   const measured = MEASURED.includes(item.kind) && !((item.kind === "switch" || item.kind === "button") && item.size);
@@ -1308,11 +1311,11 @@ export function M3Node({
         scale: pressed ? 0.97 : 1,
       }}
       transition={{
-        borderTopLeftRadius: RADIUS_TWEEN,
-        borderBottomLeftRadius: RADIUS_TWEEN,
-        borderTopRightRadius: RADIUS_TWEEN,
-        borderBottomRightRadius: RADIUS_TWEEN,
-        scale: { type: "spring", stiffness: 700, damping: 30, mass: 0.5 },
+        borderTopLeftRadius: radiusTransition,
+        borderBottomLeftRadius: radiusTransition,
+        borderTopRightRadius: radiusTransition,
+        borderBottomRightRadius: radiusTransition,
+        scale: instantRail ? { duration: 0 } : { type: "spring", stiffness: 700, damping: 30, mass: 0.5 },
       }}
       style={{
         ...boxStyle(item, palette),

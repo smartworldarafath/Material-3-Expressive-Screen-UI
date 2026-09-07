@@ -1197,7 +1197,15 @@ export function Inspector({
             {!isWideRail(item) ? (
               <>
                 <div style={{ fontSize: 12, color: p.onSurfaceVariant }}>{t("railLegacy", lang)}</div>
-                <Toggle on={false} onChange={() => onChange({ railExpanded: false })} p={p} icon="side_navigation" label={t("railUpgrade", lang)} />
+                <button
+                  type="button"
+                  onClick={() => onChange({ railExpanded: false })}
+                  className="m3-press"
+                  style={{ height: 40, width: "100%", borderRadius: 20, border: `1px solid ${p.outline}`, background: "transparent", color: p.primary, fontSize: 13, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}
+                >
+                  <Icon name="side_navigation" size={18} />
+                  {t("railUpgrade", lang)}
+                </button>
               </>
             ) : (
               <>

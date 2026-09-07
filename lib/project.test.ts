@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { isProject, projectFileName, readProject } from "./project";
+import { updateRail } from "./rail";
 import { KIND_ORDER, VARIANTS, railExpansionSide, type Doc, type Item } from "./tokens";
 
 const item = (): Item => ({ id: "item", kind: "button", label: "Save", icon: null, variant: "filled" });
@@ -132,12 +133,22 @@ describe("projectFileName", () => {
 
 describe("readProject", () => {
   it.each(["left", "right"])("does not persist the runtime %s expansion edge", async (side) => {
-    const project = withItem({ kind: "navRail", railExpanded: true, [railExpansionSide]: side });
+    const authored: Item = { ...item(), kind: "navRail", railExpanded: false, railModal: true, size2: 800,
+      selected: 1, tabs: [{ icon: "home", label: "Home" }, { icon: "star", label: "Saved" }], note: "Keep my destinations",
+    };
+    const original = doc();
+    original.frames = [{ ...original.frames[0], w: 1280, h: 800 }];
+    original.groups = [{ ...original.groups[0], x: side === "left" ? 0 : 1184, y: -10, items: [authored] }];
+    const project = { ...original, groups: updateRail(original.groups, original.frames, {}, authored.id, { railExpanded: true }) };
+    const expanded = project.groups[0].items[0];
+    expect(expanded[railExpansionSide]).toBe(side);
+    expect(Reflect.ownKeys(expanded)).toContain(railExpansionSide);
     const json = JSON.stringify(project);
-    expect(json).not.toContain("railExpansionSide");
-    expect(json).not.toContain("railAnchor");
     const saved = await readProject(new File([json], "rail.json"));
-    expect(saved).toEqual(withItem({ kind: "navRail", railExpanded: true }));
+    const expectedItem = { ...authored, railExpanded: true };
+    expect(saved).not.toBeNull();
+    expect(Reflect.ownKeys(saved!.groups[0].items[0])).toEqual(Reflect.ownKeys(expectedItem));
+    expect(saved).toEqual({ ...original, groups: [{ ...original.groups[0], x: side === "left" ? 0 : 1060, items: [expectedItem] }] });
   });
 
   it.each([undefined, false, true])("accepts optional navigation rail booleans %s without changing them", (value) => {

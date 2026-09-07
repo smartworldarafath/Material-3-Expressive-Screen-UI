@@ -10,6 +10,43 @@ const group = (id: string, x: number, items: Item[]): Group => ({ id, x, y: 40, 
 const stage = (right = false): Group[] => [group("rail-group", right ? 1204 : 20, [rail]), group("bar-group", right ? 20 : 116, [bar])];
 
 describe("updateRail", () => {
+  it.each([[100, 600, "right"], [1200, -600, "left"]] as const)("ignores the empty free-group origin at %s", (x, offset, side) => {
+    const original = [{ ...group("free", x, [rail]), free: true, pos: { rail: { x: offset, y: 0 } } }];
+    expect(railSide(original[0], frame, {})).toBe(side);
+    const expanded = updateRail(original, [frame], {}, "rail", { railExpanded: true });
+    expect(railSide(expanded[0], frame, {})).toBe(side);
+    expect(updateRail(expanded, [frame], {}, "rail", { railExpanded: false })).toEqual(original);
+  });
+
+  it.each([false, true])("resizes the complete body between neighbouring rails (modal=%s)", (railModal) => {
+    const leftWidth = railModal ? 96 : 220;
+    const original = [
+      group("left", 20, [{ ...rail, railExpanded: true, railModal }]),
+      group("right", 1204, [{ ...rail, id: "right" }]),
+      group("body", 20 + leftWidth, [{ ...bar, size: 1280 - leftWidth - 96 }]),
+    ];
+    const larger = { ...frame, w: 1440 };
+    const out = carryFrame(original, frame, larger, [frame], {}).groups;
+    expect(out.find((g) => g.id === "body")!.items[0].size).toBe(1440 - leftWidth - 96);
+    const restored = carryFrame(out, larger, frame, [larger], {}).groups;
+    expect(restored.find((g) => g.id === "body")!.items[0].size).toBe(1280 - leftWidth - 96);
+  });
+
+  it("keeps the remaining rail's slot when only the first rail becomes a bottom bar", () => {
+    const original = [
+      group("left", 20, [rail]),
+      group("right", 1204, [{ ...rail, id: "right" }]),
+      group("body", 116, [{ ...bar, size: 1088 }]),
+    ];
+    const phone = { ...frame, w: 412 };
+    const compact = carryFrame(original, frame, phone, [frame], {}).groups;
+    expect(compact.find((g) => g.id === "left")!.items[0].kind).toBe("bottomNav");
+    expect(compact.find((g) => g.id === "right")!.items[0].kind).toBe("navRail");
+    expect(compact.find((g) => g.id === "body")!.items[0].size).toBe(316);
+    const restored = carryFrame(compact, phone, frame, [phone], {}).groups;
+    expect(restored.find((g) => g.id === "left")!.items[0].kind).toBe("navRail");
+    expect(restored.find((g) => g.id === "body")!.items[0].size).toBe(1088);
+  });
   it("uses the actual rail bounds when a standalone free group retains an offset", () => {
     const original = [{ ...group("free", 570, [rail]), free: true, pos: { rail: { x: 120, y: 0 } } }];
     expect(railSide(original[0], frame, {})).toBe("right");
@@ -46,7 +83,7 @@ describe("updateRail", () => {
     ];
     const out = carryFrame(original, frame, { ...frame, w: 1440 }, [frame], {}).groups;
     // The first bottom bar still becomes an original 80dp rail, as on main.
-    expect(out.find((g) => g.id === "body")!.items[0].size).toBe(1360);
+    expect(out.find((g) => g.id === "body")!.items[0].size).toBe(1360 - layoutWidth);
   });
 
   it.each([false, true])("keeps a near-centre right rail's body origin when modal=%s", (railModal) => {
