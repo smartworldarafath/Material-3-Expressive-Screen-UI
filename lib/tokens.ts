@@ -72,6 +72,7 @@ export type Palette = {
   primaryContainer: string;
   onPrimaryContainer: string;
   inversePrimary: string;
+  secondary: string;
   secondaryContainer: string;
   onSecondaryContainer: string;
   tertiaryContainer: string;
@@ -276,7 +277,7 @@ export const PALETTES: Palette[] = [
     inverseOnSurface: "#F4EFF4",
     ...ERROR,
   },
-];
+].map((p) => ({ ...p, secondary: schemeFromSeed(p.primary, p.label, { keepChroma: true }).secondary }));
 
 /* ---------- theme: the four expressive axes ---------- */
 export type ShapeScale = "square" | "rounded" | "full";
@@ -378,7 +379,10 @@ export function scaleR(r: number): number {
  *  other contrast levels are generated from the same seed. */
 export function paletteOf(key: string, custom?: Palette | null, theme?: Theme): Palette {
   const base = (key === "custom" && custom) || PALETTES.find((p) => p.key === key) || PALETTES[0];
-  if (!theme || (!theme.dark && theme.contrast === "standard")) return base;
+  if (!theme || (!theme.dark && theme.contrast === "standard")) {
+    /* Saved custom schemes may predate the secondary role. */
+    return base.secondary ? base : { ...base, secondary: schemeFromSeed(base.seed ?? base.primary).secondary };
+  }
   const seed = base.seed ?? base.primary;
   /* a preset's hue and chroma are deliberate (Mono is nearly grey), so they are kept as they are */
   return { ...schemeFromSeed(seed, base.label, { dark: theme.dark, contrast: theme.contrast, keepChroma: base.key !== "custom" }), key: base.key };

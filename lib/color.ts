@@ -90,7 +90,7 @@ export type SchemeOptions = { dark?: boolean; contrast?: Contrast; /** keep a mu
  *  outlines further from their backgrounds the way Material Theme Builder does. */
 type Tones = Record<
   | "primary" | "onPrimary" | "primaryContainer" | "onPrimaryContainer" | "inversePrimary"
-  | "secondaryContainer" | "onSecondaryContainer" | "tertiaryContainer" | "onTertiaryContainer"
+  | "secondary" | "secondaryContainer" | "onSecondaryContainer" | "tertiaryContainer" | "onTertiaryContainer"
   | "surface" | "surfaceContainerLow" | "surfaceContainer" | "surfaceContainerHigh" | "surfaceContainerHighest"
   | "onSurface" | "onSurfaceVariant" | "outline" | "outlineVariant" | "inverseSurface" | "inverseOnSurface",
   number
@@ -98,13 +98,13 @@ type Tones = Record<
 
 const LIGHT: Tones = {
   primary: 40, onPrimary: 100, primaryContainer: 90, onPrimaryContainer: 10, inversePrimary: 80,
-  secondaryContainer: 90, onSecondaryContainer: 10, tertiaryContainer: 90, onTertiaryContainer: 10,
+  secondary: 40, secondaryContainer: 90, onSecondaryContainer: 10, tertiaryContainer: 90, onTertiaryContainer: 10,
   surface: 98, surfaceContainerLow: 96, surfaceContainer: 94, surfaceContainerHigh: 92, surfaceContainerHighest: 90,
   onSurface: 10, onSurfaceVariant: 30, outline: 50, outlineVariant: 80, inverseSurface: 20, inverseOnSurface: 95,
 };
 const DARK: Tones = {
   primary: 80, onPrimary: 20, primaryContainer: 30, onPrimaryContainer: 90, inversePrimary: 40,
-  secondaryContainer: 30, onSecondaryContainer: 90, tertiaryContainer: 30, onTertiaryContainer: 90,
+  secondary: 80, secondaryContainer: 30, onSecondaryContainer: 90, tertiaryContainer: 30, onTertiaryContainer: 90,
   surface: 6, surfaceContainerLow: 10, surfaceContainer: 12, surfaceContainerHigh: 17, surfaceContainerHighest: 22,
   onSurface: 90, onSurfaceVariant: 80, outline: 60, outlineVariant: 30, inverseSurface: 90, inverseOnSurface: 20,
 };
@@ -112,9 +112,11 @@ const DARK: Tones = {
 function tonesFor(dark: boolean, contrast: Contrast): Tones {
   const t = { ...(dark ? DARK : LIGHT) };
   if (contrast === "medium") {
+    t.secondary = dark ? 85 : 30;
     if (dark) Object.assign(t, { primary: 85, onPrimaryContainer: 95, onSecondaryContainer: 95, onTertiaryContainer: 95, onSurfaceVariant: 85, outline: 70, outlineVariant: 50 });
     else Object.assign(t, { primary: 30, onPrimaryContainer: 20, onSecondaryContainer: 20, onTertiaryContainer: 20, onSurfaceVariant: 25, outline: 40, outlineVariant: 65 });
   } else if (contrast === "high") {
+    t.secondary = dark ? 95 : 20;
     if (dark) Object.assign(t, { primary: 95, onPrimary: 0, primaryContainer: 80, onPrimaryContainer: 0, secondaryContainer: 80, onSecondaryContainer: 0, tertiaryContainer: 80, onTertiaryContainer: 0, onSurface: 100, onSurfaceVariant: 95, outline: 90, outlineVariant: 90 });
     else Object.assign(t, { primary: 20, primaryContainer: 30, onPrimaryContainer: 100, secondaryContainer: 30, onSecondaryContainer: 100, tertiaryContainer: 30, onTertiaryContainer: 100, onSurface: 0, onSurfaceVariant: 10, outline: 20, outlineVariant: 20 });
   }
@@ -152,6 +154,7 @@ export function schemeFromSeed(seedHex: string, label = "Custom", opts: SchemeOp
     primaryContainer: P(k.primaryContainer),
     onPrimaryContainer: P(k.onPrimaryContainer),
     inversePrimary: P(k.inversePrimary),
+    secondary: S(k.secondary),
     secondaryContainer: S(k.secondaryContainer),
     onSecondaryContainer: S(k.onSecondaryContainer),
     tertiaryContainer: T(k.tertiaryContainer),

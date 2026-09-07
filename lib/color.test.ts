@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 
 import { hexToRgb, isHex, onColorFor, rgbToHex, rgbToLab, schemeFromSeed } from "./color";
+import { DEFAULT_THEME, PALETTES, Palette, paletteOf } from "./tokens";
 
 /** perceptual lightness of a hex color, for readable-contrast assertions */
 const toneOf = (hex: string) => rgbToLab(...hexToRgb(hex)!).L;
@@ -43,6 +44,15 @@ describe("hexToRgb / rgbToHex", () => {
 describe("schemeFromSeed", () => {
   const seed = "#6750A4";
 
+  it.each([false, true])("keeps secondary labels readable across contrast levels (dark=%s)", (dark) => {
+    for (const contrast of ["standard", "medium", "high"] as const) {
+      const p = schemeFromSeed(seed, "Custom", { dark, contrast });
+      expect(isHex(p.secondary)).toBe(true);
+      expect(Math.abs(toneOf(p.secondary) - toneOf(p.surfaceContainer))).toBeGreaterThan(45);
+    }
+    expect(toneOf(schemeFromSeed(seed, "Custom", { dark }).secondary)).toBeCloseTo(dark ? 80 : 40, 0);
+  });
+
   it("honours the dark option: surfaces go dark, text on them light", () => {
     const light = schemeFromSeed(seed);
     const dark = schemeFromSeed(seed, "Custom", { dark: true });
@@ -57,6 +67,32 @@ describe("schemeFromSeed", () => {
     expect(Math.abs(toneOf(high.primary) - toneOf(high.surface))).toBeGreaterThan(
       Math.abs(toneOf(standard.primary) - toneOf(standard.surface)),
     );
+  });
+});
+
+describe("secondary palette role", () => {
+  it("exists in every preset, light/dark mode and contrast level", () => {
+    for (const preset of PALETTES) {
+      for (const dark of [false, true]) {
+        for (const contrast of ["standard", "medium", "high"] as const) {
+          const p = paletteOf(preset.key, undefined, { ...DEFAULT_THEME, dark, contrast });
+          expect(isHex(p.secondary)).toBe(true);
+          expect(Math.abs(toneOf(p.secondary) - toneOf(p.surfaceContainer))).toBeGreaterThan(45);
+        }
+      }
+    }
+  });
+
+  it("fills old custom palettes without changing their existing colors", () => {
+    const { secondary: _secondary, ...saved } = { ...PALETTES[0], key: "custom" };
+    const before = structuredClone(saved);
+    const p = paletteOf("custom", saved as Palette);
+    expect(isHex(p.secondary)).toBe(true);
+    const { secondary: _generated, ...rest } = p;
+    expect(rest).toEqual(before);
+    expect(saved).toEqual(before);
+    const custom = { ...p, secondary: "#123456" };
+    expect(paletteOf("custom", custom)).toBe(custom);
   });
 });
 
