@@ -425,21 +425,43 @@ function Screen({
     return () => window.clearTimeout(timer);
   }, [railMotion]);
   useEffect(() => { setRailMotion(null); }, [groups, frame, widths]);
+  /* The editor behind the preview is inert while it is up, so focus has nowhere else to
+   * go: a screen that becomes the one on show takes it when nothing inside the preview
+   * holds it, and a modal screen giving way to a plain one leaves the keyboard on the new
+   * screen rather than on the body. */
+  useEffect(() => {
+    if (!interactive) return;
+    const focused = document.activeElement;
+    if (!focused || focused === document.body || focused.closest("[inert]")) screenRef.current?.focus();
+  }, [interactive]);
   useEffect(() => {
     if (!modalActive) return;
     const previous = document.activeElement as HTMLElement | null;
     screenRef.current?.querySelector<HTMLButtonElement>(`[data-rail-modal] [data-rail-toggle]`)?.focus();
-    // An exiting screen must not take focus back from its replacement.
-    return () => { if (interactiveRef.current && previous?.isConnected && !previous.closest("[inert]")) previous.focus(); };
+    return () => {
+      // An exiting screen must not take focus back from its replacement. On unmount the
+      // ref is already detached, so both branches stand down and the preview's own
+      // restore to its opener is the one that runs.
+      if (!interactiveRef.current) return;
+      /* only a control of this screen is worth returning to: anything else is the page
+       * behind the preview or a screen that has since left */
+      if (previous?.isConnected && screenRef.current?.contains(previous) && !previous.closest("[inert]")) previous.focus();
+      else screenRef.current?.focus();
+    };
   }, [modalActive]);
   useEffect(() => {
+    /* focus outside this screen, or inside it but off the modal, both belong on the toggle */
     if (modalActive && (!screenRef.current?.contains(document.activeElement) || !document.activeElement?.closest("[data-rail-modal]"))) {
       screenRef.current?.querySelector<HTMLButtonElement>("[data-rail-modal] [data-rail-toggle]")?.focus();
     }
   }, [shownGroups, modalActive]);
+  /* Registered on every render, in the capture phase: the preview's own Escape and
+   * Backspace handler listens in the bubble phase, so registration order never matters. */
   useEffect(() => {
     if (!modalActive) return;
     const onKey = (e: KeyboardEvent) => {
+      /* the preview's own controls, such as an open screen menu, keep their keys */
+      if (!screenRef.current?.contains(document.activeElement)) return;
       if (e.key === "Tab") {
         e.stopImmediatePropagation();
         const buttons = Array.from(screenRef.current?.querySelectorAll<HTMLButtonElement>("[data-rail-modal] button") ?? []);
@@ -465,11 +487,14 @@ function Screen({
       inert={!interactive}
       aria-hidden={!interactive || undefined}
       data-rail-motion={railMotion?.animate ? "true" : undefined}
-      role={modalActive ? "dialog" : undefined}
+      role={modalActive ? "dialog" : "group"}
       aria-modal={modalActive ? true : undefined}
-      aria-label={modalActive ? t("railState", lang) : undefined}
+      aria-label={modalActive ? t("railState", lang) : frame.name || t("screen", lang)}
+      tabIndex={-1}
+      /* the scrim and the pointer guard follow the rail itself, so a peek shows the modal
+       * state as authored; the root's inert keeps a non-interactive screen from acting on it */
       onPointerDown={(e) => { if (hasModal) e.stopPropagation(); }}
-      style={{ position: "absolute", inset: 0, background: p[frame.bg ?? "surface"], overflow: "hidden" }}
+      style={{ position: "absolute", inset: 0, background: p[frame.bg ?? "surface"], overflow: "hidden", outline: "none" }}
     >
       <AnimatePresence>
         {hasModal && <motion.button
@@ -728,14 +753,24 @@ export function Preview({
     [frames, back, spring, sameSize],
   );
 
+  const [picker, setPicker] = useState(false);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") {
+        /* an open menu is the thing Escape dismisses */
+        if (picker) setPicker(false);
+        else onClose();
+      }
       if (e.key === "Backspace" || e.key === "ArrowLeft") back();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [back, onClose]);
+  }, [back, onClose, picker]);
+  /* The control that opened the preview gets the keyboard back when it closes, whichever
+   * screens were shown in between; a screen's own restore only covers its modal rail. Read
+   * during the first render, before a screen's effect moves focus onto its rail. */
+  const [opener] = useState(() => (typeof document === "undefined" ? null : (document.activeElement as HTMLElement | null)));
+  useEffect(() => () => { if (opener?.isConnected && !opener.closest("[inert]")) opener.focus(); }, [opener]);
 
   const groupsFor = useCallback((f: Frame) => groupsInFrame(doc.groups, f, frames, widths), [doc.groups, frames, widths]);
   const groups = useMemo(() => (current ? groupsFor(current) : []), [current, groupsFor]);
@@ -845,8 +880,14 @@ export function Preview({
     };
   }, [frames, scale, prog, axisMV, enterMV, exitMV]);
 
-  const [picker, setPicker] = useState(false);
   const pickerRef = useRef<HTMLDivElement>(null);
+  const pickerButton = useRef<HTMLButtonElement>(null);
+  /* A menu hands focus back to its button when it closes; a chosen screen is then one Tab
+   * away. The chosen item is still in the tree here because the menu animates out. */
+  useEffect(() => {
+    const focused = document.activeElement;
+    if (!picker && focused !== pickerButton.current && pickerRef.current?.contains(focused)) pickerButton.current?.focus();
+  }, [picker]);
   useEffect(() => {
     if (!picker) return;
     const onDown = (e: PointerEvent) => {
@@ -985,7 +1026,7 @@ export function Preview({
                   pointerEvents: "none",
                 }}
               >
-                <Screen active={false} frame={peekFrame} groups={peekGroups} {...screenProps} />
+                <Screen {...screenProps} active={false} frame={peekFrame} groups={peekGroups} />
               </motion.div>
             )}
           </motion.div>
@@ -1030,6 +1071,7 @@ export function Preview({
           </button>
           <div ref={pickerRef} style={{ position: "relative", minWidth: 0 }}>
             <button
+              ref={pickerButton}
               onClick={() => setPicker((v) => !v)}
               title={t("screens", lang)}
               aria-expanded={picker}

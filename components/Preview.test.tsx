@@ -56,7 +56,10 @@ function screenElement(peek = false) {
   const screens = elements(tree).filter((element) => typeof element.type === "function" && "frame" in element.props);
   hooks.peek = false;
   hooks.refs = [];
-  return screens[peek ? 1 : 0];
+  // chosen by its prop rather than by position, so reordering the JSX cannot swap them
+  const screen = screens.find((element) => (element.props.active === false) === peek);
+  if (!screen) throw new Error(`no ${peek ? "peek" : "current"} screen rendered`);
+  return screen;
 }
 function renderScreen(element: Element) {
   hooks.cursor = 0;
@@ -71,8 +74,10 @@ function runEffects() {
 describe("preview screen modal lifecycle", () => {
   const previous = { isConnected: true, closest: vi.fn(), focus: vi.fn() };
   const toggle = { closest: () => ({}), focus: vi.fn(() => { documentState.activeElement = toggle; }) };
-  const documentState = { activeElement: previous as typeof previous | typeof toggle };
-  const host = { querySelector: vi.fn(() => toggle), contains: (element: unknown) => element === toggle };
+  const body = { closest: () => null };
+  const documentState = { activeElement: previous as typeof previous | typeof toggle | typeof body | null, body };
+  let previousInside = true;
+  const host = { querySelector: vi.fn(() => toggle), contains: (element: unknown) => element === toggle || (element === previous && previousInside), focus: vi.fn() };
   const addEventListener = vi.fn();
   const removeEventListener = vi.fn();
   const attach = (tree: Element) => { (tree.props.ref as { current: unknown }).current = host; };
@@ -85,6 +90,7 @@ describe("preview screen modal lifecycle", () => {
     hooks.present = true;
     hooks.peek = false;
     previous.isConnected = true;
+    previousInside = true;
     previous.closest.mockReturnValue(null);
     documentState.activeElement = previous;
     vi.stubGlobal("document", documentState);
@@ -98,13 +104,27 @@ describe("preview screen modal lifecycle", () => {
     const tree = renderScreen(element);
     attach(tree);
     const cleanup = runEffects();
-    expect(tree.props).toMatchObject({ inert: true, "aria-hidden": true });
-    expect(tree.props.role).toBeUndefined();
+    expect(tree.props).toMatchObject({ inert: true, "aria-hidden": true, role: "group", "aria-label": "Next" });
     expect(tree.props["aria-modal"]).toBeUndefined();
     expect(toggle.focus).not.toHaveBeenCalled();
+    expect(host.focus).not.toHaveBeenCalled();
     expect(addEventListener).not.toHaveBeenCalled();
     cleanup();
     expect(previous.focus).not.toHaveBeenCalled();
+    expect(host.focus).not.toHaveBeenCalled();
+  });
+
+  it.each(["nothing", "the body", "an inert subtree"])("takes focus itself when %s holds it as the screen on show", (holder) => {
+    if (holder === "nothing") documentState.activeElement = null;
+    else if (holder === "the body") documentState.activeElement = documentState.body;
+    else previous.closest.mockReturnValue({});
+    const element = screenElement();
+    const tree = renderScreen({ ...element, props: { ...element.props, groups: [] } });
+    attach(tree);
+    runEffects();
+    expect(tree.props).toMatchObject({ tabIndex: -1, role: "group", "aria-label": "First" });
+    expect(host.focus).toHaveBeenCalledOnce();
+    expect(toggle.focus).not.toHaveBeenCalled();
   });
 
   it("focuses and registers keyboard handling while the screen is active", () => {
@@ -130,8 +150,7 @@ describe("preview screen modal lifecycle", () => {
 
     hooks.present = false;
     const exiting = renderScreen(element);
-    expect(exiting.props).toMatchObject({ inert: true, "aria-hidden": true });
-    expect(exiting.props.role).toBeUndefined();
+    expect(exiting.props).toMatchObject({ inert: true, "aria-hidden": true, role: "group" });
     expect(exiting.props["aria-modal"]).toBeUndefined();
     cleanup();
     expect(previous.focus).not.toHaveBeenCalled();
@@ -143,14 +162,17 @@ describe("preview screen modal lifecycle", () => {
     expect(previous.focus).not.toHaveBeenCalled();
   });
 
-  it.each(["connected", "inert", "disconnected"])("restores a %s previous target only when safe on modal dismissal", (status) => {
+  it.each(["connected", "outside", "inert", "disconnected"])("restores a %s previous target only when safe on modal dismissal", (status) => {
     const element = screenElement();
     attach(renderScreen(element));
     const cleanup = runEffects();
     previous.isConnected = status !== "disconnected";
+    previousInside = status !== "outside";
     previous.closest.mockReturnValue(status === "inert" ? {} : null);
     renderScreen({ ...element, props: { ...element.props, groups: [] } });
     cleanup();
     expect(previous.focus).toHaveBeenCalledTimes(status === "connected" ? 1 : 0);
+    // an unusable previous target hands the keyboard to the screen itself, never to the body
+    expect(host.focus).toHaveBeenCalledTimes(status === "connected" ? 0 : 1);
   });
 });
