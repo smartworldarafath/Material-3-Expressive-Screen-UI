@@ -1,33 +1,46 @@
 import { describe, expect, it } from "vitest";
-import { modalRailPlacements, railMotionTargets } from "./railView";
-import { updateRail } from "./rail";
-import { Frame, GAP, Group, Item, sizeOf } from "./tokens";
+import { railMotionTargets } from "./railView";
+import { constrainModalRails, modalRailOf, updateRail } from "./rail";
+import { Frame, Group, Item } from "./tokens";
 
 const rail: Item = { id: "rail", kind: "navRail", label: "", icon: "menu", variant: "filled", railExpanded: false, railModal: true, size2: 500 };
 const sibling: Item = { id: "sibling", kind: "button", label: "Sibling", icon: null, variant: "filled" };
 const group: Group = { id: "mixed", x: 20, y: 40, axis: "x", items: [sibling, rail] };
 
-describe("modal rail rendering layers", () => {
-  it.each([false, true])("isolates only the rail without modifying its free group (expanded=%s)", (expanded) => {
-    const free = { ...group, free: true, items: [sibling, { ...rail, railExpanded: expanded }], pos: { rail: { x: 12, y: 18 }, sibling: { x: 120, y: 150 } } };
-    const before = structuredClone(free);
-    const layers = modalRailPlacements([free], {});
-    expect(layers).toHaveLength(1);
-    expect(layers[0]).toMatchObject({ item: { id: "rail" }, x: 32, y: 58, index: 1 });
-    expect(layers[0].group).toBe(free);
-    expect(free).toEqual(before);
+describe("standalone modal rail invariant", () => {
+  it.each([false, true])("collapses grouped modal rails without moving siblings (free=%s)", (free) => {
+    const mixed: Group = { ...group, free, items: [sibling, { ...rail, railExpanded: true, railAnchor: { side: "right", offset: 20 } }], pos: { rail: { x: 12, y: 18 }, sibling: { x: 120, y: 150 } } };
+    const input = [mixed];
+    const before = structuredClone(input);
+    const [next] = constrainModalRails(input);
+    expect(next.items[1]).toMatchObject({ railExpanded: false, railModal: false });
+    expect(next.items[1].railAnchor).toBeUndefined();
+    expect(next.items[0]).toBe(sibling);
+    expect(next.pos).toBe(mixed.pos);
+    expect([next.x, next.y, next.axis]).toEqual([mixed.x, mixed.y, mixed.axis]);
+    expect(modalRailOf(next)).toBeUndefined();
+    expect(input).toEqual(before);
+    expect(constrainModalRails([next])[0]).toBe(next);
+    expect(constrainModalRails(JSON.parse(JSON.stringify(input)))).toEqual([next]);
   });
 
-  it("retains the flex slot and vertical alignment beside a taller sibling", () => {
-    const tall: Item = { ...sibling, kind: "box", size: 300, size2: 700 };
-    const layers = modalRailPlacements([{ ...group, items: [tall, rail] }], {});
-    expect(layers[0]).toMatchObject({ x: 20 + 300 + GAP, y: 140, w: 96, h: 500 });
+  it("keeps standalone modal, mixed standard and legacy rails unchanged", () => {
+    const standalone = { ...group, items: [{ ...rail, railExpanded: true }] };
+    const mixed = { ...group, items: [sibling, { ...rail, railModal: false, railExpanded: true }] };
+    const legacy = { ...group, items: [sibling, { ...rail, railModal: undefined, railExpanded: undefined }] };
+    const input = [standalone, mixed, legacy];
+    expect(constrainModalRails(input)).toBe(input);
+    expect(modalRailOf(standalone)).toBe(standalone.items[0]);
+    expect(modalRailOf(mixed)).toBeUndefined();
+    expect(modalRailOf(legacy)).toBeUndefined();
   });
 
-  it("retains a vertical run's offset and excludes standard rails", () => {
-    const layers = modalRailPlacements([{ ...group, axis: "y" }, { ...group, id: "standard", items: [{ ...rail, id: "standard-rail", railModal: false }] }], {});
-    expect(layers).toHaveLength(1);
-    expect(layers[0].y).toBe(40 + sizeOf(sibling, {}).h + GAP);
+  it("refuses modal patches in mixed groups and permits them after ungrouping", () => {
+    const mixed = [{ ...group, items: [sibling, { ...rail, railModal: false }] }];
+    expect(updateRail(mixed, [], {}, rail.id, { railModal: true, railExpanded: true })).toBe(mixed);
+    const single = [{ ...group, items: [{ ...rail, railModal: false }] }];
+    const expanded = updateRail(single, [], {}, rail.id, { railModal: true, railExpanded: true });
+    expect(modalRailOf(expanded[0])?.id).toBe(rail.id);
   });
 });
 
@@ -45,7 +58,6 @@ describe("rail motion scope", () => {
     const motion = railMotionTargets(before, after, {}, "rail");
     expect([...motion.groups]).toEqual(["bar", "body"]);
     expect([...motion.items]).toEqual(["rail", "bar"]);
-    expect([...motion.positions]).toEqual(["bar", "sibling"]);
     expect(motion.items.has("locked")).toBe(false);
     expect(motion.items.has("sibling")).toBe(false);
   });
@@ -56,6 +68,5 @@ describe("rail motion scope", () => {
     const motion = railMotionTargets(modal, after, {}, "rail");
     expect([...motion.groups]).toEqual([]);
     expect([...motion.items]).toEqual(["rail"]);
-    expect([...motion.positions]).toEqual([]);
   });
 });

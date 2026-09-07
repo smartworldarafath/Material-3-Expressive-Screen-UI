@@ -1,12 +1,30 @@
 import { barSlotOf, railSide } from "./tidy";
 import { Frame, Group, Item, carryItemSize, frameOfGroup, frameSizeOf, railLayoutWidth, railWidth } from "./tokens";
 
+/** First-version modal rails must own their group; grouping one collapses it. */
+export function constrainModalRails(groups: Group[]): Group[] {
+  let changed = false;
+  const next = groups.map((group) => {
+    if (group.items.length === 1 || !group.items.some((it) => it.kind === "navRail" && it.railModal)) return group;
+    changed = true;
+    return { ...group, items: group.items.map((it) => {
+      if (it.kind !== "navRail" || !it.railModal) return it;
+      const { railAnchor: _anchor, ...item } = it;
+      return { ...item, railModal: false, railExpanded: false };
+    }) };
+  });
+  return changed ? next : groups;
+}
+
+export const modalRailOf = (group: Group) => group.items.length === 1 && group.items[0].kind === "navRail" && group.items[0].railModal && group.items[0].railExpanded ? group.items[0] : undefined;
+
 /** Change a rail without tidying the screen or losing hand-placed vertical positions. */
 export function updateRail(groups: Group[], frames: Frame[], widths: Record<string, number>, id: string, patch: Partial<Item>): Group[] {
   const target = groups.find((g) => g.items.some((it) => it.id === id && it.kind === "navRail"));
   if (!target) return groups;
   const item = target.items.find((it) => it.id === id)!;
   const updated = { ...item, ...patch };
+  if (target.items.length > 1 && updated.railModal) return constrainModalRails(groups);
   if (Object.entries(patch).every(([key, value]) => item[key as keyof Item] === value)) return groups;
   const frame = frameOfGroup(target, frames, widths);
   const standalone = target.items.length === 1;

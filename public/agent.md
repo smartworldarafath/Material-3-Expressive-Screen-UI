@@ -133,6 +133,7 @@ Sizes are in dp; `size` is the width unless noted. Content width inside the phon
 | `circularProgress` | circular progress | `value` or omit, `wavy` | 48 × 48 |
 
 For `navRail`, `railExpanded` is the initial state; the preview's menu button toggles it. With `railModal: true`, an expanded rail covers the content with a scrim while the body keeps a 96dp navigation slot. Otherwise, reserve the rail's current width beside the content. Keep `tabs`, `selected`, and `actions` on the same item in either state.
+Modal presentation requires the rail to be the only item in its group. The editor collapses modal rails and switches them to standard presentation when they are grouped with other items, including imported mixed groups. Ungroup the rail before enabling modal presentation again. The editor controls are desktop-only.
 
 `railAnchor` is optional internal editor state (`{ side: "left" | "right", offset: number }`) that preserves the expansion edge until the rail is moved horizontally. Preserve it when editing a saved project; omit it when generating a new sketch.
 

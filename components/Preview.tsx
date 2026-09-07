@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Item } from "@/lib/tokens";
 import { AnimatePresence, animate, motion, useMotionValue, useTransform, useReducedMotion } from "motion/react";
 import type { TargetAndTransition, Variants } from "motion/react";
@@ -42,8 +42,8 @@ import {
 import { Icon, M3Node } from "./M3Node";
 import { IconBtn } from "./ui";
 import { t, useLang } from "@/lib/i18n";
-import { updateRail } from "@/lib/rail";
-import { isModalRail, modalRailPlacements, railMotionTargets } from "@/lib/railView";
+import { constrainModalRails, modalRailOf, updateRail } from "@/lib/rail";
+import { railMotionTargets } from "@/lib/railView";
 
 const EASE = [0.2, 0, 0, 1] as const;
 const SLIDE_MS = 0.42;
@@ -385,9 +385,9 @@ function Screen({
   const reducedMotion = useReducedMotion();
   const screenRef = useRef<HTMLDivElement>(null);
   const shownGroups = useMemo(() => Object.entries(railStates).reduce(
-    (current, [id, railExpanded]) => updateRail(current, [frame], widths, id, { railExpanded }), groups,
+    (current, [id, railExpanded]) => updateRail(current, [frame], widths, id, { railExpanded }), constrainModalRails(groups),
   ), [groups, frame, widths, railStates]);
-  const modalRail = shownGroups.flatMap((g) => g.items).find((it) => it.kind === "navRail" && it.railExpanded && it.railModal);
+  const modalRail = shownGroups.map(modalRailOf).find(Boolean);
   const modalId = modalRail?.id;
   const changeRail = (id: string, railExpanded: boolean, animate: boolean) => {
     const next = updateRail(shownGroups, [frame], widths, id, { railExpanded });
@@ -509,21 +509,27 @@ function Screen({
           style={{ position: "absolute", inset: 0, border: 0, padding: 0, background: "rgba(0,0,0,0.32)", zIndex: 3 }}
         />}
       </AnimatePresence>
-      {shownGroups.map((g) => (
-        <Fragment key={g.id}>
+      {shownGroups.map((g) => {
+        const ownsModal = !!modalId && modalRailOf(g)?.id === modalId;
+        return (
         <div
+          key={g.id}
           className="m3-preview-group"
           data-preview-group={g.id}
           data-rail-animate={railMotion?.groups.has(g.id) ? "group" : undefined}
-          inert={!!modalId}
+          data-rail-modal={ownsModal ? "true" : undefined}
+          role={ownsModal ? "dialog" : undefined}
+          aria-modal={ownsModal ? true : undefined}
+          aria-label={ownsModal ? t("railState", lang) : undefined}
+          inert={!!modalId && !ownsModal}
           style={
             g.free
-              ? { position: "absolute", left: g.x - frame.x, top: g.y - frame.y, zIndex: g.items.some((it) => it.id === menuId) ? 2 : undefined }
+              ? { position: "absolute", left: g.x - frame.x, top: g.y - frame.y, zIndex: ownsModal ? 4 : g.items.some((it) => it.id === menuId) ? 2 : undefined }
               : {
                   position: "absolute",
                   left: g.x - frame.x,
                   top: g.y - frame.y,
-                  zIndex: g.items.some((it) => it.id === menuId) ? 2 : undefined,
+                  zIndex: ownsModal ? 4 : g.items.some((it) => it.id === menuId) ? 2 : undefined,
                   display: "flex",
                   flexDirection: g.axis === "x" ? "row" : "column",
                   alignItems: g.axis === "x" ? "center" : "stretch",
@@ -532,32 +538,14 @@ function Screen({
           }
         >
           {((corners) => g.items.map((it, i) => {
-            if (isModalRail(it)) {
-              if (g.free) return null;
-              const size = sizeOf(it, widths);
-              return <div key={it.id} data-rail-placeholder={it.id} data-rail-animate={railMotion?.items.has(it.id) ? "placeholder" : undefined}
-                aria-hidden style={{ width: size.w, height: size.h, flex: "0 0 auto", pointerEvents: "none" }} />;
-            }
             const node = renderItem(g, it, i, corners);
             if (!g.free) return node;
             const o = g.pos?.[it.id] ?? { x: 0, y: 0 };
             return <div key={it.id} style={{ position: "absolute", left: o.x, top: o.y }}>{node}</div>;
           }))(g.free ? freeRadii(g, widths) : null)}
         </div>
-      {modalRailPlacements([g], widths).map((pl) => (
-        <div key={`modal:${pl.item.id}`} className="m3-preview-group" data-preview-rail-layer={pl.item.id}
-          data-rail-animate={railMotion?.positions.has(pl.item.id) ? "group" : undefined}
-          data-rail-modal={pl.item.id === modalId ? "true" : undefined}
-          role={pl.item.id === modalId ? "dialog" : undefined}
-          aria-modal={pl.item.id === modalId ? true : undefined}
-          aria-label={pl.item.id === modalId ? t("railState", lang) : undefined}
-          inert={!!modalId && pl.item.id !== modalId}
-          style={{ position: "absolute", left: pl.x - frame.x, top: pl.y - frame.y, zIndex: pl.item.id === modalId ? 4 : undefined }}>
-          {renderItem(pl.group, pl.item, pl.index, null)}
-        </div>
-      ))}
-        </Fragment>
-      ))}
+        );
+      })}
     </div>
   );
 }

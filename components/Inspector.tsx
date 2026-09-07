@@ -601,6 +601,7 @@ export function Inspector({
   onDuplicate,
   multi,
   grouped,
+  railStandalone = false,
   onGroup,
   onUngroup,
   onAlign,
@@ -618,6 +619,8 @@ export function Inspector({
   multi: number;
   /** the selection is exactly one hand-made group */
   grouped?: boolean;
+  /** Modal expansion is available only when this rail owns its group. */
+  railStandalone?: boolean;
   onGroup?: () => void;
   onUngroup?: () => void;
   /** lines the selected parts up with each other, or spaces them evenly */
@@ -1208,12 +1211,14 @@ export function Inspector({
                 </div>
                 <div role="group" aria-label={t("railPresentation", lang)}>
                   <div style={{ fontSize: 12, color: p.onSurfaceVariant, marginBottom: 6 }}>{t("railPresentation", lang)}</div>
-                  <Segmented
-                    options={[{ key: "standard", label: t("railStandard", lang) }, { key: "modal", label: t("railModal", lang) }]}
-                    value={item.railModal ? "modal" : "standard"}
-                    onChange={(v) => onChange({ railExpanded: item.railExpanded ?? false, railModal: v === "modal" })}
-                    p={p}
-                  />
+                  {railStandalone ? (
+                    <Segmented
+                      options={[{ key: "standard", label: t("railStandard", lang) }, { key: "modal", label: t("railModal", lang) }]}
+                      value={item.railModal ? "modal" : "standard"}
+                      onChange={(v) => onChange({ railExpanded: item.railExpanded ?? false, railModal: v === "modal" })}
+                      p={p}
+                    />
+                  ) : <div style={{ fontSize: 12, color: p.onSurfaceVariant }}>{t("railStandalone", lang)}</div>}
                 </div>
               </>
             )}

@@ -141,7 +141,6 @@ input.m3-number {
 }
 [data-rail-motion] .m3-preview-group,
 [data-rail-motion] [data-node],
-[data-rail-motion] [data-rail-placeholder],
 [data-rail-motion] .m3-rail-geometry,
 [data-rail-motion] .m3-rail-hit {
   transition: none !important;
@@ -149,8 +148,7 @@ input.m3-number {
 [data-rail-motion="true"] [data-rail-animate="group"] {
   transition: left 240ms cubic-bezier(0.32, 0.72, 0, 1), top 240ms cubic-bezier(0.32, 0.72, 0, 1) !important;
 }
-[data-rail-motion="true"] [data-rail-animate="item"] > [data-node],
-[data-rail-motion="true"] [data-rail-animate="placeholder"] {
+[data-rail-motion="true"] [data-rail-animate="item"] > [data-node] {
   transition: width 240ms cubic-bezier(0.32, 0.72, 0, 1), height 240ms cubic-bezier(0.32, 0.72, 0, 1) !important;
 }
 [data-rail-motion="true"] [data-rail-animate="item"] .m3-rail-geometry,

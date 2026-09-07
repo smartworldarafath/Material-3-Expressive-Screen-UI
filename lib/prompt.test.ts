@@ -86,6 +86,21 @@ describe("buildPrompt structure", () => {
 describe("navigation rail expansion", () => {
   afterEach(() => setGlobalLang("ja"));
 
+  it.each(LANGS)("exports imported mixed-group modal rails as collapsed standard rails in %s", (lang) => {
+    const doc = fixture();
+    doc.groups = [{ id: "mixed", x: 16, y: 24, axis: "x", free: true,
+      items: [{ ...makeItem("navRail"), railExpanded: true, railModal: true }, makeItem("button")],
+    }];
+    const before = structuredClone(doc);
+    const prompt = buildPrompt(doc, {}, undefined, lang);
+    const layout = prompt.slice(prompt.indexOf(SECTIONS[lang][2]), prompt.indexOf(SECTIONS[lang][4]));
+    expect(layout).toContain("WideNavigationRail");
+    expect(layout).toContain("96dp");
+    expect(layout).not.toContain("ModalWideNavigationRail");
+    expect(layout).not.toContain("220dp");
+    expect(doc).toEqual(before);
+  });
+
   it.each(LANGS)("exports only the selected rail state and presentation in %s", (lang) => {
     const expandedText = { ja: "展開状態", en: "NavigationRail, expanded,", zh: "展开状态", ko: "펼친 상태" }[lang];
     const collapsedText = { ja: "折りたたみ状態", en: "NavigationRail, collapsed,", zh: "折叠状态", ko: "접힌 상태" }[lang];
