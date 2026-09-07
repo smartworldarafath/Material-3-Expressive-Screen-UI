@@ -32,10 +32,18 @@ import {
   contentWidth,
   defaultTabsFor,
   framePresetOf,
+  CardAlign,
+  CardImageFit,
   CardImagePos,
+  CardImageRatio,
+  cardContentAlignOf,
   cardFillOf,
+  cardGapOf,
+  cardImageFitOf,
   cardImagePosOf,
   cardImageSizeOf,
+  cardPaddingOf,
+  cardTextAlignOf,
   frameSizeOf,
   halfWidth,
   isPhoneFrame,
@@ -997,21 +1005,49 @@ export function Inspector({
           )}
           {item.kind === "card" && !item.noImage && (
             <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 10 }}>
-              <div role="group" aria-label={t("imagePosition", lang)}>
-                <Segmented<CardImagePos>
-                  options={[
-                    { key: "top", icon: "vertical_align_top", title: t("imageTop", lang) },
-                    { key: "leading", icon: "align_horizontal_left", title: t("imageLeading", lang) },
-                    { key: "trailing", icon: "align_horizontal_right", title: t("imageTrailing", lang) },
-                    { key: "background", icon: "wallpaper", title: t("background", lang) },
-                  ]}
-                  value={cardImagePosOf(item)}
-                  onChange={(pos) => onChange({ imagePos: pos === "top" ? undefined : pos })}
-                  p={p}
-                  height={36}
-                />
+              <div style={{ fontSize: 12, fontWeight: 600, color: p.onSurfaceVariant }}>{t("imagePosition", lang)}</div>
+              <div role="radiogroup" aria-label={t("imagePosition", lang)} style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+                {([
+                  { key: "top", icon: "vertical_align_top", label: t("imageTop", lang) },
+                  { key: "leading", icon: "align_horizontal_left", label: t("imageLeading", lang) },
+                  { key: "trailing", icon: "align_horizontal_right", label: t("imageTrailing", lang) },
+                  { key: "background", icon: "wallpaper", label: t("background", lang) },
+                ] satisfies { key: CardImagePos; icon: string; label: string }[]).map((option) => {
+                  const on = cardImagePosOf(item) === option.key;
+                  return (
+                    <button
+                      key={option.key}
+                      type="button"
+                      role="radio"
+                      aria-checked={on}
+                      onClick={() => onChange({ imagePos: option.key === "top" ? undefined : option.key })}
+                      className="m3-press"
+                      style={{ height: 36, border: "none", borderRadius: 12, background: on ? p.primary : p.surfaceContainerHigh, color: on ? p.onPrimary : p.onSurfaceVariant, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, cursor: "pointer", fontSize: 12, fontWeight: 600 }}
+                    >
+                      <Icon name={option.icon} size={18} fill={on} />
+                      {option.label}
+                    </button>
+                  );
+                })}
               </div>
-              {cardImagePosOf(item) !== "background" && (
+              {cardImagePosOf(item) === "top" && (
+                <>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: p.onSurfaceVariant }}>{t("aspectRatio", lang)}</div>
+                  <Segmented<"custom" | CardImageRatio>
+                    options={[
+                      { key: "custom", label: t("customSize", lang) },
+                      { key: "16:9", label: "16:9" },
+                      { key: "4:3", label: "4:3" },
+                      { key: "1:1", label: "1:1" },
+                    ]}
+                    value={item.imageRatio ?? "custom"}
+                    onChange={(imageRatio) => onChange({ imageRatio: imageRatio === "custom" ? undefined : imageRatio })}
+                    p={p}
+                    height={32}
+                  />
+                </>
+              )}
+              {cardImagePosOf(item) !== "background" && !(cardImagePosOf(item) === "top" && item.imageRatio) && (
                 /* the image area's one free dimension: its height on top, its width at a side */
                 <Slider
                   icon={cardImagePosOf(item) === "top" ? "height" : "width"}
@@ -1020,10 +1056,21 @@ export function Inspector({
                   min={40}
                   max={320}
                   step={4}
-                  onChange={(imageSize) => onChange({ imageSize })}
+                  onChange={(imageSize) => onChange({ imageSize, imageRatio: undefined })}
                   p={p}
                 />
               )}
+              <div style={{ fontSize: 12, fontWeight: 600, color: p.onSurfaceVariant }}>{t("imageFit", lang)}</div>
+              <Segmented<CardImageFit>
+                options={[
+                  { key: "cover", icon: "crop", label: t("imageCrop", lang) },
+                  { key: "contain", icon: "fit_screen", label: t("imageContain", lang) },
+                ]}
+                value={cardImageFitOf(item)}
+                onChange={(imageFit) => onChange({ imageFit: imageFit === "cover" ? undefined : imageFit })}
+                p={p}
+                height={34}
+              />
             </div>
           )}
           <input
@@ -1070,6 +1117,41 @@ export function Inspector({
           {/* a picture on the web by its address; a picked file shows as data and is not editable here */}
           <div style={{ marginTop: 8 }}>
             <UrlField key={item.id} value={item.src && /^https?:\/\//.test(item.src) ? item.src : ""} onChange={(src) => onChange({ src })} placeholder={t("imageUrl", lang)} p={p} />
+          </div>
+        </Section>
+      )}
+
+      {item.kind === "card" && !editOn && (
+        <Section id="card-layout" icon="dashboard" title={t("cardLayout", lang)} p={p}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <Slider icon="padding" title={t("padding", lang)} value={cardPaddingOf(item)} min={0} max={32} step={1} onChange={(cardPadding) => onChange({ cardPadding })} p={p} />
+            <SizePresets values={[0, 8, 12, 16, 24]} value={cardPaddingOf(item)} min={0} max={32} onChange={(cardPadding) => onChange({ cardPadding })} p={p} />
+            <Slider icon="space_bar" title={t("spacing", lang)} value={cardGapOf(item)} min={0} max={24} step={1} onChange={(cardGap) => onChange({ cardGap })} p={p} />
+            <SizePresets values={[0, 4, 8, 12, 16, 24]} value={cardGapOf(item)} min={0} max={24} onChange={(cardGap) => onChange({ cardGap })} p={p} />
+            <div style={{ fontSize: 12, fontWeight: 600, color: p.onSurfaceVariant }}>{t("contentPosition", lang)}</div>
+            <Segmented<CardAlign>
+              options={[
+                { key: "start", icon: "vertical_align_top", label: t("imageTop", lang) },
+                { key: "center", icon: "vertical_align_center", label: t("placeCenter", lang) },
+                { key: "end", icon: "vertical_align_bottom", label: t("placeBottom", lang) },
+              ]}
+              value={cardContentAlignOf(item)}
+              onChange={(contentAlign) => onChange({ contentAlign: contentAlign === "start" ? undefined : contentAlign })}
+              p={p}
+              height={34}
+            />
+            <div style={{ fontSize: 12, fontWeight: 600, color: p.onSurfaceVariant }}>{t("textAlignment", lang)}</div>
+            <Segmented<CardAlign>
+              options={[
+                { key: "start", icon: "format_align_left", title: t("alignLeft", lang) },
+                { key: "center", icon: "format_align_center", title: t("alignCenterH", lang) },
+                { key: "end", icon: "format_align_right", title: t("alignRight", lang) },
+              ]}
+              value={cardTextAlignOf(item)}
+              onChange={(textAlign) => onChange({ textAlign: textAlign === "start" ? undefined : textAlign })}
+              p={p}
+              height={34}
+            />
           </div>
         </Section>
       )}

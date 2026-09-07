@@ -49,34 +49,66 @@ function cardImage(it: Item, lang: Lang): string {
   const size = pos !== "background" ? it.imageSize : undefined;
   if (lang === "ja") {
     const what = url ? ` ${url} の画像` : it.src ? "指定の画像" : `${it.icon ? `${it.icon} アイコンの` : ""}プレースホルダー画像`;
-    const sized = size ? `（${pos === "top" ? "高さ" : "幅"} ${size}dp）` : "";
-    if (pos === "leading") return `先頭側（全高）に${what}${sized}、`;
-    if (pos === "trailing") return `末尾側（全高）に${what}${sized}、`;
-    if (pos === "background") return `背景全面に${what}（テキストの下にスクリム）、`;
-    return `上部に${what}${sized}、`;
+    const sized = it.imageRatio && pos === "top" ? `（比率 ${it.imageRatio}）` : size ? `（${pos === "top" ? "高さ" : "幅"} ${size}dp）` : "";
+    const fit = it.imageFit === "contain" ? "（切り抜かず全体を表示）" : "";
+    if (pos === "leading") return `先頭側（全高）に${what}${sized}${fit}、`;
+    if (pos === "trailing") return `末尾側（全高）に${what}${sized}${fit}、`;
+    if (pos === "background") return `背景全面に${what}${fit}（テキストの下にスクリム）、`;
+    return `上部に${what}${sized}${fit}、`;
   }
   if (lang === "zh") {
     const what = url ? ` ${url} 的图片` : it.src ? "指定的图片" : `${it.icon ? `${it.icon} 图标的` : ""}占位图片`;
-    const sized = size ? `（${pos === "top" ? "高" : "宽"} ${size}dp）` : "";
-    if (pos === "leading") return `左侧（全高）是${what}${sized}，`;
-    if (pos === "trailing") return `右侧（全高）是${what}${sized}，`;
-    if (pos === "background") return `整张卡片的背景是${what}（文字下方加渐变遮罩），`;
-    return `顶部是${what}${sized}，`;
+    const sized = it.imageRatio && pos === "top" ? `（宽高比 ${it.imageRatio}）` : size ? `（${pos === "top" ? "高" : "宽"} ${size}dp）` : "";
+    const fit = it.imageFit === "contain" ? "（完整显示、不裁剪）" : "";
+    if (pos === "leading") return `左侧（全高）是${what}${sized}${fit}，`;
+    if (pos === "trailing") return `右侧（全高）是${what}${sized}${fit}，`;
+    if (pos === "background") return `整张卡片的背景是${what}${fit}（文字下方加渐变遮罩），`;
+    return `顶部是${what}${sized}${fit}，`;
   }
   if (lang === "ko") {
     const what = url ? `${url}의 이미지` : it.src ? "지정한 이미지" : `${it.icon ? `${it.icon} 아이콘의 ` : ""}자리표시자 이미지`;
-    const sized = size ? `(${pos === "top" ? "높이" : "너비"} ${size}dp)` : "";
-    if (pos === "leading") return `앞쪽(전체 높이)에 ${what}${sized}, `;
-    if (pos === "trailing") return `뒤쪽(전체 높이)에 ${what}${sized}, `;
-    if (pos === "background") return `배경 전체에 ${what}(텍스트 아래 스크림), `;
-    return `위쪽에 ${what}${sized}, `;
+    const sized = it.imageRatio && pos === "top" ? `(가로세로 비율 ${it.imageRatio})` : size ? `(${pos === "top" ? "높이" : "너비"} ${size}dp)` : "";
+    const fit = it.imageFit === "contain" ? "(자르지 않고 전체 표시)" : "";
+    if (pos === "leading") return `앞쪽(전체 높이)에 ${what}${sized}${fit}, `;
+    if (pos === "trailing") return `뒤쪽(전체 높이)에 ${what}${sized}${fit}, `;
+    if (pos === "background") return `배경 전체에 ${what}${fit}(텍스트 아래 스크림), `;
+    return `위쪽에 ${what}${sized}${fit}, `;
   }
   const what = url ? `an image from ${url}` : it.src ? "the provided image" : `a placeholder image${it.icon ? ` (${it.icon} icon)` : ""}`;
-  const sized = size ? ` (${size}dp ${pos === "top" ? "tall" : "wide"})` : "";
-  if (pos === "leading") return `with ${what}${sized} filling the leading side, `;
-  if (pos === "trailing") return `with ${what}${sized} filling the trailing side, `;
-  if (pos === "background") return `with ${what} as a full-bleed background behind the text (add a scrim for legibility), `;
-  return `with ${what}${sized} on top, `;
+  const sized = it.imageRatio && pos === "top" ? ` (${it.imageRatio} aspect ratio)` : size ? ` (${size}dp ${pos === "top" ? "tall" : "wide"})` : "";
+  const fit = it.imageFit === "contain" ? " shown whole without cropping" : "";
+  if (pos === "leading") return `with ${what}${sized}${fit} filling the leading side, `;
+  if (pos === "trailing") return `with ${what}${sized}${fit} filling the trailing side, `;
+  if (pos === "background") return `with ${what}${fit} as a full-bleed background behind the text (add a scrim for legibility), `;
+  return `with ${what}${sized}${fit} on top, `;
+}
+
+/** non-default card spacing and alignment, kept next to the card sentence so an
+ *  implementation generated from the prompt reproduces the canvas */
+function cardLayoutText(it: Item, lang: Lang): string {
+  const details: string[] = [];
+  if (lang === "ja") {
+    if (it.cardPadding !== undefined) details.push(`内側余白 ${it.cardPadding}dp`);
+    if (it.cardGap !== undefined) details.push(`要素間隔 ${it.cardGap}dp`);
+    if (it.contentAlign) details.push(`内容は${{ start: "上", center: "中央", end: "下" }[it.contentAlign]}寄せ`);
+    if (it.textAlign) details.push(`文字は${{ start: "左", center: "中央", end: "右" }[it.textAlign]}揃え`);
+  } else if (lang === "zh") {
+    if (it.cardPadding !== undefined) details.push(`内边距 ${it.cardPadding}dp`);
+    if (it.cardGap !== undefined) details.push(`元素间距 ${it.cardGap}dp`);
+    if (it.contentAlign) details.push(`内容${{ start: "顶部", center: "垂直居中", end: "底部" }[it.contentAlign]}对齐`);
+    if (it.textAlign) details.push(`文字${{ start: "左", center: "居中", end: "右" }[it.textAlign]}对齐`);
+  } else if (lang === "ko") {
+    if (it.cardPadding !== undefined) details.push(`안쪽 여백 ${it.cardPadding}dp`);
+    if (it.cardGap !== undefined) details.push(`요소 간격 ${it.cardGap}dp`);
+    if (it.contentAlign) details.push(`콘텐츠 ${{ start: "위", center: "가운데", end: "아래" }[it.contentAlign]} 정렬`);
+    if (it.textAlign) details.push(`텍스트 ${{ start: "왼쪽", center: "가운데", end: "오른쪽" }[it.textAlign]} 정렬`);
+  } else {
+    if (it.cardPadding !== undefined) details.push(`${it.cardPadding}dp padding`);
+    if (it.cardGap !== undefined) details.push(`${it.cardGap}dp element spacing`);
+    if (it.contentAlign) details.push(`content aligned to the ${{ start: "top", center: "center", end: "bottom" }[it.contentAlign]}`);
+    if (it.textAlign) details.push(`${{ start: "left", center: "center", end: "right" }[it.textAlign]}-aligned text`);
+  }
+  return details.length ? ` (${details.join(lang === "en" || lang === "ko" ? ", " : "、")})` : "";
 }
 
 /** an image's web address, when it was given as one rather than picked from a file */
@@ -146,7 +178,7 @@ function itemJa(it: Item): string {
       return `プレースホルダー${q(it.label)}の検索バー${it.icon2 ? `（右端に ${it.icon2} アイコン）` : ""}`;
     case "card": {
       const style = it.variant === "elevated" ? "エレベーテッド" : it.variant === "outlined" ? "アウトライン" : "塗りつぶし";
-      return `${style}カード${it.size2 ? `（高さ ${it.size2}dp）` : ""}${it.fill ? `（背景 ${it.fill}）` : ""}。${cardImage(it, "ja")}見出し${q(it.label)}${hasText(it.supporting) ? `、本文${q(it.supporting!)}` : ""}`;
+      return `${style}カード${it.size2 ? `（高さ ${it.size2}dp）` : ""}${it.fill ? `（背景 ${it.fill}）` : ""}。${cardImage(it, "ja")}見出し${q(it.label)}${hasText(it.supporting) ? `、本文${q(it.supporting!)}` : ""}${cardLayoutText(it, "ja")}`;
     }
     case "listItem":
       return `${q(it.label)}${hasText(it.supporting) ? `（サブテキスト${q(it.supporting!)}）` : ""}${it.icon ? `、先頭に ${it.icon} アイコン${it.iconFill === "none" ? "（背景なし）" : it.iconFill ? `（背景 ${it.iconFill}）` : ""}` : ""}${it.switch ? `、末尾にスイッチ（初期状態${it.checked ? "オン" : "オフ"}）` : it.icon2 ? `、末尾に ${it.icon2}` : ""}${it.fill && it.fill !== "surfaceContainerLow" ? `、背景は ${it.fill}` : ""}`;
@@ -237,7 +269,7 @@ function itemEn(it: Item): string {
       return `a search bar with the placeholder ${q(it.label)}${it.icon2 ? ` and a ${it.icon2} icon at the end` : ""}`;
     case "card": {
       const style = it.variant === "elevated" ? "an elevated" : it.variant === "outlined" ? "an outlined" : "a filled";
-      return `${style} card${it.size2 ? ` (${it.size2}dp tall)` : ""}${it.fill ? ` on ${it.fill}` : ""} ${cardImage(it, "en") || "with "}the headline ${q(it.label)}${hasText(it.supporting) ? ` and the body ${q(it.supporting!)}` : ""}`;
+      return `${style} card${it.size2 ? ` (${it.size2}dp tall)` : ""}${it.fill ? ` on ${it.fill}` : ""} ${cardImage(it, "en") || "with "}the headline ${q(it.label)}${hasText(it.supporting) ? ` and the body ${q(it.supporting!)}` : ""}${cardLayoutText(it, "en")}`;
     }
     case "listItem":
       return `${q(it.label)}${hasText(it.supporting) ? ` with supporting text ${q(it.supporting!)}` : ""}${it.icon ? `, a leading ${it.icon} icon${it.iconFill === "none" ? " (no background circle)" : it.iconFill ? ` (on a ${it.iconFill} circle)` : ""}` : ""}${it.switch ? `, a trailing switch (initially ${it.checked ? "on" : "off"})` : it.icon2 ? `, a trailing ${it.icon2} icon` : ""}${it.fill && it.fill !== "surfaceContainerLow" ? `, on a ${it.fill} background` : ""}`;
@@ -328,7 +360,7 @@ function itemZh(it: Item): string {
       return `占位文字为${q(it.label)}的搜索栏${it.icon2 ? `（右端有 ${it.icon2} 图标）` : ""}`;
     case "card": {
       const style = it.variant === "elevated" ? "浮起" : it.variant === "outlined" ? "描边" : "填充";
-      return `${style}卡片${it.size2 ? `（高 ${it.size2}dp）` : ""}${it.fill ? `（背景 ${it.fill}）` : ""}。${cardImage(it, "zh")}标题${q(it.label)}${hasText(it.supporting) ? `，正文${q(it.supporting!)}` : ""}`;
+      return `${style}卡片${it.size2 ? `（高 ${it.size2}dp）` : ""}${it.fill ? `（背景 ${it.fill}）` : ""}。${cardImage(it, "zh")}标题${q(it.label)}${hasText(it.supporting) ? `，正文${q(it.supporting!)}` : ""}${cardLayoutText(it, "zh")}`;
     }
     case "listItem":
       return `${q(it.label)}${hasText(it.supporting) ? `（辅助文本${q(it.supporting!)}）` : ""}${it.icon ? `，左侧显示 ${it.icon} 图标${it.iconFill === "none" ? "（无背景）" : it.iconFill ? `（背景 ${it.iconFill}）` : ""}` : ""}${it.switch ? `，显示列表项开关（初始${it.checked ? "开启" : "关闭"}）` : it.icon2 ? `，右侧显示 ${it.icon2} 图标` : ""}${it.fill && it.fill !== "surfaceContainerLow" ? `，背景为 ${it.fill}` : ""}`;
@@ -412,7 +444,7 @@ function itemKo(it: Item): string {
     case "searchBar": return `자리표시자가 ${q(it.label)}인 검색창${it.icon2 ? `(오른쪽 끝에 ${it.icon2} 아이콘)` : ""}`;
     case "card": {
       const style = it.variant === "elevated" ? "돌출" : it.variant === "outlined" ? "윤곽선" : "채움";
-      return `${style} 카드${it.size2 ? `(높이 ${it.size2}dp)` : ""}${it.fill ? `(배경 ${it.fill})` : ""}. ${cardImage(it, "ko")}제목 ${q(it.label)}${hasText(it.supporting) ? `, 본문 ${q(it.supporting!)}` : ""}`;
+      return `${style} 카드${it.size2 ? `(높이 ${it.size2}dp)` : ""}${it.fill ? `(배경 ${it.fill})` : ""}. ${cardImage(it, "ko")}제목 ${q(it.label)}${hasText(it.supporting) ? `, 본문 ${q(it.supporting!)}` : ""}${cardLayoutText(it, "ko")}`;
     }
     case "listItem": return `${q(it.label)}${hasText(it.supporting) ? `(보조 텍스트 ${q(it.supporting!)})` : ""}${it.icon ? `, 앞쪽 ${it.icon} 아이콘${it.iconFill === "none" ? "(배경 없음)" : it.iconFill ? `(배경 ${it.iconFill})` : ""}` : ""}${it.switch ? `, 끝에 스위치(초기 상태 ${it.checked ? "켜짐" : "꺼짐"})` : it.icon2 ? `, 뒤쪽 ${it.icon2}` : ""}${it.fill && it.fill !== "surfaceContainerLow" ? `, 배경 ${it.fill}` : ""}`;
     case "dialog": return `제목 ${q(it.label)}${hasText(it.supporting) ? `, 본문 ${q(it.supporting!)}` : ""}${it.icon ? `, ${it.icon} 아이콘 포함` : ""} 대화상자(취소/확인 텍스트 버튼)`;
@@ -880,7 +912,7 @@ const STYLE_NOTES: Record<Lang, Partial<Record<Kind | "boxSheet", string>>> = {
     navRail:
       "ナビゲーションレール: 幅 80dp、画面の左端に上から下まで、背景は surfaceContainer。項目は上から縦に並べ、選択中の項目は secondaryContainer のピル型インジケータ（幅 56dp・高さ 32dp）で示し、アイコンは塗りつぶし、その下に labelMedium のラベル。本文はレールの右に置く。",
     searchBar: "検索バー: 高さ 56dp、角は完全な丸、背景は surfaceContainerHigh。先頭に検索アイコン、末尾に指定のアイコン。",
-    card: "カード: 角丸 20dp。画像領域は各カードの記述に従い、上部・先頭側・末尾側・背景全面のいずれかに置く（背景の場合はテキストの下にスクリム）。塗りつぶしは surfaceContainerHighest、エレベーテッドは surfaceContainerLow に Level 1 の影、アウトラインは outlineVariant の 1dp 枠。見出しは titleMedium、本文は bodyMedium、内側の余白は 16dp。",
+    card: "カード: 角丸 20dp。画像領域は各カードの記述に従い、上部・先頭側・末尾側・背景全面のいずれかに置く（背景の場合はテキストの下にスクリム）。塗りつぶしは surfaceContainerHighest、エレベーテッドは surfaceContainerLow に Level 1 の影、アウトラインは outlineVariant の 1dp 枠。見出しは titleMedium、本文は bodyMedium。内側余白は 12dp、要素間隔は 8dp（横レイアウトでは 12dp）を既定とし、各カードに指定があれば従う。",
     listItem:
       "リスト項目: 高さ 72dp、先頭アイコンは 24dp（指定がなければ primaryContainer の 40dp の円の上）、主テキストは bodyLarge、サブテキストは bodyMedium の onSurfaceVariant。背景は指定のロール（指定がなければ surfaceContainerLow）。上下に連結したリストは 3dp の隙間で並べ、外側の角を 28dp、隣り合う内側の角を 8dp にする（M3 Expressive のリスト表現）。",
     dialog: "ダイアログ: 幅 312dp、角丸 28dp、背景は surfaceContainerHigh。見出しは headlineSmall、本文は bodyMedium、下部右寄せにテキストボタン。",
@@ -929,7 +961,7 @@ const STYLE_NOTES: Record<Lang, Partial<Record<Kind | "boxSheet", string>>> = {
     navRail:
       "Navigation rail: 80dp wide on surfaceContainer, running the full height of the left edge. Destinations stack from the top; the active one shows a secondaryContainer pill indicator (56×32dp) with a filled icon and a labelMedium label below it. The content sits to the right of the rail.",
     searchBar: "Search bar: 56dp tall, fully rounded, on surfaceContainerHigh, with a leading search icon and the specified trailing icon.",
-    card: "Cards: 20dp corners. Place each card's image area where its line says — on top, filling the leading or trailing side, or as a full-bleed background (behind a scrim under the text). Filled uses surfaceContainerHighest, elevated uses surfaceContainerLow with a level 1 shadow, outlined has a 1dp outlineVariant border. Headline in titleMedium, body in bodyMedium, 16dp inner padding.",
+    card: "Cards: 20dp corners. Place each card's image area where its line says — on top, filling the leading or trailing side, or as a full-bleed background (behind a scrim under the text). Filled uses surfaceContainerHighest, elevated uses surfaceContainerLow with a level 1 shadow, outlined has a 1dp outlineVariant border. Headline in titleMedium, body in bodyMedium. Default to 12dp padding and 8dp element spacing (12dp for horizontal layouts), unless the card states otherwise.",
     listItem:
       "List items: 72dp tall, 24dp leading icon (on a 40dp primaryContainer circle unless stated), headline in bodyLarge, supporting text in bodyMedium on onSurfaceVariant, on the specified background role (surfaceContainerLow unless stated). A stacked list is a vertical run with 3dp gaps, 28dp outer corners and 8dp inner corners (the M3 Expressive list treatment).",
     dialog: "Dialogs: 312dp wide, 28dp corners, on surfaceContainerHigh. Headline in headlineSmall, body in bodyMedium, text buttons aligned right at the bottom.",
@@ -977,7 +1009,7 @@ const STYLE_NOTES: Record<Lang, Partial<Record<Kind | "boxSheet", string>>> = {
     navRail:
       "侧边导航栏：宽 80dp，贴着屏幕左缘通高，背景为 surfaceContainer。项目从上往下排列，选中项用 secondaryContainer 的胶囊指示器（宽 56dp、高 32dp）表示，图标为填充样式，下方为 labelMedium 标签。内容放在导航栏右侧。",
     searchBar: "搜索栏：高 56dp，完全圆角，背景为 surfaceContainerHigh。左侧显示搜索图标，右侧显示指定图标。",
-    card: "卡片：圆角 20dp。图片区域按每张卡片的描述放在顶部、左侧、右侧或作为整卡背景（背景时文字下方加渐变遮罩）。填充用 surfaceContainerHighest，浮起用 surfaceContainerLow 加 Level 1 阴影，描边用 1dp 的 outlineVariant 边框。标题用 titleMedium，正文用 bodyMedium，内边距 16dp。",
+    card: "卡片：圆角 20dp。图片区域按每张卡片的描述放在顶部、左侧、右侧或作为整卡背景（背景时文字下方加渐变遮罩）。填充用 surfaceContainerHighest，浮起用 surfaceContainerLow 加 Level 1 阴影，描边用 1dp 的 outlineVariant 边框。标题用 titleMedium，正文用 bodyMedium。默认内边距 12dp、元素间距 8dp（横向布局为 12dp），每张卡片另有指定时以其为准。",
     listItem:
       "列表项：高 72dp，左侧图标 24dp（未指定时放在 40dp 的 primaryContainer 圆形上），主文本用 bodyLarge，辅助文本用 bodyMedium 的 onSurfaceVariant，背景为指定的颜色角色（未指定则为 surfaceContainerLow）。上下相连的列表以 3dp 间距排列，外侧圆角 28dp，相邻内侧圆角 8dp（M3 Expressive 的列表样式）。",
     dialog: "对话框：宽 312dp，圆角 28dp，背景为 surfaceContainerHigh。标题用 headlineSmall，正文用 bodyMedium，底部右对齐放文字按钮。",
@@ -1019,7 +1051,7 @@ const STYLE_NOTES: Record<Lang, Partial<Record<Kind | "boxSheet", string>>> = {
     topAppBar: "상단 앱 바: 높이 64dp, 배경 surface. 상태 표시줄 뒤까지 배경을 늘리고 시스템 인셋만큼 위쪽 여백을 둔다. 제목은 titleLarge, 양쪽 아이콘 버튼은 48dp를 사용한다.",
     bottomNav: "내비게이션 바: 높이 80dp, 배경 surfaceContainer. 제스처 내비게이션 영역까지 배경을 늘리고 시스템 인셋만큼 아래쪽 여백을 둔다. 선택 항목은 64×32dp secondaryContainer 알약 표시기, 채운 아이콘, labelMedium 레이블로 표시한다.",
     searchBar: "검색창: 높이 56dp, 완전 둥근 모서리, 배경 surfaceContainerHigh. 앞쪽 검색 아이콘과 지정된 뒤쪽 아이콘을 둔다.",
-    card: "카드: 모서리 20dp. 이미지 영역은 각 카드의 설명에 따라 위쪽·앞쪽·뒤쪽·배경 전체 중 한 곳에 배치한다(배경일 때는 텍스트 아래 스크림). 채움은 surfaceContainerHighest, 돌출은 surfaceContainerLow와 Level 1 그림자, 윤곽선은 1dp outlineVariant 테두리를 사용한다. 제목 titleMedium, 본문 bodyMedium, 안쪽 여백 16dp.",
+    card: "카드: 모서리 20dp. 이미지 영역은 각 카드의 설명에 따라 위쪽·앞쪽·뒤쪽·배경 전체 중 한 곳에 배치한다(배경일 때는 텍스트 아래 스크림). 채움은 surfaceContainerHighest, 돌출은 surfaceContainerLow와 Level 1 그림자, 윤곽선은 1dp outlineVariant 테두리를 사용한다. 제목 titleMedium, 본문 bodyMedium. 기본 안쪽 여백은 12dp, 요소 간격은 8dp(가로 레이아웃은 12dp)이며 카드별 지정이 있으면 따른다.",
     listItem: "목록 항목: 높이 72dp, 앞쪽 아이콘 24dp(별도 지정이 없으면 40dp primaryContainer 원 위), 주 텍스트 bodyLarge, 보조 텍스트 bodyMedium/onSurfaceVariant. 연결 목록은 간격 3dp, 바깥 모서리 28dp, 안쪽 모서리 8dp.",
     dialog: "대화상자: 너비 312dp, 모서리 28dp, 배경 surfaceContainerHigh. 제목 headlineSmall, 본문 bodyMedium, 텍스트 버튼은 아래쪽 오른쪽 정렬.",
     snackbar: "스낵바: 높이 48dp, 모서리 8dp, inverseSurface 배경과 inverseOnSurface 텍스트. 동작은 inversePrimary 텍스트 버튼으로 하고 아래쪽에서 16dp 띄워 몇 초 뒤 닫는다.",

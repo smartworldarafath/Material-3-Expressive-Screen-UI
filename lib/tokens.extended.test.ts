@@ -50,9 +50,19 @@ import {
   defaultPlatformOf,
   isPlatform,
   makeItem,
+  cardContentAlignOf,
+  cardGapOf,
+  cardImageFitOf,
   cardImagePosOf,
   cardImageSizeOf,
+  cardPaddingOf,
+  cardTextAlignOf,
+  isCardAlign,
+  isCardImageFit,
   isCardImagePos,
+  isCardImageRatio,
+  CARD_GAP,
+  CARD_PADDING,
   CARD_SIDE_IMAGE_W,
   Frame,
   Item,
@@ -366,6 +376,36 @@ describe("card image placement helpers", () => {
     const card = { ...makeItem("card"), imageSize: 120 };
     expect(cardImageSizeOf(card)).toBe(120);
     expect(cardImageSizeOf({ ...card, imagePos: "leading" })).toBe(120);
+  });
+
+  it("derives top media height from its aspect ratio and the padded content width", () => {
+    const card = { ...makeItem("card"), size: 320, imageRatio: "16:9" as const };
+    expect(cardImageSizeOf(card)).toBe(Math.round((320 - CARD_PADDING * 2) / (16 / 9)));
+    expect(cardImageSizeOf({ ...card, cardPadding: 0, imageRatio: "1:1" })).toBe(320);
+  });
+
+  it("recognizes image ratios and fit modes", () => {
+    for (const ratio of ["16:9", "4:3", "1:1"]) expect(isCardImageRatio(ratio)).toBe(true);
+    for (const fit of ["cover", "contain"]) expect(isCardImageFit(fit)).toBe(true);
+    expect(isCardImageRatio("3:2")).toBe(false);
+    expect(isCardImageFit("fill")).toBe(false);
+  });
+
+  it("keeps the legacy card spacing and alignment unless the author changes it", () => {
+    const card = makeItem("card");
+    expect(cardPaddingOf(card)).toBe(CARD_PADDING);
+    expect(cardGapOf(card)).toBe(CARD_GAP);
+    expect(cardImageFitOf(card)).toBe("cover");
+    expect(cardContentAlignOf(card)).toBe("start");
+    expect(cardTextAlignOf(card)).toBe("start");
+    expect(cardGapOf({ ...card, imagePos: "leading" })).toBe(12);
+    expect(cardPaddingOf({ ...card, cardPadding: 24 })).toBe(24);
+    expect(cardGapOf({ ...card, cardGap: 0 })).toBe(0);
+  });
+
+  it("accepts exactly the three card alignments", () => {
+    for (const align of ["start", "center", "end"]) expect(isCardAlign(align)).toBe(true);
+    for (const bad of ["left", "top", "", null]) expect(isCardAlign(bad)).toBe(false);
   });
 });
 

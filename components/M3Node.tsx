@@ -13,9 +13,14 @@ import {
   Radii,
   STATUS_BAR_H,
   baseRadii,
+  cardContentAlignOf,
   cardFillOf,
+  cardGapOf,
+  cardImageFitOf,
   cardImagePosOf,
   cardImageSizeOf,
+  cardPaddingOf,
+  cardTextAlignOf,
   onToken,
   scaleR,
   sizeOf,
@@ -480,16 +485,21 @@ function Body({ item, p }: { item: Item; p: Palette }) {
     case "card": {
       const pos = cardImagePosOf(item);
       const hasImage = !item.noImage;
+      const padding = cardPaddingOf(item);
+      const gap = cardGapOf(item);
+      const textAlign = cardTextAlignOf(item);
+      const contentAlign = cardContentAlignOf(item);
+      const justifyContent = { start: "flex-start", center: "center", end: "flex-end" }[contentAlign] as React.CSSProperties["justifyContent"];
       const picture = item.src ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={item.src} alt="" draggable={false} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+        <img src={item.src} alt="" draggable={false} style={{ width: "100%", height: "100%", objectFit: cardImageFitOf(item), display: "block" }} />
       ) : (
         item.icon && <Icon name={item.icon} size={34} />
       );
       const media = (style: React.CSSProperties) => (
         <div
           style={{
-            borderRadius: scaleR(14),
+            borderRadius: padding > 0 ? scaleR(14) : 0,
             background: p.primaryContainer,
             color: p.onPrimaryContainer,
             display: "grid",
@@ -506,13 +516,18 @@ function Body({ item, p }: { item: Item; p: Palette }) {
         /* Full-bleed media behind the text. A photo carries M3's fixed image scrim so the
          * text stays readable in either mode; the placeholder keeps its container pair. */
         const overPhoto = !!item.src;
+        const scrim = contentAlign === "start"
+          ? "linear-gradient(rgba(0,0,0,0.65), rgba(0,0,0,0) 60%)"
+          : contentAlign === "center"
+            ? "rgba(0,0,0,0.42)"
+            : "linear-gradient(rgba(0,0,0,0) 40%, rgba(0,0,0,0.65))";
         return (
-          <div style={{ position: "relative", height: "100%", boxSizing: "border-box", display: "flex", flexDirection: "column", justifyContent: "flex-end" }}>
+          <div style={{ position: "relative", height: "100%", boxSizing: "border-box", display: "flex", flexDirection: "column", justifyContent }}>
             <div style={{ position: "absolute", inset: 0, background: p.primaryContainer, color: p.onPrimaryContainer, display: "grid", placeItems: "center" }}>
               {picture}
             </div>
-            {overPhoto && <div style={{ position: "absolute", inset: 0, background: "linear-gradient(rgba(0,0,0,0) 40%, rgba(0,0,0,0.65))" }} />}
-            <div style={{ position: "relative", padding: 12, display: "flex", flexDirection: "column", gap: 8 }}>
+            {overPhoto && <div style={{ position: "absolute", inset: 0, background: scrim }} />}
+            <div style={{ position: "relative", padding, display: "flex", flexDirection: "column", gap, textAlign }}>
               {hasLabel && (
                 <div style={{ fontSize: 16, fontWeight: w(600, 700), color: overPhoto ? "#fff" : p.onPrimaryContainer, ...ellipsis }}>{item.label}</div>
               )}
@@ -528,7 +543,7 @@ function Body({ item, p }: { item: Item; p: Palette }) {
       /* top: the image band above the text; leading / trailing: a full-height column beside it */
       const side = hasImage && (pos === "leading" || pos === "trailing");
       const text = (
-        <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 8, justifyContent: side ? "center" : undefined }}>
+        <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap, justifyContent, textAlign }}>
           {hasLabel && (
             <div style={{ fontSize: 16, fontWeight: w(600, 700), color: item.fill ? onToken(item.fill, p) : p.onSurface, ...ellipsis }}>{item.label}</div>
           )}
@@ -542,11 +557,11 @@ function Body({ item, p }: { item: Item; p: Palette }) {
       return (
         <div
           style={{
-            padding: 12,
+            padding,
             height: "100%",
             display: "flex",
             flexDirection: side ? "row" : "column",
-            gap: side ? 12 : 8,
+            gap,
             boxSizing: "border-box",
           }}
         >

@@ -130,6 +130,17 @@ describe("card image placement", () => {
     expect(background).not.toContain(SIZED[lang].side);
   });
 
+  it.each(LANGS)("includes image ratio, contain fit, spacing and alignment choices in %s", (lang) => {
+    const expected: Record<Lang, string[]> = {
+      ja: ["比率 16:9", "切り抜かず全体を表示", "内側余白 20dp", "要素間隔 6dp", "内容は中央寄せ", "文字は右揃え"],
+      en: ["16:9 aspect ratio", "shown whole without cropping", "20dp padding", "6dp element spacing", "content aligned to the center", "right-aligned text"],
+      zh: ["宽高比 16:9", "完整显示、不裁剪", "内边距 20dp", "元素间距 6dp", "内容垂直居中对齐", "文字右对齐"],
+      ko: ["가로세로 비율 16:9", "자르지 않고 전체 표시", "안쪽 여백 20dp", "요소 간격 6dp", "콘텐츠 가운데 정렬", "텍스트 오른쪽 정렬"],
+    };
+    const layout = cardLayout(lang, { imageRatio: "16:9", imageFit: "contain", cardPadding: 20, cardGap: 6, contentAlign: "center", textAlign: "end" });
+    for (const phrase of expected[lang]) expect(layout).toContain(phrase);
+  });
+
   it.each(LANGS)("stays silent about the image area when it is turned off in %s", (lang) => {
     expect(cardLayout(lang, { noImage: true, imagePos: "background" })).not.toContain(PLACEMENT[lang].background);
   });

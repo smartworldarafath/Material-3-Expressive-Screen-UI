@@ -1182,6 +1182,16 @@ export type Item = {
   imagePos?: CardImagePos;
   /** cards: the image area's size in dp — its height on top, its width at a side; a background image fills the card */
   imageSize?: number;
+  /** cards: a top image can follow a standard aspect ratio instead of a fixed height */
+  imageRatio?: CardImageRatio;
+  /** cards: how a source image fills its media area */
+  imageFit?: CardImageFit;
+  /** cards: inner padding and the gap between media, headline and supporting text */
+  cardPadding?: number;
+  cardGap?: number;
+  /** cards: vertical position of the content block and horizontal alignment of its text */
+  contentAlign?: CardAlign;
+  textAlign?: CardAlign;
   /** on/off state for switches, checkboxes and chips */
   checked?: boolean;
   /** a switch whose handle stays plain when on, without the check icon */
@@ -1321,11 +1331,35 @@ export type CardImagePos = "top" | "leading" | "trailing" | "background";
 export const isCardImagePos = (v: unknown): v is CardImagePos => v === "top" || v === "leading" || v === "trailing" || v === "background";
 export const cardImagePosOf = (it: Item): CardImagePos => it.imagePos ?? "top";
 
+export type CardImageRatio = "16:9" | "4:3" | "1:1";
+export const isCardImageRatio = (v: unknown): v is CardImageRatio => v === "16:9" || v === "4:3" || v === "1:1";
+const CARD_IMAGE_RATIOS: Record<CardImageRatio, number> = { "16:9": 16 / 9, "4:3": 4 / 3, "1:1": 1 };
+
+export type CardImageFit = "cover" | "contain";
+export const isCardImageFit = (v: unknown): v is CardImageFit => v === "cover" || v === "contain";
+export const cardImageFitOf = (it: Item): CardImageFit => it.imageFit ?? "cover";
+
+export type CardAlign = "start" | "center" | "end";
+export const isCardAlign = (v: unknown): v is CardAlign => v === "start" || v === "center" || v === "end";
+export const cardContentAlignOf = (it: Item): CardAlign => it.contentAlign ?? "start";
+export const cardTextAlignOf = (it: Item): CardAlign => it.textAlign ?? "start";
+
+export const CARD_PADDING = 12;
+export const CARD_GAP = 8;
+export const CARD_SIDE_GAP = 12;
+export const cardPaddingOf = (it: Item): number => it.cardPadding ?? CARD_PADDING;
+export const cardGapOf = (it: Item): number =>
+  it.cardGap ?? (cardImagePosOf(it) === "leading" || cardImagePosOf(it) === "trailing" ? CARD_SIDE_GAP : CARD_GAP);
+
 /** default width of a card's side image column (an M3 horizontal-card thumbnail) */
 export const CARD_SIDE_IMAGE_W = 80;
 /** the image area's extent in dp: the author's value, else 28% of the card's width
  *  on top or the standard column on a side; a background image fills the card */
 export function cardImageSizeOf(it: Item): number {
+  if (cardImagePosOf(it) === "top" && it.imageRatio) {
+    const width = (it.size ?? KIND_SPEC.card.defSize ?? KIND_SPEC.card.w) - cardPaddingOf(it) * 2;
+    return Math.max(1, Math.round(width / CARD_IMAGE_RATIOS[it.imageRatio]));
+  }
   if (it.imageSize !== undefined) return it.imageSize;
   if (cardImagePosOf(it) !== "top") return CARD_SIDE_IMAGE_W;
   return Math.round((it.size ?? KIND_SPEC.card.defSize ?? KIND_SPEC.card.w) * 0.28);
