@@ -458,6 +458,8 @@ export default function Page() {
   widthsRef.current = widths;
   const viewRef = useRef(view);
   viewRef.current = view;
+  const previewIdRef = useRef(previewId);
+  previewIdRef.current = previewId;
   const leftOpenRef = useRef(leftOpen);
   leftOpenRef.current = leftOpen;
   const leftWRef = useRef(leftW);
@@ -595,8 +597,12 @@ export default function Page() {
   /** Puts a stored or opened document into the editor. Fields a partial document
    *  leaves out keep their current value, or go back to the default when `reset`. */
   const applyDoc = (doc: Partial<Doc>, reset: boolean) => {
-    setPreviewId(null);
-    viewBeforePreview.current = null;
+    // A document can arrive during the opening glide, before previewId is set.
+    // Keep that pending preview's return view until it actually opens and closes.
+    if (previewIdRef.current !== null) {
+      setPreviewId(null);
+      viewBeforePreview.current = null;
+    }
     const frames = Array.isArray(doc.frames) ? doc.frames : framesRef.current;
     if (Array.isArray(doc.groups)) setGroups(migrateGroups(doc.groups, frames));
     if (Array.isArray(doc.frames)) setFrames(doc.frames);

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Item } from "@/lib/tokens";
-import { AnimatePresence, animate, motion, useMotionValue, useTransform, useReducedMotion } from "motion/react";
+import { AnimatePresence, animate, motion, useMotionValue, useTransform, useReducedMotion, useIsPresent } from "motion/react";
 import type { TargetAndTransition, Variants } from "motion/react";
 import {
   Action,
@@ -356,6 +356,7 @@ function Tappable({
 const ellipsisText: React.CSSProperties = { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" };
 
 function Screen({
+  active = true,
   frame,
   groups,
   widths,
@@ -366,6 +367,7 @@ function Screen({
   values,
   onValue,
 }: {
+  active?: boolean;
   frame: Frame;
   groups: Group[];
   widths: Record<string, number>;
@@ -383,12 +385,17 @@ function Screen({
   const [railMotion, setRailMotion] = useState<(ReturnType<typeof railMotionTargets> & { animate: boolean }) | null>(null);
   const lang = useLang();
   const reducedMotion = useReducedMotion();
+  const isPresent = useIsPresent();
+  const interactive = active && isPresent;
+  const interactiveRef = useRef(interactive);
+  interactiveRef.current = interactive;
   const screenRef = useRef<HTMLDivElement>(null);
   const shownGroups = useMemo(() => Object.entries(railStates).reduce(
     (current, [id, railExpanded]) => updateRail(current, [frame], widths, id, { railExpanded }), constrainModalRails(groups),
   ), [groups, frame, widths, railStates]);
   const modalIds = new Set(shownGroups.flatMap((g) => { const rail = modalRailOf(g); return rail ? [rail.id] : []; }));
   const hasModal = modalIds.size > 0;
+  const modalActive = interactive && hasModal;
   const changeRail = (id: string, railExpanded: boolean, animate: boolean) => {
     const next = updateRail(shownGroups, [frame], widths, id, { railExpanded });
     setRailMotion({ ...railMotionTargets(shownGroups, next, widths, id), animate: animate && !reducedMotion });
@@ -419,18 +426,19 @@ function Screen({
   }, [railMotion]);
   useEffect(() => { setRailMotion(null); }, [groups, frame, widths]);
   useEffect(() => {
-    if (!hasModal) return;
+    if (!modalActive) return;
     const previous = document.activeElement as HTMLElement | null;
     screenRef.current?.querySelector<HTMLButtonElement>(`[data-rail-modal] [data-rail-toggle]`)?.focus();
-    return () => { if (previous?.isConnected) previous.focus(); };
-  }, [hasModal]);
+    // An exiting screen must not take focus back from its replacement.
+    return () => { if (interactiveRef.current && previous?.isConnected && !previous.closest("[inert]")) previous.focus(); };
+  }, [modalActive]);
   useEffect(() => {
-    if (hasModal && !document.activeElement?.closest("[data-rail-modal]")) {
+    if (modalActive && (!screenRef.current?.contains(document.activeElement) || !document.activeElement?.closest("[data-rail-modal]"))) {
       screenRef.current?.querySelector<HTMLButtonElement>("[data-rail-modal] [data-rail-toggle]")?.focus();
     }
-  }, [shownGroups, hasModal]);
+  }, [shownGroups, modalActive]);
   useEffect(() => {
-    if (!hasModal) return;
+    if (!modalActive) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Tab") {
         e.stopImmediatePropagation();
@@ -454,10 +462,12 @@ function Screen({
   return (
     <div
       ref={screenRef}
+      inert={!interactive}
+      aria-hidden={!interactive || undefined}
       data-rail-motion={railMotion?.animate ? "true" : undefined}
-      role={hasModal ? "dialog" : undefined}
-      aria-modal={hasModal ? true : undefined}
-      aria-label={hasModal ? t("railState", lang) : undefined}
+      role={modalActive ? "dialog" : undefined}
+      aria-modal={modalActive ? true : undefined}
+      aria-label={modalActive ? t("railState", lang) : undefined}
       onPointerDown={(e) => { if (hasModal) e.stopPropagation(); }}
       style={{ position: "absolute", inset: 0, background: p[frame.bg ?? "surface"], overflow: "hidden" }}
     >
@@ -975,7 +985,7 @@ export function Preview({
                   pointerEvents: "none",
                 }}
               >
-                <Screen frame={peekFrame} groups={peekGroups} {...screenProps} />
+                <Screen active={false} frame={peekFrame} groups={peekGroups} {...screenProps} />
               </motion.div>
             )}
           </motion.div>
