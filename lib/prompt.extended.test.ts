@@ -114,7 +114,6 @@ describe("buildPrompt — palette section", () => {
       "onPrimaryContainer",
       "secondary",
       "secondaryContainer",
-      "secondary",
       "onSecondaryContainer",
       "tertiaryContainer",
       "onTertiaryContainer",
