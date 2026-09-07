@@ -10,6 +10,14 @@ const group = (id: string, x: number, items: Item[]): Group => ({ id, x, y: 40, 
 const stage = (right = false): Group[] => [group("rail-group", right ? 1204 : 20, [rail]), group("bar-group", right ? 20 : 116, [bar])];
 
 describe("updateRail", () => {
+  it("uses the actual rail bounds when a standalone free group retains an offset", () => {
+    const original = [{ ...group("free", 570, [rail]), free: true, pos: { rail: { x: 120, y: 0 } } }];
+    expect(railSide(original[0], frame, {})).toBe("right");
+    const expanded = updateRail(original, [frame], {}, "rail", { railExpanded: true });
+    expect(railSide(expanded[0], frame, {})).toBe("right");
+    expect(updateRail(expanded, [frame], {}, "rail", { railExpanded: false })).toEqual(original);
+  });
+
   it.each([false, true])("keeps neighbouring layout slots stable through modal toggles on the right=%s", (right) => {
     const original = [
       group("outer", right ? 1204 : 20, [{ ...rail, railModal: true }]),

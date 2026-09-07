@@ -259,12 +259,12 @@ export function carryFrame(groups: Group[], frame: Frame, to: Frame, frames: Fra
 export function railSide(g: Group, frame: Frame, widths: Record<string, number>): "left" | "right" {
   const item = g.items[0];
   const fr = frameRect(frame);
+  const bb = groupBounds(g, widths);
   const side = item[railExpansionSide];
   if (g.items.length === 1 && item.railExpanded && side) {
-    const middle = g.x + (side === "right" ? railWidth(item) - RAIL_COLLAPSED_W / 2 : RAIL_COLLAPSED_W / 2);
+    const middle = side === "right" ? bb.r - RAIL_COLLAPSED_W / 2 : bb.l + RAIL_COLLAPSED_W / 2;
     return middle > (fr.l + fr.r) / 2 ? "right" : "left";
   }
-  const bb = groupBounds(g, widths);
   return (bb.l + bb.r) / 2 > (fr.l + fr.r) / 2 ? "right" : "left";
 }
 
