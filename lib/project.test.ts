@@ -131,6 +131,15 @@ describe("projectFileName", () => {
 });
 
 describe("readProject", () => {
+  it.each(["left", "right"])("preserves a saved %s expansion anchor", async (side) => {
+    const project = withItem({ kind: "navRail", railExpanded: true, railAnchor: { side, offset: 486.5 } });
+    await expect(readProject(new File([JSON.stringify(project)], "rail.json"))).resolves.toEqual(project);
+  });
+
+  it.each([null, false, [], {}, { side: "top", offset: 12 }, { side: "left" }, { side: "right", offset: "12" }, { side: "left", offset: Infinity }])("rejects invalid expansion anchor %j", (railAnchor) => {
+    expect(isProject(withItem({ kind: "navRail", railExpanded: true, railAnchor }))).toBe(false);
+  });
+
   it.each([undefined, false, true])("accepts optional navigation rail booleans %s without changing them", (value) => {
     const project = withItem({ kind: "navRail", railExpanded: value, railModal: value });
     const before = structuredClone(project);

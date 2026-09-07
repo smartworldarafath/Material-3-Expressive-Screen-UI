@@ -32,6 +32,7 @@ import {
   frameSizeOf,
   halfWidth,
   isPhoneFrame,
+  isWideRail,
   toggleIcon,
   iconSlotsOf,
   setIconSlot,
@@ -1190,23 +1191,32 @@ export function Inspector({
       {item.kind === "navRail" && !editOn && (
         <Section id="rail" icon="side_navigation" title={t("railState", lang)} p={p}>
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            <div role="group" aria-label={t("railState", lang)}>
-              <Segmented
-                options={[{ key: "collapsed", label: t("railCollapsed", lang) }, { key: "expanded", label: t("railExpanded", lang) }]}
-                value={item.railExpanded ? "expanded" : "collapsed"}
-                onChange={(v) => onChange({ railExpanded: v === "expanded" })}
-                p={p}
-              />
-            </div>
-            <div role="group" aria-label={t("railPresentation", lang)}>
-              <div style={{ fontSize: 12, color: p.onSurfaceVariant, marginBottom: 6 }}>{t("railPresentation", lang)}</div>
-              <Segmented
-                options={[{ key: "standard", label: t("railStandard", lang) }, { key: "modal", label: t("railModal", lang) }]}
-                value={item.railModal ? "modal" : "standard"}
-                onChange={(v) => onChange({ railExpanded: item.railExpanded ?? false, railModal: v === "modal" })}
-                p={p}
-              />
-            </div>
+            {!isWideRail(item) ? (
+              <>
+                <div style={{ fontSize: 12, color: p.onSurfaceVariant }}>{t("railLegacy", lang)}</div>
+                <Toggle on={false} onChange={() => onChange({ railExpanded: false })} p={p} icon="side_navigation" label={t("railUpgrade", lang)} />
+              </>
+            ) : (
+              <>
+                <div role="group" aria-label={t("railState", lang)}>
+                  <Segmented
+                    options={[{ key: "collapsed", label: t("railCollapsed", lang) }, { key: "expanded", label: t("railExpanded", lang) }]}
+                    value={item.railExpanded ? "expanded" : "collapsed"}
+                    onChange={(v) => onChange({ railExpanded: v === "expanded" })}
+                    p={p}
+                  />
+                </div>
+                <div role="group" aria-label={t("railPresentation", lang)}>
+                  <div style={{ fontSize: 12, color: p.onSurfaceVariant, marginBottom: 6 }}>{t("railPresentation", lang)}</div>
+                  <Segmented
+                    options={[{ key: "standard", label: t("railStandard", lang) }, { key: "modal", label: t("railModal", lang) }]}
+                    value={item.railModal ? "modal" : "standard"}
+                    onChange={(v) => onChange({ railExpanded: item.railExpanded ?? false, railModal: v === "modal" })}
+                    p={p}
+                  />
+                </div>
+              </>
+            )}
           </div>
         </Section>
       )}

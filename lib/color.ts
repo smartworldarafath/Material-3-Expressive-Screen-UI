@@ -183,3 +183,22 @@ export function onColorFor(hex: string): string {
 }
 
 export const isHex = (v: string) => /^#[0-9a-f]{6}$/i.test(v.trim());
+
+/** WCAG relative luminance contrast for two opaque sRGB colors. */
+export function contrastRatio(a: string, b: string): number {
+  const luminance = (hex: string) => {
+    const [r, g, b] = (hexToRgb(hex) ?? [0, 0, 0]).map(lin);
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  };
+  const x = luminance(a);
+  const y = luminance(b);
+  return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
+}
+
+/** Collapsed labels sit outside the indicator; expanded labels sit inside it. */
+export function railSelectedLabelColor(p: Palette, expanded: boolean): string {
+  const background = expanded ? p.secondaryContainer : p.surfaceContainer;
+  return contrastRatio(p.secondary, background) >= 4.5
+    ? p.secondary
+    : expanded ? p.onSecondaryContainer : p.onSurface;
+}

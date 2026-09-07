@@ -99,6 +99,10 @@ describe("navigation rail expansion", () => {
             { ...makeItem("navRail"), railExpanded, railModal, selected: 1, tabs: [{ icon: "home", label: "Home" }, { icon: "star", label: "Saved" }] },
           ] }];
           const prompt = buildPrompt(doc, {}, undefined, lang);
+          if (lang === "ja") {
+            expect(prompt).not.toContain("スクラム");
+            expect(prompt).toContain("スクリム");
+          }
           const layout = prompt.slice(prompt.indexOf(SECTIONS[lang][2]), prompt.indexOf(SECTIONS[lang][4]));
           expect(layout).toContain(railExpanded ? expandedText : collapsedText);
           expect(layout).not.toContain(railExpanded ? collapsedText : expandedText);
@@ -114,6 +118,8 @@ describe("navigation rail expansion", () => {
           expect(styles).toMatch(/\bsecondary\b/);
           expect(styles).toContain("surfaceContainer");
           expect(styles).toContain("onSecondaryContainer");
+          expect(styles).toContain("4.5:1");
+          expect(styles).toContain("onSurface");
           expect(styles).not.toContain("80dp");
         }
       }

@@ -27,6 +27,7 @@ import {
 import { CircularProgress, LinearProgress, LoadingIndicator } from "./Loading";
 import { t, useLang } from "@/lib/i18n";
 import { useTheme } from "@/lib/theme";
+import { railSelectedLabelColor } from "@/lib/color";
 
 /** weight of a heading or label: heavier under the emphasized type setting */
 const useWeight = () => {
@@ -880,7 +881,7 @@ function Body({ item, p }: { item: Item; p: Palette }) {
               <div className="m3-rail-geometry" style={{ position: "absolute", left: 0, top: 0, width: 24, height: 24, transform: `translate(${expanded ? 16 : 24}px, ${expanded ? 16 : 4}px)`, color: on ? p.onSecondaryContainer : p.onSurfaceVariant }}>
                 {tab.icon && <Icon name={tab.icon} size={24} fill={on} />}
               </div>
-              {tab.label.trim() && <span className="m3-rail-geometry" style={{ position: "absolute", left: expanded ? 48 : 0, top: expanded ? 18 : 36, width: expanded ? rail.width - 88 : 72, textAlign: expanded ? "left" : "center", fontSize: expanded ? 14 : 12, lineHeight: "20px", fontWeight: on ? w(600, 700) : w(400, 500), color: on ? p.secondary : p.onSurfaceVariant, ...ellipsis }}>{tab.label}</span>}
+              {tab.label.trim() && <span className="m3-rail-geometry" style={{ position: "absolute", left: expanded ? 48 : 0, top: expanded ? 18 : 36, width: expanded ? rail.width - 88 : 72, textAlign: expanded ? "left" : "center", fontSize: expanded ? 14 : 12, lineHeight: "20px", fontWeight: on ? w(600, 700) : w(400, 500), color: on ? railSelectedLabelColor(p, expanded) : p.onSurfaceVariant, ...ellipsis }}>{tab.label}</span>}
             </div>;
           })}
         </div>
@@ -893,16 +894,11 @@ function Body({ item, p }: { item: Item; p: Palette }) {
             alignItems: "center",
             gap: rail.gap,
             height: "100%",
-            padding: `${rail.top}px 0 ${wide ? 16 : RAIL_TOP}px`,
+            padding: `${rail.top}px 0 ${RAIL_TOP}px`,
             boxSizing: "border-box",
             position: "relative",
           }}
         >
-          {wide && (
-            <div style={{ position: "absolute", left: 12, top: RAIL_TOP, width: 48, height: 48, display: "grid", placeItems: "center", color: p.onSurfaceVariant }}>
-              <Icon name={expanded ? "menu_open" : "menu"} size={24} />
-            </div>
-          )}
           {tabs.map((t, i) => {
             const on = i === Math.min(item.selected ?? 0, Math.max(0, tabs.length - 1));
             const withLabel = t.label.trim().length > 0;
@@ -911,39 +907,36 @@ function Body({ item, p }: { item: Item; p: Palette }) {
                 key={i}
                 style={{
                   display: "flex",
-                  flexDirection: expanded ? "row" : "column",
+                  flexDirection: "column",
                   alignItems: "center",
-                  gap: expanded ? 8 : 4,
+                  gap: 4,
                   width: rail.width - 2 * rail.inset,
                   height: rail.itemHeight,
-                  padding: expanded ? "0 16px" : undefined,
                   boxSizing: "border-box",
-                  borderRadius: expanded ? 28 : undefined,
-                  background: expanded && on ? p.secondaryContainer : undefined,
                   flex: "0 0 auto",
                 }}
               >
                 <div
                   style={{
-                    width: expanded ? 24 : 56,
-                    height: expanded ? 24 : 32,
+                    width: 56,
+                    height: 32,
                     flexShrink: 0,
                     borderRadius: scaleR(16),
                     display: "grid",
                     placeItems: "center",
-                    background: on && !expanded ? p.secondaryContainer : "transparent",
+                    background: on ? p.secondaryContainer : "transparent",
                     color: on ? p.onSecondaryContainer : p.onSurfaceVariant,
                     transition: "background 160ms, color 160ms",
                   }}
                 >
-                  {t.icon && <Icon name={t.icon} size={wide ? 24 : 22} fill={on} />}
+                  {t.icon && <Icon name={t.icon} size={22} fill={on} />}
                 </div>
                 {withLabel && (
                   <span
                     style={{
-                      fontSize: expanded ? 14 : wide ? 12 : 11,
+                      fontSize: 11,
                       fontWeight: on ? w(600, 700) : w(400, 500),
-                      color: on ? (wide ? p.onSecondaryContainer : p.onSurface) : p.onSurfaceVariant,
+                      color: on ? p.onSurface : p.onSurfaceVariant,
                       maxWidth: "100%",
                       ...ellipsis,
                     }}

@@ -1185,6 +1185,8 @@ export type Item = {
   railExpanded?: boolean;
   /** Expanded rail overlays a scrim rather than taking additional layout space. */
   railModal?: boolean;
+  /** Internal expansion anchor; a horizontal move invalidates its frame-relative offset. */
+  railAnchor?: { side: "left" | "right"; offset: number };
   contained?: boolean;
   /** free text the author writes about what this part does */
   note?: string;

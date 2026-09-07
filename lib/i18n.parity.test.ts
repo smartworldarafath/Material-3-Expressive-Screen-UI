@@ -31,6 +31,13 @@ function leafPaths(value: unknown, prefix = ""): string[] {
 }
 
 describe("UI dictionary parity", () => {
+  it.each(LANGS)("makes the legacy-to-expressive width change explicit in $key", ({ key: lang }) => {
+    expect(t("railLegacy", lang)).toContain("80dp");
+    expect(t("railUpgrade", lang)).toContain("96dp");
+    expect(t("railUpgrade", lang)).toContain("Expressive");
+    expect(t("railLegacy", lang)).not.toBe(t("railCollapsed", lang));
+  });
+
   it("offers each supported language exactly once with a nonblank display label", () => {
     expect([...languages].sort()).toEqual(["en", "ja", "ko", "zh"]);
     for (const { key, label } of LANGS) nonemptyStrings(label, `LANGS.${key}`);

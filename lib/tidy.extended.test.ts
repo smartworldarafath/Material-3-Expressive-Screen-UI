@@ -233,6 +233,22 @@ describe("tidy idempotence", () => {
 });
 
 describe("expandable rail layout", () => {
+  it.each(["left", "right"] as const)("packs multiple modal rails without overlap on the %s edge", (side) => {
+    const screen: Frame = { id: "multi", name: "Desktop", x: 20, y: 40, w: 1280, h: 800 };
+    const rails = [0, 1].map((i) => group(`rail-${i}`, side === "left" ? 30 + i * 230 : 820 + i * 230, 48, [
+      { ...navRail(`r-${i}`), railExpanded: true, railModal: true, size2: 800 },
+    ]));
+    const bar = group("top", side === "left" ? 212 : 20, 48, [{ ...topBar("top-item"), size: 1088 }]);
+    const out = tidyFrame([...rails, bar], screen, [screen], widths)!;
+    const first = out.find((g) => g.id === "rail-0")!;
+    const second = out.find((g) => g.id === "rail-1")!;
+    expect(second.x - first.x).toBe(220);
+    expect(side === "left" ? first.x : second.x + 220).toBe(side === "left" ? 20 : 1300);
+    expect(out.find((g) => g.id === "top")?.x).toBe(side === "left" ? 212 : 20);
+    expect(barSlotOf(out, screen, [screen], widths)).toEqual({ x: side === "left" ? 212 : 20, w: 1088 });
+    expect(tidyFrame(out, screen, [screen], widths)).toBeNull();
+  });
+
   const desk: Frame = { id: "wide", name: "Desktop", x: 40, y: 20, w: DESKTOP_W, h: DESKTOP_H };
 
   it.each([
