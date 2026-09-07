@@ -76,6 +76,7 @@ import {
   uniformRadii,
   FULL_WIDTH,
   fitHeight,
+  railExpansionSide,
 } from "@/lib/tokens";
 import { Icon, M3Node, M3Static, MeasuredContent } from "@/components/M3Node";
 import { LayersPanel } from "@/components/Layers";
@@ -1717,7 +1718,8 @@ export default function Page() {
   const patchSelected = (patch: Partial<Item>) => {
     if (!primaryId) return;
     const id = primaryId;
-    const resizes = "size" in patch || "size2" in patch;
+    /* a rail state change resizes it too, so it counts as a resize for the lock */
+    const resizes = "size" in patch || "size2" in patch || "railExpanded" in patch || "railModal" in patch;
     /* a resize would reflow and move the locked group; other edits leave its layout alone */
     if (resizes && groupsRef.current.some((g) => g.locked && g.items.some((it) => it.id === id))) {
       showToast(lockedGroupMsg());
@@ -1805,6 +1807,13 @@ export default function Page() {
       id: uid(),
       tabs: selected.tabs?.map((t) => ({ ...t })),
     };
+    /* a copied modal rail starts collapsed and standard: a screen shows one modal rail, and
+       the copy sits inward of the edge the original remembered */
+    if (copy.kind === "navRail" && copy.railModal) {
+      copy.railModal = false;
+      copy.railExpanded = false;
+      delete copy[railExpansionSide];
+    }
     snapshot();
     setGroups((prev) => [
       ...prev,
