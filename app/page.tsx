@@ -1728,6 +1728,8 @@ export default function Page() {
   const deleteSelected = useCallback(() => {
     if (selectedIds.length === 0) return;
     const ids = new Set(selectedIds);
+    /* nothing deletable when every selected part sits in a locked group: no snapshot, keep the selection */
+    if (groupsRef.current.every((g) => g.locked || !g.items.some((it) => ids.has(it.id)))) return;
     snapshot();
     setGroups((prev) =>
       prev
@@ -1947,6 +1949,8 @@ export default function Page() {
   const groupSelected = useCallback(() => {
     const ids = new Set(selectedIds);
     if (ids.size < 2) return;
+    /* regrouping would carry a locked group's parts into an unlocked group */
+    if (groupsRef.current.some((g) => g.locked && g.items.some((it) => ids.has(it.id)))) return;
     const rects = new Map(itemRects().map((r) => [r.id, r]));
     const picked: Item[] = [];
     let top = -1;
@@ -1995,7 +1999,8 @@ export default function Page() {
   /** Split a free group back into single runs at their current positions, in the same layer slot. */
   const ungroupSelected = useCallback(() => {
     const g = selectedGroup;
-    if (!g) return;
+    /* ungrouping would replace a locked group with unlocked single runs */
+    if (!g || g.locked) return;
     snapshot();
     const singles: Group[] = explodeGroup(g, widthsRef.current).map((run) => ({ ...run, id: uid() }));
     for (const sg of singles) instantRef.current.add(sg.id);

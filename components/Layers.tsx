@@ -111,7 +111,8 @@ function Row({
           <button
             onClick={onLock}
             title={t(locked ? "unlock" : "lock", lang)}
-            aria-pressed={locked}
+            aria-label={t(locked ? "unlock" : "lock", lang)}
+            aria-pressed={!!locked}
             className="m3-press"
             style={{ width: 28, height: 28, borderRadius: 14, border: "none", background: "transparent", color: locked ? (on ? p.onSecondaryContainer : p.primary) : p.outline, cursor: "pointer", padding: 0, display: "grid", placeItems: "center", flex: "0 0 auto" }}
           >
