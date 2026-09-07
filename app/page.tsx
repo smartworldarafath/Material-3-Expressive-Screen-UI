@@ -223,6 +223,9 @@ function migrateGroups(groups: Group[], frames: Frame[]): Group[] {
 }
 
 /** Seed ids are deterministic so server and client render the same markup. */
+/* shown when an edit is refused because the group is locked */
+const lockedGroupMsg = () => t("lockedGroup", getLang());
+
 const seed = (lang: Lang = getLang()): Group[] => {
   const text = SEED_TEXT[lang];
   let n = 0;
@@ -996,7 +999,8 @@ export default function Page() {
       let best: Snap | null = null;
       let bestD = 1;
       for (const g of groupsRef.current) {
-        if (g.free || g.axis !== spec.axis || !g.items[0] || !canJoin(g.items[0], item))
+        /* a locked run is finished: nothing joins it, so it never moves to make room */
+        if (g.free || g.locked || g.axis !== spec.axis || !g.items[0] || !canJoin(g.items[0], item))
           continue;
         for (let k = 0; k <= g.items.length; k++) {
           const r = restPos(g, k, sz);
@@ -1704,8 +1708,13 @@ export default function Page() {
   const patchSelected = (patch: Partial<Item>) => {
     if (!primaryId) return;
     const id = primaryId;
-    snapshotFor(id + ":" + Object.keys(patch).join(","));
     const resizes = "size" in patch || "size2" in patch;
+    /* a resize would reflow and move the locked group; other edits leave its layout alone */
+    if (resizes && groupsRef.current.some((g) => g.locked && g.items.some((it) => it.id === id))) {
+      showToast(lockedGroupMsg());
+      return;
+    }
+    snapshotFor(id + ":" + Object.keys(patch).join(","));
     setGroups((prev) =>
       prev.map((g) => {
         const idx = g.items.findIndex((it) => it.id === id);
@@ -1730,7 +1739,10 @@ export default function Page() {
     if (selectedIds.length === 0) return;
     const ids = new Set(selectedIds);
     /* nothing deletable when every selected part sits in a locked group: no snapshot, keep the selection */
-    if (groupsRef.current.every((g) => g.locked || !g.items.some((it) => ids.has(it.id)))) return;
+    if (groupsRef.current.every((g) => g.locked || !g.items.some((it) => ids.has(it.id)))) {
+      showToast(lockedGroupMsg());
+      return;
+    }
     snapshot();
     setGroups((prev) =>
       prev
@@ -1765,6 +1777,7 @@ export default function Page() {
       for (const it of fg.items) pos[idMap.get(it.id)!] = fg.pos?.[it.id] ?? { x: 0, y: 0 };
       const copyG: Group = {
         ...fg,
+        locked: undefined,
         id: uid(),
         x: fg.x + 24,
         y: fg.y + 24,
@@ -1809,7 +1822,8 @@ export default function Page() {
     if (!g) return;
     let group: Group;
     if (g.items.every((it) => ids.has(it.id))) {
-      group = structuredClone(g);
+      /* a copy starts unlocked; the lock belongs to the original */
+      group = { ...structuredClone(g), locked: undefined };
     } else {
       const rect = itemRects().find((r) => r.id === selected.id);
       if (!rect) return;
@@ -1951,7 +1965,10 @@ export default function Page() {
     const ids = new Set(selectedIds);
     if (ids.size < 2) return;
     /* regrouping would carry a locked group's parts into an unlocked group */
-    if (groupsRef.current.some((g) => g.locked && g.items.some((it) => ids.has(it.id)))) return;
+    if (groupsRef.current.some((g) => g.locked && g.items.some((it) => ids.has(it.id)))) {
+      showToast(lockedGroupMsg());
+      return;
+    }
     const rects = new Map(itemRects().map((r) => [r.id, r]));
     const picked: Item[] = [];
     let top = -1;
@@ -2000,8 +2017,12 @@ export default function Page() {
   /** Split a free group back into single runs at their current positions, in the same layer slot. */
   const ungroupSelected = useCallback(() => {
     const g = selectedGroup;
+    if (!g) return;
     /* ungrouping would replace a locked group with unlocked single runs */
-    if (!g || g.locked) return;
+    if (g.locked) {
+      showToast(lockedGroupMsg());
+      return;
+    }
     snapshot();
     const singles: Group[] = explodeGroup(g, widthsRef.current).map((run) => ({ ...run, id: uid() }));
     for (const sg of singles) instantRef.current.add(sg.id);
@@ -2954,7 +2975,7 @@ export default function Page() {
    *  again in the new order, so reordering a list really moves its rows. */
   const reorderGroupItems = (groupId: string, order: string[]) => {
     const g = groupsRef.current.find((x) => x.id === groupId);
-    if (!g) return;
+    if (!g || g.locked) return;
     const byId = new Map(g.items.map((it) => [it.id, it]));
     const items = order.map((id) => byId.get(id)).filter((it): it is Item => !!it);
     if (items.length !== g.items.length || new Set(order).size !== order.length) return;
