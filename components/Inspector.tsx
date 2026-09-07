@@ -24,6 +24,7 @@ import {
   VARIANTS,
   Variant,
   actionSlotsOf,
+  baseRadii,
   contentWidth,
   defaultTabsFor,
   framePresetOf,
@@ -1186,6 +1187,30 @@ export function Inspector({
         </Section>
       )}
 
+      {item.kind === "navRail" && !editOn && (
+        <Section id="rail" icon="side_navigation" title={t("railState", lang)} p={p}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <div role="group" aria-label={t("railState", lang)}>
+              <Segmented
+                options={[{ key: "collapsed", label: t("railCollapsed", lang) }, { key: "expanded", label: t("railExpanded", lang) }]}
+                value={item.railExpanded ? "expanded" : "collapsed"}
+                onChange={(v) => onChange({ railExpanded: v === "expanded" })}
+                p={p}
+              />
+            </div>
+            <div role="group" aria-label={t("railPresentation", lang)}>
+              <div style={{ fontSize: 12, color: p.onSurfaceVariant, marginBottom: 6 }}>{t("railPresentation", lang)}</div>
+              <Segmented
+                options={[{ key: "standard", label: t("railStandard", lang) }, { key: "modal", label: t("railModal", lang) }]}
+                value={item.railModal ? "modal" : "standard"}
+                onChange={(v) => onChange({ railExpanded: item.railExpanded ?? false, railModal: v === "modal" })}
+                p={p}
+              />
+            </div>
+          </div>
+        </Section>
+      )}
+
       {(spec.size || hasRadius) && !editOn && (
         <Section id="size" icon="straighten" title={t("size", lang)} p={p}>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -1320,7 +1345,7 @@ export function Inspector({
                 <Slider
                   iconNode={<CornerIcon side={item.kind === "navRail" ? "left" : "top"} />}
                   title={t(item.kind === "navRail" ? "cornerLeft" : "cornerTop", lang)}
-                  value={item.radiusTop ?? 0}
+                  value={item.kind === "navRail" ? baseRadii(item).tl : (item.radiusTop ?? 0)}
                   min={0}
                   max={40}
                   step={1}
@@ -1330,7 +1355,7 @@ export function Inspector({
                 <Slider
                   iconNode={<CornerIcon side={item.kind === "navRail" ? "right" : "bottom"} />}
                   title={t(item.kind === "navRail" ? "cornerRight" : "cornerBottom", lang)}
-                  value={item.radiusBottom ?? 0}
+                  value={item.kind === "navRail" ? baseRadii(item).tr : (item.radiusBottom ?? 0)}
                   min={0}
                   max={40}
                   step={1}

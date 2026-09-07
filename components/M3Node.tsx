@@ -20,10 +20,9 @@ import {
   variantShadow,
   variantStyle,
   SETTLE_MS,
-  RAIL_W,
   RAIL_TOP,
-  RAIL_ITEM_H,
-  RAIL_GAP,
+  isWideRail,
+  railMetrics,
 } from "@/lib/tokens";
 import { CircularProgress, LinearProgress, LoadingIndicator } from "./Loading";
 import { t, useLang } from "@/lib/i18n";
@@ -866,19 +865,44 @@ function Body({ item, p }: { item: Item; p: Palette }) {
 
     case "navRail": {
       const tabs = item.tabs ?? [];
+      const wide = isWideRail(item);
+      const expanded = !!item.railExpanded;
+      const rail = railMetrics(item);
+      if (wide) return (
+        <div style={{ position: "relative", height: "100%" }}>
+          <div className="m3-rail-geometry" style={{ position: "absolute", left: rail.headerLeft, top: RAIL_TOP, width: 48, height: 48, display: "grid", placeItems: "center", color: p.onSurfaceVariant }}>
+            <Icon name={expanded ? "menu_open" : "menu"} size={24} />
+          </div>
+          {tabs.map((tab, i) => {
+            const on = i === Math.min(item.selected ?? 0, Math.max(0, tabs.length - 1));
+            return <div key={i} className="m3-rail-geometry" style={{ position: "absolute", left: rail.inset, top: rail.top + i * (rail.itemHeight + rail.gap), width: rail.width - rail.inset * 2, height: rail.itemHeight }}>
+              <div className="m3-rail-geometry" style={{ position: "absolute", left: expanded ? 0 : 8, top: 0, width: expanded ? rail.width - rail.inset * 2 : 56, height: expanded ? 56 : 32, borderRadius: expanded ? 28 : 16, background: on ? p.secondaryContainer : "transparent" }} />
+              <div className="m3-rail-geometry" style={{ position: "absolute", left: 0, top: 0, width: 24, height: 24, transform: `translate(${expanded ? 16 : 24}px, ${expanded ? 16 : 4}px)`, color: on ? p.onSecondaryContainer : p.onSurfaceVariant }}>
+                {tab.icon && <Icon name={tab.icon} size={24} fill={on} />}
+              </div>
+              {tab.label.trim() && <span className="m3-rail-geometry" style={{ position: "absolute", left: expanded ? 48 : 0, top: expanded ? 18 : 36, width: expanded ? rail.width - 88 : 72, textAlign: expanded ? "left" : "center", fontSize: expanded ? 14 : 12, lineHeight: "20px", fontWeight: on ? w(600, 700) : w(400, 500), color: on ? p.secondary : p.onSurfaceVariant, ...ellipsis }}>{tab.label}</span>}
+            </div>;
+          })}
+        </div>
+      );
       return (
         <div
           style={{
             display: "flex",
             flexDirection: "column",
             alignItems: "center",
-            gap: RAIL_GAP,
+            gap: rail.gap,
             height: "100%",
-            padding: `${RAIL_TOP}px 0`,
+            padding: `${rail.top}px 0 ${wide ? 16 : RAIL_TOP}px`,
             boxSizing: "border-box",
             position: "relative",
           }}
         >
+          {wide && (
+            <div style={{ position: "absolute", left: 12, top: RAIL_TOP, width: 48, height: 48, display: "grid", placeItems: "center", color: p.onSurfaceVariant }}>
+              <Icon name={expanded ? "menu_open" : "menu"} size={24} />
+            </div>
+          )}
           {tabs.map((t, i) => {
             const on = i === Math.min(item.selected ?? 0, Math.max(0, tabs.length - 1));
             const withLabel = t.label.trim().length > 0;
@@ -887,34 +911,39 @@ function Body({ item, p }: { item: Item; p: Palette }) {
                 key={i}
                 style={{
                   display: "flex",
-                  flexDirection: "column",
+                  flexDirection: expanded ? "row" : "column",
                   alignItems: "center",
-                  gap: 4,
-                  width: RAIL_W - 12,
-                  height: RAIL_ITEM_H,
+                  gap: expanded ? 8 : 4,
+                  width: rail.width - 2 * rail.inset,
+                  height: rail.itemHeight,
+                  padding: expanded ? "0 16px" : undefined,
+                  boxSizing: "border-box",
+                  borderRadius: expanded ? 28 : undefined,
+                  background: expanded && on ? p.secondaryContainer : undefined,
                   flex: "0 0 auto",
                 }}
               >
                 <div
                   style={{
-                    width: 56,
-                    height: 32,
+                    width: expanded ? 24 : 56,
+                    height: expanded ? 24 : 32,
+                    flexShrink: 0,
                     borderRadius: scaleR(16),
                     display: "grid",
                     placeItems: "center",
-                    background: on ? p.secondaryContainer : "transparent",
+                    background: on && !expanded ? p.secondaryContainer : "transparent",
                     color: on ? p.onSecondaryContainer : p.onSurfaceVariant,
                     transition: "background 160ms, color 160ms",
                   }}
                 >
-                  {t.icon && <Icon name={t.icon} size={22} fill={on} />}
+                  {t.icon && <Icon name={t.icon} size={wide ? 24 : 22} fill={on} />}
                 </div>
                 {withLabel && (
                   <span
                     style={{
-                      fontSize: 11,
+                      fontSize: expanded ? 14 : wide ? 12 : 11,
                       fontWeight: on ? w(600, 700) : w(400, 500),
-                      color: on ? p.onSurface : p.onSurfaceVariant,
+                      color: on ? (wide ? p.onSecondaryContainer : p.onSurface) : p.onSurfaceVariant,
                       maxWidth: "100%",
                       ...ellipsis,
                     }}
@@ -1187,6 +1216,7 @@ function boxStyle(item: Item, p: Palette): React.CSSProperties {
         : { background: p.surface, border: `1px solid ${p.outline}`, color: p.onSurface };
     case "topAppBar":
     case "bottomNav":
+      return { background: p.surfaceContainer, border: "none", color: p.onSurface };
     case "navRail":
       return { background: p.surfaceContainer, border: "none", color: p.onSurface };
     case "toolbar":
@@ -1218,6 +1248,8 @@ function boxStyle(item: Item, p: Palette): React.CSSProperties {
 function shadowOf(item: Item): string {
   if (NO_BOX.includes(item.kind)) return "none";
   switch (item.kind) {
+    case "navRail":
+      return item.railModal && item.railExpanded ? "0 2px 6px rgba(0,0,0,0.16), 0 1px 2px rgba(0,0,0,0.10)" : "none";
     case "button":
     case "iconButton":
     case "extendedFab":
@@ -1272,6 +1304,7 @@ export function M3Node({
     <motion.div
       data-node={item.id}
       data-kind={item.kind}
+      data-wide-rail={item.kind === "navRail" && isWideRail(item) ? "true" : undefined}
       onPointerDown={onPointerDown}
       initial={false}
       animate={{

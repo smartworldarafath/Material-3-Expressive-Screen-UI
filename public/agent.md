@@ -100,7 +100,7 @@ Sizes are in dp; `size` is the width unless noted. Content width inside the phon
 |---|---|---|---|
 | `topAppBar` | top app bar | `label` title, `icon` leading, `icon2` trailing, `actions` with keys `icon` / `icon2` | 412 × 88, at the top |
 | `bottomNav` | navigation bar | `tabs` (3–5 of `{icon,label}`), `selected` index, `actions` with keys `tab:0`… | 412 × 104, at the bottom |
-| `navRail` | navigation rail (desktop) | `tabs`, `selected` | 80 wide, full height |
+| `navRail` | navigation rail (desktop) | `tabs`, `selected`, `railExpanded` false / true for M3 Expressive collapsed / expanded, `railModal` for modal expansion, `size2` height | 96 collapsed / 220 expanded; omit both rail fields for the original 80-wide rail |
 | `tabs` | tab row | `tabs`, `selected` | 412 × 48 |
 | `searchBar` | search bar | `label` placeholder, `icon2` trailing | 380 × 56 |
 | `button` | button | `label`, `icon`, `variant`, `action`, `toggle`, `size` width (omit for text-sized; 380 fills the content width, 182 is half) | text-sized × 56 |
@@ -131,6 +131,8 @@ Sizes are in dp; `size` is the width unless noted. Content width inside the phon
 | `loadingIndicator` | M3 Expressive loading indicator | `contained` | 48 × 48 |
 | `linearProgress` | linear progress | `value` or omit for indeterminate, `wavy` | 380 × 24 |
 | `circularProgress` | circular progress | `value` or omit, `wavy` | 48 × 48 |
+
+For `navRail`, `railExpanded` is the initial state; the preview's menu button toggles it. With `railModal: true`, an expanded rail covers the content with a scrim while the body keeps a 96dp navigation slot. Otherwise, reserve the rail's current width beside the content. Keep `tabs`, `selected`, and `actions` on the same item in either state.
 
 Fields that any part may carry:
 

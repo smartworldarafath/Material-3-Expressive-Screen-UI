@@ -131,6 +131,19 @@ describe("projectFileName", () => {
 });
 
 describe("readProject", () => {
+  it.each([undefined, false, true])("accepts optional navigation rail booleans %s without changing them", (value) => {
+    const project = withItem({ kind: "navRail", railExpanded: value, railModal: value });
+    const before = structuredClone(project);
+    expect(isProject(project)).toBe(true);
+    expect(project).toEqual(before);
+  });
+
+  it.each(["railExpanded", "railModal"])("rejects non-boolean navigation rail field %s", (field) => {
+    for (const value of [null, 0, 1, "true", "false", {}, []]) {
+      expect(isProject(withItem({ kind: "navRail", [field]: value }))).toBe(false);
+    }
+  });
+
   it("reads a real File as JSON without relying on its name or MIME type", async () => {
     const value = doc();
     await expect(readProject(new File([JSON.stringify(value)], "sketch.txt", { type: "text/plain" }))).resolves.toEqual(value);

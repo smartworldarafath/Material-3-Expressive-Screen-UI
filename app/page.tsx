@@ -90,6 +90,7 @@ import { AiActionKey, AiPanel, aiErrorText } from "@/components/AiPanel";
 import { TidyState } from "@/components/ui";
 import { AiSettings, DEFAULT_AI, hasKey, isSecureUrl, loadAiSettings, proposeBehavior, proposeDescription, pushHistory, saveAiSettings } from "@/lib/ai";
 import { barSlotOf, bodyRect, carryFrame, pullInto, tidyFrame } from "@/lib/tidy";
+import { updateRail } from "@/lib/rail";
 import { isProject, readProject, saveProject } from "@/lib/project";
 import { hasShareHash, readShareHash } from "@/lib/share";
 import { LoadingIndicator } from "@/components/Loading";
@@ -1706,7 +1707,7 @@ export default function Page() {
     snapshotFor(id + ":" + Object.keys(patch).join(","));
     const resizes = "size" in patch || "size2" in patch;
     setGroups((prev) =>
-      prev.map((g) => {
+      "railExpanded" in patch || "railModal" in patch ? updateRail(prev, framesRef.current, widthsRef.current, id, patch) : prev.map((g) => {
         const idx = g.items.findIndex((it) => it.id === id);
         if (idx < 0) return g;
         const next = { ...g.items[idx], ...patch };
@@ -2972,6 +2973,7 @@ export default function Page() {
   };
 
   const renderGroup = (g: Group, ox: number, oy: number) => {
+    const modalRail = g.items.some((it) => it.kind === "navRail" && it.railExpanded && it.railModal);
     if (g.free) {
       const instantG = instantRef.current.has(g.id);
       const allOn = g.items.every((it) => selectedSet.has(it.id));
@@ -2982,7 +2984,7 @@ export default function Page() {
           initial={false}
           animate={{ x: g.x - ox, y: g.y - oy }}
           transition={instantG ? INSTANT : OPEN}
-          style={{ position: "absolute", left: 0, top: 0 }}
+          style={{ position: "absolute", left: 0, top: 0, zIndex: modalRail ? 2 : undefined }}
         >
           {layoutOf(g, widths).map((pl) => (
             <div key={pl.item.id} style={{ position: "absolute", left: pl.x - g.x, top: pl.y - g.y }}>
@@ -3042,6 +3044,7 @@ export default function Page() {
         }}
         transition={instant ? INSTANT : OPEN}
         style={{
+          zIndex: modalRail ? 2 : undefined,
           position: "absolute",
           left: 0,
           top: 0,
@@ -3462,6 +3465,9 @@ export default function Page() {
                           {groups
                             .filter((g) => frameOf.get(g.id) === f.id)
                             .map((g) => renderGroup(g, f.x, f.y))}
+                          {groups.some((g) => frameOf.get(g.id) === f.id && g.items.some((it) => it.kind === "navRail" && it.railExpanded && it.railModal)) && (
+                            <div aria-hidden style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.32)", pointerEvents: "none", zIndex: 1 }} />
+                          )}
                           {draftBusy && (
                             <div style={{ position: "absolute", inset: 0, zIndex: 90, background: canvasBg, display: "grid", placeItems: "center" }}>
                               <LoadingIndicator size={96} color="url(#m3e-drafting)" />

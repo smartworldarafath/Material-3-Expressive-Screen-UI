@@ -1,8 +1,37 @@
 import { afterEach, describe, expect, it } from "vitest";
 
-import { DEFAULT_THEME, R_FULL, baseRadii, makeItem, normalizeTheme, runCorners, scaleR, setGlobalShape } from "./tokens";
+import { DEFAULT_THEME, R_FULL, baseRadii, makeItem, normalizeTheme, railLayoutWidth, railMetrics, runCorners, scaleR, setGlobalShape, sizeOf } from "./tokens";
 
 afterEach(() => setGlobalShape("rounded")); // restore the module default
+
+describe("navigation rail geometry", () => {
+  it("keeps old rails unchanged and creates expressive collapsed rails", () => {
+    const fresh = makeItem("navRail");
+    expect(fresh.railExpanded).toBe(false);
+    expect(sizeOf(fresh, {}).w).toBe(96);
+    const legacy = { ...fresh, railExpanded: undefined };
+    expect(sizeOf(legacy, {}).w).toBe(80);
+    expect(railMetrics(legacy)).toMatchObject({ top: 44, itemHeight: 52, gap: 12 });
+  });
+
+  it("shares drawing and hit-area geometry and keeps modal layout collapsed", () => {
+    const expanded = { ...makeItem("navRail"), railExpanded: true };
+    expect(railMetrics(expanded)).toEqual({ width: 220, headerLeft: 16, inset: 12, top: 100, itemHeight: 56, gap: 0 });
+    expect(railLayoutWidth(expanded)).toBe(220);
+    const modal = { ...expanded, railModal: true };
+    expect(sizeOf(modal, {}).w).toBe(220);
+    expect(railLayoutWidth(modal)).toBe(96);
+    expect(baseRadii(modal)).toEqual({ tl: 16, tr: 16, bl: 16, br: 16 });
+    expect(baseRadii({ ...modal, radiusTop: 0 }).tl).toBe(0);
+  });
+
+  it("aligns the menu and destination icon centers in both expressive states", () => {
+    const collapsed = railMetrics(makeItem("navRail"));
+    expect(collapsed.headerLeft + 24).toBe(collapsed.width / 2);
+    const expanded = railMetrics({ ...makeItem("navRail"), railExpanded: true });
+    expect(expanded.headerLeft + 24).toBe(expanded.inset + 16 + 12);
+  });
+});
 
 describe("setGlobalShape / scaleR", () => {
   it("shrinks radii for the square scale and grows them for full", () => {

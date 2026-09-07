@@ -32,6 +32,25 @@ export const RAIL_W = 80;
 export const RAIL_TOP = 44;
 export const RAIL_ITEM_H = 52;
 export const RAIL_GAP = 12;
+/** M3 Expressive navigation rail tokens; the 80dp rail above is kept for saved sketches. */
+export const RAIL_COLLAPSED_W = 96;
+export const RAIL_EXPANDED_W = 220;
+export const isWideRail = (it: Item) => it.railExpanded !== undefined || it.railModal === true;
+export const railWidth = (it: Item) => it.railExpanded ? RAIL_EXPANDED_W : isWideRail(it) ? RAIL_COLLAPSED_W : RAIL_W;
+/** Modal expansion overlays the body, retaining only the collapsed rail's layout slot. */
+export const railLayoutWidth = (it: Item) => it.railModal ? RAIL_COLLAPSED_W : railWidth(it);
+/** Shared drawing / hit-area geometry. The header is a 48dp menu button with an 8dp gap. */
+export function railMetrics(it: Item) {
+  const wide = isWideRail(it);
+  return {
+    width: railWidth(it),
+    headerLeft: it.railExpanded ? 16 : (railWidth(it) - 48) / 2,
+    inset: wide ? 12 : 6,
+    top: RAIL_TOP + (wide ? 56 : 0),
+    itemHeight: wide ? 56 : RAIL_ITEM_H,
+    gap: wide ? (it.railExpanded ? 0 : 4) : RAIL_GAP,
+  };
+}
 /** system insets: the status bar above a top app bar and the gesture area below a navigation bar.
  *  Both bars carry their inset as extra height so their background reaches the rounded screen edge. */
 export const STATUS_BAR_H = 24;
@@ -1162,6 +1181,10 @@ export type Item = {
   /** 0..100 for sliders and determinate progress; undefined = indeterminate */
   value?: number;
   wavy?: boolean;
+  /** Undefined retains the original rail; false/true select the collapsed/expanded expressive rail. */
+  railExpanded?: boolean;
+  /** Expanded rail overlays a scrim rather than taking additional layout space. */
+  railModal?: boolean;
   contained?: boolean;
   /** free text the author writes about what this part does */
   note?: string;
@@ -1584,7 +1607,10 @@ export function makeItem(kind: Kind): Item {
     it.radiusTop = 0;
     it.radiusBottom = 0;
   }
-  if (kind === "navRail") it.tabs = defaultTabs();
+  if (kind === "navRail") {
+    it.tabs = defaultTabs();
+    it.railExpanded = false;
+  }
   if (kind === "tabs" || kind === "fabMenu" || kind === "select") it.tabs = defaultTabsFor(kind);
   if (kind === "toolbar") it.tabs = defaultTabsFor(kind).slice(0, 4);
   return it;
@@ -1644,7 +1670,7 @@ export function sizeOf(it: Item, widths: Record<string, number>) {
     case "box":
       return { w: n, h: it.size2 ?? s.h };
     case "navRail":
-      return { w: s.w, h: it.size2 ?? s.h };
+      return { w: railWidth(it), h: it.size2 ?? s.h };
     default:
       return { w: s.w, h: s.h };
   }
@@ -1667,8 +1693,9 @@ export function baseRadii(it: Item): Radii {
     }
     case "navRail": {
       /* a rail's corners are its left and right sides: radiusTop is the left pair, radiusBottom the right */
-      const l = it.radiusTop ?? 0;
-      const r = it.radiusBottom ?? 0;
+      const modalRadius = it.railExpanded && it.railModal ? 16 : 0;
+      const l = it.radiusTop ?? modalRadius;
+      const r = it.radiusBottom ?? modalRadius;
       return { tl: l, bl: l, tr: r, br: r };
     }
     case "fab":

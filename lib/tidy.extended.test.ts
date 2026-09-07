@@ -23,6 +23,7 @@ import {
   railSide,
   barSlotOf,
   carryFrame,
+  bodyRect,
 } from "./tidy";
 import {
   Frame,
@@ -228,6 +229,76 @@ describe("tidy idempotence", () => {
     const first = tidyFrame(groups, f, [f], widths)!;
     const second = tidyFrame(first, f, [f], widths);
     expect(second).toBeNull();
+  });
+});
+
+describe("expandable rail layout", () => {
+  const desk: Frame = { id: "wide", name: "Desktop", x: 40, y: 20, w: DESKTOP_W, h: DESKTOP_H };
+
+  it.each([
+    [undefined, undefined, 80, 80],
+    [false, false, 96, 96],
+    [true, false, 220, 220],
+    [false, true, 96, 96],
+    [true, true, 220, 96],
+  ] as const)("uses the rail's layout width for expanded=%s modal=%s", (railExpanded, railModal, visualWidth, layoutWidth) => {
+    for (const side of ["left", "right"] as const) {
+      const x = side === "left" ? desk.x + 4 : desk.x + DESKTOP_W - visualWidth - 4;
+      const rail = group("rail", x, desk.y + 8, [{ ...navRail("r"), railExpanded, railModal, size2: DESKTOP_H }]);
+      const slot = barSlotOf([rail], desk, [desk], widths);
+      expect(slot).toEqual({ x: desk.x + (side === "left" ? layoutWidth : 0), w: DESKTOP_W - layoutWidth });
+      const body = bodyRect([rail], desk, [desk], widths);
+      expect([body.l, body.r]).toEqual([slot.x + PHONE_MARGIN, slot.x + slot.w - PHONE_MARGIN]);
+      const bar = group("bar", desk.x + 300, desk.y + 60, [{ ...topBar("b"), size: slot.w }]);
+      const out = tidyFrame([rail, bar], desk, [desk], widths)!;
+      expect(out.find((g) => g.id === "rail")?.x).toBe(side === "left" ? desk.x : desk.x + DESKTOP_W - visualWidth);
+      expect(out.find((g) => g.id === "bar")?.x).toBe(slot.x);
+      expect(tidyFrame(out, desk, [desk], widths)).toBeNull();
+    }
+  });
+
+  it("sums mixed rail widths on both edges", () => {
+    const rails = [
+      group("left-wide", desk.x, desk.y, [{ ...navRail("l1"), railExpanded: true }]),
+      group("left-compact", desk.x + 230, desk.y, [{ ...navRail("l2"), railExpanded: false }]),
+      group("right-modal", desk.x + DESKTOP_W - 220, desk.y, [{ ...navRail("r"), railExpanded: true, railModal: true }]),
+    ];
+    expect(barSlotOf(rails, desk, [desk], widths)).toEqual({ x: desk.x + 316, w: DESKTOP_W - 412 });
+    const body = bodyRect(rails, desk, [desk], widths);
+    expect([body.l, body.r]).toEqual([desk.x + 316 + PHONE_MARGIN, desk.x + DESKTOP_W - 96 - PHONE_MARGIN]);
+    const out = tidyFrame(rails, desk, [desk], widths)!;
+    expect(out.find((g) => g.id === "left-compact")?.x).toBe(desk.x + 220);
+    expect(out.find((g) => g.id === "right-modal")?.x).toBe(desk.x + DESKTOP_W - 220);
+  });
+
+  it.each([false, true])("carries expanded rails and body-spanning bars when modal=%s", (railModal) => {
+    for (const side of ["left", "right"] as const) {
+      const layoutWidth = railModal ? 96 : 220;
+      const rail = group("rail", side === "left" ? desk.x : desk.x + DESKTOP_W - 220, desk.y, [{ ...navRail("r"), railExpanded: true, railModal, size2: DESKTOP_H }]);
+      const bar = group("bar", desk.x + (side === "left" ? layoutWidth : 0), desk.y, [{ ...topBar("b"), size: DESKTOP_W - layoutWidth }]);
+      const larger = { ...desk, w: 1440, h: 900 };
+      const out = carryFrame([rail, bar], desk, larger, [desk], widths).groups;
+      const movedRail = out.find((g) => g.id === "rail")!;
+      const movedBar = out.find((g) => g.id === "bar")!;
+      expect(movedRail.x).toBe(side === "left" ? desk.x : desk.x + 1440 - 220);
+      expect(movedRail.items[0].size2).toBe(900);
+      expect(movedBar.x).toBe(desk.x + (side === "left" ? layoutWidth : 0));
+      expect(movedBar.items[0].size).toBe(1440 - layoutWidth);
+    }
+  });
+
+  it.each([false, true])("restores an expanded rail through a phone round trip when modal=%s", (railModal) => {
+    const layoutWidth = railModal ? 96 : 220;
+    const rail = group("rail", desk.x, desk.y, [{ ...navRail("r"), railExpanded: true, railModal, size2: DESKTOP_H }]);
+    const bar = group("bar", desk.x + layoutWidth, desk.y, [{ ...topBar("b"), size: DESKTOP_W - layoutWidth }]);
+    const phone = { ...desk, w: PHONE_W, h: PHONE_H };
+    const compact = carryFrame([rail, bar], desk, phone, [desk], widths).groups;
+    expect(compact.find((g) => g.id === "rail")?.items[0].kind).toBe("bottomNav");
+    expect(compact.find((g) => g.id === "bar")?.items[0].size).toBe(PHONE_W);
+    const restored = carryFrame(compact, phone, desk, [phone], widths).groups;
+    expect(restored.find((g) => g.id === "rail")?.items[0]).toMatchObject({ kind: "navRail", railExpanded: true, railModal });
+    expect(restored.find((g) => g.id === "bar")?.items[0].size).toBe(DESKTOP_W - layoutWidth);
+    expect(restored.find((g) => g.id === "bar")?.x).toBe(desk.x + layoutWidth);
   });
 });
 
