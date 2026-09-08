@@ -490,16 +490,23 @@ function Body({ item, p }: { item: Item; p: Palette }) {
       const textAlign = cardTextAlignOf(item);
       const contentAlign = cardContentAlignOf(item);
       const justifyContent = { start: "flex-start", center: "center", end: "flex-end" }[contentAlign] as React.CSSProperties["justifyContent"];
+      const side = hasImage && (pos === "leading" || pos === "trailing");
       const picture = item.src ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={item.src} alt="" draggable={false} style={{ width: "100%", height: "100%", objectFit: cardImageFitOf(item), display: "block" }} />
       ) : (
         item.icon && <Icon name={item.icon} size={34} />
       );
+      const mediaRadius = padding > 0 ? scaleR(14) : 0;
+      const mediaCorners: React.CSSProperties = !side
+        ? { borderRadius: mediaRadius }
+        : pos === "leading"
+          ? { borderTopLeftRadius: mediaRadius, borderBottomLeftRadius: mediaRadius }
+          : { borderTopRightRadius: mediaRadius, borderBottomRightRadius: mediaRadius };
       const media = (style: React.CSSProperties) => (
         <div
           style={{
-            borderRadius: padding > 0 ? scaleR(14) : 0,
+            ...mediaCorners,
             background: p.primaryContainer,
             color: p.onPrimaryContainer,
             display: "grid",
@@ -514,8 +521,10 @@ function Body({ item, p }: { item: Item; p: Palette }) {
       );
       if (hasImage && pos === "background") {
         /* Full-bleed media behind the text. A photo carries M3's fixed image scrim so the
-         * text stays readable in either mode; the placeholder keeps its container pair. */
+         * text stays readable in either mode; an explicit fill colors the placeholder. */
         const overPhoto = !!item.src;
+        const placeholderBackground = item.fill ? p[item.fill] : p.primaryContainer;
+        const placeholderForeground = item.fill ? onToken(item.fill, p) : p.onPrimaryContainer;
         const scrim = contentAlign === "start"
           ? "linear-gradient(rgba(0,0,0,0.65), rgba(0,0,0,0) 60%)"
           : contentAlign === "center"
@@ -523,16 +532,16 @@ function Body({ item, p }: { item: Item; p: Palette }) {
             : "linear-gradient(rgba(0,0,0,0) 40%, rgba(0,0,0,0.65))";
         return (
           <div style={{ position: "relative", height: "100%", boxSizing: "border-box", display: "flex", flexDirection: "column", justifyContent }}>
-            <div style={{ position: "absolute", inset: 0, background: p.primaryContainer, color: p.onPrimaryContainer, display: "grid", placeItems: "center" }}>
+            <div style={{ position: "absolute", inset: 0, background: placeholderBackground, color: placeholderForeground, display: "grid", placeItems: "center" }}>
               {picture}
             </div>
             {overPhoto && <div style={{ position: "absolute", inset: 0, background: scrim }} />}
             <div style={{ position: "relative", padding, display: "flex", flexDirection: "column", gap, textAlign }}>
               {hasLabel && (
-                <div style={{ fontSize: 16, fontWeight: w(600, 700), color: overPhoto ? "#fff" : p.onPrimaryContainer, ...ellipsis }}>{item.label}</div>
+                <div style={{ fontSize: 16, fontWeight: w(600, 700), color: overPhoto ? "#fff" : placeholderForeground, ...ellipsis }}>{item.label}</div>
               )}
               {hasSupporting && (
-                <div style={{ fontSize: 13, lineHeight: 1.5, color: overPhoto ? "#fff" : p.onPrimaryContainer, opacity: 0.85, overflow: "hidden" }}>
+                <div style={{ fontSize: 13, lineHeight: 1.5, color: overPhoto ? "#fff" : placeholderForeground, opacity: 0.85, overflow: "hidden" }}>
                   {item.supporting}
                 </div>
               )}
@@ -541,7 +550,6 @@ function Body({ item, p }: { item: Item; p: Palette }) {
         );
       }
       /* top: the image band above the text; leading / trailing: a full-height column beside it */
-      const side = hasImage && (pos === "leading" || pos === "trailing");
       const text = (
         <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap, justifyContent, textAlign }}>
           {hasLabel && (

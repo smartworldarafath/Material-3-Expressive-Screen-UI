@@ -453,7 +453,7 @@ export function MobileInspector({
         <Row icon="palette" label={t("style", lang)} p={p}>
           <div className="no-scrollbar" style={{ display: "flex", gap: 6, overflowX: "auto", padding: "3px 3px 6px" }}>
             {variants.map((v) => (
-              <VariantSwatch key={v.key} v={v.key} label={v.label} p={p} on={item.variant === v.key} onClick={() => onChange(item.kind === "card" ? cardVariantPatch(v.key) : { variant: v.key })} />
+              <VariantSwatch key={v.key} v={v.key} label={v.label} p={p} on={item.variant === v.key} onClick={() => onChange(item.kind === "card" ? cardVariantPatch(item, v.key) : { variant: v.key })} />
             ))}
           </div>
         </Row>

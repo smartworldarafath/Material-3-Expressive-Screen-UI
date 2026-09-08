@@ -1219,7 +1219,7 @@ export function Inspector({
                 label={v.label}
                 p={p}
                 on={shown.variant === v.key}
-                onClick={() => change(item.kind === "card" && !editOn ? cardVariantPatch(v.key) : { variant: v.key })}
+                onClick={() => change(item.kind === "card" && !editOn ? cardVariantPatch(item, v.key) : { variant: v.key })}
               />
             ))}
           </div>

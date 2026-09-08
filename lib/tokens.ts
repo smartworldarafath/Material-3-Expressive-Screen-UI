@@ -1327,8 +1327,10 @@ export const COLOR_TOKENS: { key: ColorToken; label: string }[] = [
 export const cardDefaultFillOf = (variant: Variant): ColorToken =>
   variant === "outlined" ? "surface" : variant === "elevated" ? "surfaceContainerLow" : "surfaceContainerHighest";
 export const cardFillOf = (it: Item): ColorToken => it.fill ?? cardDefaultFillOf(it.variant);
-/** choosing a card variant restores its canonical container role; a later swatch choice is an explicit override */
-export const cardVariantPatch = (variant: Variant): Pick<Item, "variant" | "fill"> => ({ variant, fill: undefined });
+/** choosing a different card variant restores its canonical container role; reselecting
+ *  the active variant is a no-op so it does not erase an explicit color override */
+export const cardVariantPatch = (it: Item, variant: Variant): Pick<Item, "variant"> & Partial<Pick<Item, "fill">> =>
+  variant === it.variant ? { variant } : { variant, fill: undefined };
 
 /** where a card's image area sits; sketches saved before placement existed stay on top */
 export type CardImagePos = "top" | "leading" | "trailing" | "background";
@@ -1357,16 +1359,16 @@ export const cardGapOf = (it: Item): number =>
 
 /** default width of a card's side image column (an M3 horizontal-card thumbnail) */
 export const CARD_SIDE_IMAGE_W = 80;
-/** the image area's extent in dp: the author's value, else 28% of the card's width
+/** the image area's extent in dp: the author's value, else 28% of the padded content width
  *  on top or the standard column on a side; a background image fills the card */
 export function cardImageSizeOf(it: Item): number {
+  const paddedWidth = Math.max(1, (it.size ?? KIND_SPEC.card.defSize ?? KIND_SPEC.card.w) - cardPaddingOf(it) * 2);
   if (cardImagePosOf(it) === "top" && it.imageRatio) {
-    const width = (it.size ?? KIND_SPEC.card.defSize ?? KIND_SPEC.card.w) - cardPaddingOf(it) * 2;
-    return Math.max(1, Math.round(width / CARD_IMAGE_RATIOS[it.imageRatio]));
+    return Math.max(1, Math.round(paddedWidth / CARD_IMAGE_RATIOS[it.imageRatio]));
   }
   if (it.imageSize !== undefined) return it.imageSize;
   if (cardImagePosOf(it) !== "top") return CARD_SIDE_IMAGE_W;
-  return Math.round((it.size ?? KIND_SPEC.card.defSize ?? KIND_SPEC.card.w) * 0.28);
+  return Math.round(paddedWidth * 0.28);
 }
 
 export function onToken(t: ColorToken, p: Palette): string {

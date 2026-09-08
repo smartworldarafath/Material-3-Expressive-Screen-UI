@@ -137,8 +137,29 @@ describe("card image placement", () => {
       zh: ["宽高比 16:9", "完整显示、不裁剪", "内边距 20dp", "元素间距 6dp", "内容垂直居中对齐", "文字右对齐"],
       ko: ["가로세로 비율 16:9", "자르지 않고 전체 표시", "안쪽 여백 20dp", "요소 간격 6dp", "콘텐츠 가운데 정렬", "텍스트 오른쪽 정렬"],
     };
-    const layout = cardLayout(lang, { imageRatio: "16:9", imageFit: "contain", cardPadding: 20, cardGap: 6, contentAlign: "center", textAlign: "end" });
+    const layout = cardLayout(lang, { src: "https://example.com/card.jpg", imageRatio: "16:9", imageFit: "contain", cardPadding: 20, cardGap: 6, contentAlign: "center", textAlign: "end" });
     for (const phrase of expected[lang]) expect(layout).toContain(phrase);
+  });
+
+  it.each(LANGS)("states the default center-crop behavior for a real image in %s", (lang) => {
+    const crop: Record<Lang, string> = {
+      ja: "領域を埋めるよう切り抜き",
+      en: "center-cropped to fill its area",
+      zh: "居中裁剪以填满区域",
+      ko: "영역을 채우도록 가운데 자르기",
+    };
+    expect(cardLayout(lang, { src: "https://example.com/card.jpg" })).toContain(crop[lang]);
+  });
+
+  it.each(LANGS)("requests a background scrim for a real image but not a placeholder in %s", (lang) => {
+    const scrim: Record<Lang, string> = {
+      ja: "テキストの下にスクリム",
+      en: "add a scrim for legibility",
+      zh: "文字下方加渐变遮罩",
+      ko: "텍스트 아래 스크림",
+    };
+    expect(cardLayout(lang, { imagePos: "background", src: "https://example.com/card.jpg" })).toContain(scrim[lang]);
+    expect(cardLayout(lang, { imagePos: "background" })).not.toContain(scrim[lang]);
   });
 
   it.each(LANGS)("stays silent about the image area when it is turned off in %s", (lang) => {

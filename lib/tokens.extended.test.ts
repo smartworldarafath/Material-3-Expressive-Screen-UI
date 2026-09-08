@@ -363,7 +363,9 @@ describe("card image placement helpers", () => {
     expect(cardDefaultFillOf("outlined")).toBe("surface");
     expect(cardFillOf({ ...makeItem("card"), variant: "elevated" })).toBe("surfaceContainerLow");
     expect(cardFillOf({ ...makeItem("card"), variant: "outlined", fill: "primaryContainer" })).toBe("primaryContainer");
-    expect(cardVariantPatch("outlined")).toEqual({ variant: "outlined", fill: undefined });
+    const card = { ...makeItem("card"), variant: "outlined" as const, fill: "primaryContainer" as const };
+    expect(cardVariantPatch(card, "outlined")).toEqual({ variant: "outlined" });
+    expect(cardVariantPatch(card, "elevated")).toEqual({ variant: "elevated", fill: undefined });
   });
 
   it("accepts exactly the four placements", () => {
@@ -378,8 +380,9 @@ describe("card image placement helpers", () => {
 
   it("defaults the top image to 28% of the card's width and a side column to the standard width", () => {
     const card = makeItem("card");
-    expect(cardImageSizeOf(card)).toBe(Math.round(CONTENT_W * 0.28));
-    expect(cardImageSizeOf({ ...card, size: 200 })).toBe(Math.round(200 * 0.28));
+    expect(cardImageSizeOf(card)).toBe(Math.round((CONTENT_W - CARD_PADDING * 2) * 0.28));
+    expect(cardImageSizeOf({ ...card, size: 200 })).toBe(Math.round((200 - CARD_PADDING * 2) * 0.28));
+    expect(cardImageSizeOf({ ...card, size: 200, cardPadding: 24 })).toBe(Math.round((200 - 48) * 0.28));
     expect(cardImageSizeOf({ ...card, imagePos: "leading" })).toBe(CARD_SIDE_IMAGE_W);
     expect(cardImageSizeOf({ ...card, imagePos: "trailing" })).toBe(CARD_SIDE_IMAGE_W);
   });
