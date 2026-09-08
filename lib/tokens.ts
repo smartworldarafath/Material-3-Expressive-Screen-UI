@@ -1,6 +1,6 @@
 import type { CSSProperties } from "react";
 import { FAB_MENU_TABS, KIND_TEXT, Lang, NAV_TABS, TAB_LABELS, getLang, t, SELECT_OPTIONS } from "./i18n";
-import { Contrast, schemeFromSeed } from "./color";
+import { Contrast, isLightColor, schemeFromSeed } from "./color";
 
 /* ---------- geometry ---------- */
 export const H = 56; // M3 medium button height (dp)
@@ -1182,16 +1182,10 @@ export type Item = {
   imagePos?: CardImagePos;
   /** cards: the image area's size in dp — its height on top, its width at a side; a background image fills the card */
   imageSize?: number;
-  /** cards: a top image can follow a standard aspect ratio instead of a fixed height */
-  imageRatio?: CardImageRatio;
-  /** cards: how a source image fills its media area */
-  imageFit?: CardImageFit;
-  /** cards: inner padding and the gap between media, headline and supporting text */
-  cardPadding?: number;
-  cardGap?: number;
-  /** cards: vertical position of the content block and horizontal alignment of its text */
+  /** cards: where the text block sits vertically; unset means the top, or the bottom over a background image */
   contentAlign?: CardAlign;
-  textAlign?: CardAlign;
+  /** cards: a color role for the headline and body instead of the automatic one */
+  textColor?: TextToken;
   /** on/off state for switches, checkboxes and chips */
   checked?: boolean;
   /** a switch whose handle stays plain when on, without the check icon */
@@ -1327,46 +1321,86 @@ export const COLOR_TOKENS: { key: ColorToken; label: string }[] = [
 export const cardDefaultFillOf = (variant: Variant): ColorToken =>
   variant === "outlined" ? "surface" : variant === "elevated" ? "surfaceContainerLow" : "surfaceContainerHighest";
 export const cardFillOf = (it: Item): ColorToken => it.fill ?? cardDefaultFillOf(it.variant);
-/** choosing a card variant restores its canonical container role; a later swatch choice is an explicit override */
-export const cardVariantPatch = (variant: Variant): Pick<Item, "variant" | "fill"> => ({ variant, fill: undefined });
 
 /** where a card's image area sits; sketches saved before placement existed stay on top */
 export type CardImagePos = "top" | "leading" | "trailing" | "background";
 export const isCardImagePos = (v: unknown): v is CardImagePos => v === "top" || v === "leading" || v === "trailing" || v === "background";
 export const cardImagePosOf = (it: Item): CardImagePos => it.imagePos ?? "top";
 
-export type CardImageRatio = "16:9" | "4:3" | "1:1";
-export const isCardImageRatio = (v: unknown): v is CardImageRatio => v === "16:9" || v === "4:3" || v === "1:1";
-const CARD_IMAGE_RATIOS: Record<CardImageRatio, number> = { "16:9": 16 / 9, "4:3": 4 / 3, "1:1": 1 };
-
-export type CardImageFit = "cover" | "contain";
-export const isCardImageFit = (v: unknown): v is CardImageFit => v === "cover" || v === "contain";
-export const cardImageFitOf = (it: Item): CardImageFit => it.imageFit ?? "cover";
+/** the five card layouts the editor offers: the placements plus "no image", as one choice */
+export type CardLayout = CardImagePos | "none";
+export const cardLayoutOf = (it: Item): CardLayout => (it.noImage ? "none" : cardImagePosOf(it));
+/** the fields a layout choice sets; the top layout is the unset default so old sketches stay untouched */
+export const cardLayoutPatch = (layout: CardLayout): Pick<Item, "noImage" | "imagePos"> =>
+  layout === "none" ? { noImage: true, imagePos: undefined } : { noImage: undefined, imagePos: layout === "top" ? undefined : layout };
 
 export type CardAlign = "start" | "center" | "end";
 export const isCardAlign = (v: unknown): v is CardAlign => v === "start" || v === "center" || v === "end";
-export const cardContentAlignOf = (it: Item): CardAlign => it.contentAlign ?? "start";
-export const cardTextAlignOf = (it: Item): CardAlign => it.textAlign ?? "start";
+/** the text block's vertical position: the top, or the bottom when it lies over a background image */
+export const cardContentAlignOf = (it: Item): CardAlign => it.contentAlign ?? (!it.noImage && cardImagePosOf(it) === "background" ? "end" : "start");
 
-export const CARD_PADDING = 12;
-export const CARD_GAP = 8;
-export const CARD_SIDE_GAP = 12;
-export const cardPaddingOf = (it: Item): number => it.cardPadding ?? CARD_PADDING;
-export const cardGapOf = (it: Item): number =>
-  it.cardGap ?? (cardImagePosOf(it) === "leading" || cardImagePosOf(it) === "trailing" ? CARD_SIDE_GAP : CARD_GAP);
+/** the color roles a card's text may be set to; "on" roles pair with the containers offered as backgrounds */
+export type TextToken = "primary" | "secondary" | "onSurface" | "onSurfaceVariant" | "onPrimaryContainer" | "onSecondaryContainer" | "onTertiaryContainer" | "inverseOnSurface";
+export const TEXT_TOKENS: { key: TextToken; label: string }[] = [
+  { key: "onSurface", label: "On surface" },
+  { key: "onSurfaceVariant", label: "On surface variant" },
+  { key: "primary", label: "Primary" },
+  { key: "secondary", label: "Secondary" },
+  { key: "onPrimaryContainer", label: "On primary container" },
+  { key: "onSecondaryContainer", label: "On secondary container" },
+  { key: "onTertiaryContainer", label: "On tertiary container" },
+  { key: "inverseOnSurface", label: "Inverse on surface" },
+];
+export const isTextToken = (v: unknown): v is TextToken => TEXT_TOKENS.some((t) => t.key === v);
+/** the card's text color: the chosen role, else white over a photo, the container's
+ *  "on" color over a placeholder background or a chosen fill, and onSurface otherwise */
+export function cardTextColorOf(it: Item, p: Palette): string {
+  if (it.textColor) return p[it.textColor];
+  if (!it.noImage && cardImagePosOf(it) === "background") return it.src ? "#ffffff" : p.onPrimaryContainer;
+  return it.fill ? onToken(it.fill, p) : p.onSurface;
+}
+/** the body's color: a plain card keeps M3's onSurfaceVariant at full opacity; anything
+ *  colored, filled or over an image reuses the headline color at reduced opacity */
+export function cardBodyColorOf(it: Item, p: Palette): { color: string; opacity: number } {
+  const plain = !it.textColor && !it.fill && (it.noImage || cardImagePosOf(it) !== "background");
+  return plain ? { color: p.onSurfaceVariant, opacity: 1 } : { color: cardTextColorOf(it, p), opacity: 0.8 };
+}
+/** the scrim under text on a photo: it fades in from the text's side, dark under light
+ *  text and light under dark text, so the words stay readable either way */
+export function cardScrimOf(ink: string, align: CardAlign): string {
+  const c = isLightColor(ink) ? "0,0,0" : "255,255,255";
+  const a = isLightColor(ink) ? 0.65 : 0.72;
+  if (align === "start") return `linear-gradient(rgba(${c},${a}), rgba(${c},0) 60%)`;
+  if (align === "center") return `rgba(${c},${a * 0.65})`;
+  return `linear-gradient(rgba(${c},0) 40%, rgba(${c},${a}))`;
+}
+
+/* Card spacing is fixed: content sits 20dp from the edge, the headline and body are
+ * 4dp apart, and the image area keeps 12dp from the text. */
+export const CARD_PADDING = 20;
+export const CARD_TEXT_GAP = 4;
+export const CARD_MEDIA_GAP = 12;
 
 /** default width of a card's side image column (an M3 horizontal-card thumbnail) */
 export const CARD_SIDE_IMAGE_W = 80;
+/** the least room an image must leave the text: one headline and one body line tall, or a readable column wide */
+const CARD_MIN_TEXT_H = 48;
+const CARD_MIN_TEXT_W = 96;
+/** the smallest image area the editor offers */
+export const CARD_IMAGE_MIN = 40;
+/** the largest the image area can be inside this card without pushing its text out:
+ *  a top band is bounded by the drawn height, a side column by the drawn width */
+export function cardImageMaxOf(it: Item): number {
+  const { w, h } = sizeOf(it, {});
+  const room = cardImagePosOf(it) === "top" ? h - CARD_MIN_TEXT_H : w - CARD_MIN_TEXT_W;
+  return Math.max(CARD_IMAGE_MIN, room - CARD_PADDING * 2 - CARD_MEDIA_GAP);
+}
 /** the image area's extent in dp: the author's value, else 28% of the card's width
- *  on top or the standard column on a side; a background image fills the card */
+ *  on top or the standard column on a side, never beyond cardImageMaxOf */
 export function cardImageSizeOf(it: Item): number {
-  if (cardImagePosOf(it) === "top" && it.imageRatio) {
-    const width = (it.size ?? KIND_SPEC.card.defSize ?? KIND_SPEC.card.w) - cardPaddingOf(it) * 2;
-    return Math.max(1, Math.round(width / CARD_IMAGE_RATIOS[it.imageRatio]));
-  }
-  if (it.imageSize !== undefined) return it.imageSize;
-  if (cardImagePosOf(it) !== "top") return CARD_SIDE_IMAGE_W;
-  return Math.round((it.size ?? KIND_SPEC.card.defSize ?? KIND_SPEC.card.w) * 0.28);
+  const top = cardImagePosOf(it) === "top";
+  const size = it.imageSize ?? (top ? Math.round((it.size ?? KIND_SPEC.card.defSize ?? KIND_SPEC.card.w) * 0.28) : CARD_SIDE_IMAGE_W);
+  return Math.min(size, cardImageMaxOf(it));
 }
 
 export function onToken(t: ColorToken, p: Palette): string {
@@ -1784,10 +1818,12 @@ export function baseRadii(it: Item): Radii {
     case "circularProgress":
     case "loadingIndicator":
       return uniformRadii((it.size ?? 48) / 2);
+    case "card":
+      if (it.corners) return { ...it.corners };
+    // falls through
     case "image":
     case "camera":
     case "map":
-    case "card":
       return uniformRadii(it.radiusTop ?? scaleR(s.radius));
     case "badge":
     case "radio":

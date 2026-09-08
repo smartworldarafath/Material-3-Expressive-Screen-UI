@@ -184,12 +184,16 @@ export function onColorFor(hex: string): string {
 
 export const isHex = (v: string) => /^#[0-9a-f]{6}$/i.test(v.trim());
 
+/** WCAG relative luminance of an opaque sRGB color, 0 (black) to 1 (white) */
+export function luminance(hex: string): number {
+  const [r, g, b] = (hexToRgb(hex) ?? [0, 0, 0]).map(lin);
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+/** whether a color reads as light, i.e. wants a dark backdrop behind it */
+export const isLightColor = (hex: string) => luminance(hex) > 0.35;
+
 /** WCAG relative luminance contrast for two opaque sRGB colors. */
 export function contrastRatio(a: string, b: string): number {
-  const luminance = (hex: string) => {
-    const [r, g, b] = (hexToRgb(hex) ?? [0, 0, 0]).map(lin);
-    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
-  };
   const x = luminance(a);
   const y = luminance(b);
   return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);

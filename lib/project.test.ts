@@ -87,12 +87,8 @@ describe("isProject", () => {
       kind: "card",
       imagePos: "trailing",
       imageSize: 96,
-      imageRatio: "16:9",
-      imageFit: "contain",
-      cardPadding: 0,
-      cardGap: 12,
       contentAlign: "center",
-      textAlign: "end",
+      textColor: "primary",
     }))).toBe(true);
   });
 
@@ -104,8 +100,7 @@ describe("isProject", () => {
     { corners: { tl: "0", tr: 0, bl: 0, br: 0 } }, { corners: { tl: 0, tr: 0, bl: 0, br: Infinity } },
     { tabs: null }, { tabs: {} }, { tabs: [null] }, { tabs: [{ icon: "home" }] },
     { tabs: [{ label: 1 }] }, { tabs: [{ label: "Home", icon: 1 }] },
-    { imagePos: "bottom" }, { imageSize: 0 }, { imageSize: NaN }, { imageRatio: "3:2" }, { imageFit: "stretch" },
-    { cardPadding: -1 }, { cardPadding: Infinity }, { cardGap: -1 }, { contentAlign: "top" }, { textAlign: "left" },
+    { imagePos: "bottom" }, { imageSize: 0 }, { imageSize: NaN }, { contentAlign: "top" }, { textColor: "pink" },
   ])("rejects invalid item fields %# %o", (patch) => {
     expect(isProject(withItem(patch))).toBe(false);
   });

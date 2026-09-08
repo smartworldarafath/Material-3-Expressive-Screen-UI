@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  COLOR_TOKEN_TEXT, FAB_MENU_TABS, KIND_TEXT, KO, LANGS, NAV_TABS, SEED_TEXT,
+  COLOR_TOKEN_TEXT, FAB_MENU_TABS, KIND_TEXT, KO, LANGS, NAV_TABS, SEED_TEXT, TEXT_TOKEN_TEXT,
   SWIPE_TEXT, TAB_LABELS, TRANSITION_TEXT, UI, t, type UIKey,
 } from "./i18n";
 import { KIND_ORDER, LANG_FONT, SWIPE_DIRS, TRANSITIONS } from "./tokens";
@@ -95,6 +95,11 @@ describe("dictionary coverage of editor tokens", () => {
     for (const [lang, labels] of Object.entries(COLOR_TOKEN_TEXT)) {
       expect(sortedKeys(labels), lang).toEqual(sortedKeys(COLOR_TOKEN_TEXT.ja));
       nonemptyStrings(labels, `COLOR_TOKEN_TEXT.${lang}`);
+    }
+    expect(sortedKeys(TEXT_TOKEN_TEXT)).toEqual(languages.filter((lang) => lang !== "en").sort());
+    for (const [lang, labels] of Object.entries(TEXT_TOKEN_TEXT)) {
+      expect(sortedKeys(labels), lang).toEqual(sortedKeys(TEXT_TOKEN_TEXT.ja));
+      nonemptyStrings(labels, `TEXT_TOKEN_TEXT.${lang}`);
     }
   });
 

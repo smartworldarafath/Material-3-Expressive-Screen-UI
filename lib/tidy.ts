@@ -340,7 +340,7 @@ function evenCorners(groups: Map<string, Group>): boolean {
   const cards: { g: Group; it: Item; r: number }[] = [];
   for (const g of groups.values())
     for (const it of g.items) {
-      if (it.kind === "card" && it.radiusTop !== undefined) cards.push({ g, it, r: it.radiusTop });
+      if (it.kind === "card" && !it.corners && it.radiusTop !== undefined) cards.push({ g, it, r: it.radiusTop });
       else if (it.kind === "box" && !it.corners && (it.radiusTop ?? 0) === (it.radiusBottom ?? 0)) boxes.push({ g, it, r: it.radiusTop ?? 0 });
     }
   let changed = false;

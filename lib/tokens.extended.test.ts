@@ -50,21 +50,24 @@ import {
   defaultPlatformOf,
   isPlatform,
   makeItem,
-  cardContentAlignOf,
   cardDefaultFillOf,
   cardFillOf,
-  cardGapOf,
-  cardImageFitOf,
+  cardContentAlignOf,
+  cardImageMaxOf,
+  cardScrimOf,
+  cardTextColorOf,
+  isCardAlign,
+  isTextToken,
   cardImagePosOf,
   cardImageSizeOf,
-  cardPaddingOf,
-  cardTextAlignOf,
-  cardVariantPatch,
-  isCardAlign,
-  isCardImageFit,
+  cardLayoutOf,
+  cardLayoutPatch,
+  CARD_IMAGE_MIN,
+  sizeOf,
   isCardImagePos,
-  isCardImageRatio,
-  CARD_GAP,
+  paletteOf,
+  DEFAULT_THEME,
+  CARD_MEDIA_GAP,
   CARD_PADDING,
   CARD_SIDE_IMAGE_W,
   Frame,
@@ -363,7 +366,6 @@ describe("card image placement helpers", () => {
     expect(cardDefaultFillOf("outlined")).toBe("surface");
     expect(cardFillOf({ ...makeItem("card"), variant: "elevated" })).toBe("surfaceContainerLow");
     expect(cardFillOf({ ...makeItem("card"), variant: "outlined", fill: "primaryContainer" })).toBe("primaryContainer");
-    expect(cardVariantPatch("outlined")).toEqual({ variant: "outlined", fill: undefined });
   });
 
   it("accepts exactly the four placements", () => {
@@ -379,7 +381,8 @@ describe("card image placement helpers", () => {
   it("defaults the top image to 28% of the card's width and a side column to the standard width", () => {
     const card = makeItem("card");
     expect(cardImageSizeOf(card)).toBe(Math.round(CONTENT_W * 0.28));
-    expect(cardImageSizeOf({ ...card, size: 200 })).toBe(Math.round(200 * 0.28));
+    // a narrow unsized card is short too, so its default band is clamped to what fits
+    expect(cardImageSizeOf({ ...card, size: 200 })).toBe(Math.min(Math.round(200 * 0.28), cardImageMaxOf({ ...card, size: 200 })));
     expect(cardImageSizeOf({ ...card, imagePos: "leading" })).toBe(CARD_SIDE_IMAGE_W);
     expect(cardImageSizeOf({ ...card, imagePos: "trailing" })).toBe(CARD_SIDE_IMAGE_W);
   });
@@ -390,34 +393,55 @@ describe("card image placement helpers", () => {
     expect(cardImageSizeOf({ ...card, imagePos: "leading" })).toBe(120);
   });
 
-  it("derives top media height from its aspect ratio and the padded content width", () => {
-    const card = { ...makeItem("card"), size: 320, imageRatio: "16:9" as const };
-    expect(cardImageSizeOf(card)).toBe(Math.round((320 - CARD_PADDING * 2) / (16 / 9)));
-    expect(cardImageSizeOf({ ...card, cardPadding: 0, imageRatio: "1:1" })).toBe(320);
+  it("never lets an image push the text out of the card", () => {
+    const card = { ...makeItem("card"), imageSize: 320 };
+    // the bound follows the drawn height, which an unsized card takes from its width
+    const drawnH = sizeOf(card, {}).h;
+    expect(cardImageSizeOf(card)).toBe(cardImageMaxOf(card));
+    expect(cardImageMaxOf(card)).toBe(drawnH - CARD_PADDING * 2 - CARD_MEDIA_GAP - 48);
+    expect(cardImageSizeOf({ ...card, size2: 420 })).toBe(320);
+    // a side column is bounded by the card's width, leaving a readable text column
+    const drawnW = sizeOf(card, {}).w;
+    expect(cardImageSizeOf({ ...card, imagePos: "leading" })).toBe(drawnW - CARD_PADDING * 2 - CARD_MEDIA_GAP - 96);
+    expect(cardImageSizeOf({ ...card, imagePos: "trailing", imageSize: 80 })).toBe(80);
+    // the smallest card still reports the floor rather than a negative bound
+    expect(cardImageMaxOf({ ...card, size: 160, size2: 96 })).toBe(CARD_IMAGE_MIN);
   });
 
-  it("recognizes image ratios and fit modes", () => {
-    for (const ratio of ["16:9", "4:3", "1:1"]) expect(isCardImageRatio(ratio)).toBe(true);
-    for (const fit of ["cover", "contain"]) expect(isCardImageFit(fit)).toBe(true);
-    expect(isCardImageRatio("3:2")).toBe(false);
-    expect(isCardImageFit("fill")).toBe(false);
-  });
-
-  it("keeps the legacy card spacing and alignment unless the author changes it", () => {
-    const card = makeItem("card");
-    expect(cardPaddingOf(card)).toBe(CARD_PADDING);
-    expect(cardGapOf(card)).toBe(CARD_GAP);
-    expect(cardImageFitOf(card)).toBe("cover");
-    expect(cardContentAlignOf(card)).toBe("start");
-    expect(cardTextAlignOf(card)).toBe("start");
-    expect(cardGapOf({ ...card, imagePos: "leading" })).toBe(12);
-    expect(cardPaddingOf({ ...card, cardPadding: 24 })).toBe(24);
-    expect(cardGapOf({ ...card, cardGap: 0 })).toBe(0);
-  });
-
-  it("accepts exactly the three card alignments", () => {
+  it("puts the text at the top, or at the bottom over a background image, until told otherwise", () => {
+    expect(cardContentAlignOf(makeItem("card"))).toBe("start");
+    expect(cardContentAlignOf({ ...makeItem("card"), imagePos: "background" })).toBe("end");
+    expect(cardContentAlignOf({ ...makeItem("card"), imagePos: "background", noImage: true })).toBe("start");
+    expect(cardContentAlignOf({ ...makeItem("card"), contentAlign: "center" })).toBe("center");
     for (const align of ["start", "center", "end"]) expect(isCardAlign(align)).toBe(true);
     for (const bad of ["left", "top", "", null]) expect(isCardAlign(bad)).toBe(false);
+  });
+
+  it("colors the text from its role, else from where it sits", () => {
+    const p = paletteOf("purple", undefined, DEFAULT_THEME);
+    const card = makeItem("card");
+    expect(cardTextColorOf(card, p)).toBe(p.onSurface);
+    expect(cardTextColorOf({ ...card, fill: "primary" }, p)).toBe(p.onPrimary);
+    expect(cardTextColorOf({ ...card, imagePos: "background" }, p)).toBe(p.onPrimaryContainer);
+    expect(cardTextColorOf({ ...card, imagePos: "background", src: "data:x" }, p)).toBe("#ffffff");
+    expect(cardTextColorOf({ ...card, imagePos: "background", src: "data:x", textColor: "primary" }, p)).toBe(p.primary);
+    expect(isTextToken("primary")).toBe(true);
+    expect(isTextToken("surface")).toBe(false);
+  });
+
+  it("fades a dark scrim under light text and a light one under dark text, from the text's side", () => {
+    expect(cardScrimOf("#ffffff", "end")).toMatch(/^linear-gradient\(rgba\(0,0,0,0\) 40%/);
+    expect(cardScrimOf("#1a1a1a", "start")).toMatch(/^linear-gradient\(rgba\(255,255,255,0\.72\)/);
+    expect(cardScrimOf("#ffffff", "center")).toMatch(/^rgba\(0,0,0,/);
+  });
+
+  it("folds the image switch and its placement into one layout choice", () => {
+    expect(cardLayoutOf(makeItem("card"))).toBe("top");
+    expect(cardLayoutOf({ ...makeItem("card"), noImage: true, imagePos: "leading" })).toBe("none");
+    expect(cardLayoutOf({ ...makeItem("card"), imagePos: "background" })).toBe("background");
+    expect(cardLayoutPatch("top")).toEqual({ noImage: undefined, imagePos: undefined });
+    expect(cardLayoutPatch("trailing")).toEqual({ noImage: undefined, imagePos: "trailing" });
+    expect(cardLayoutPatch("none")).toEqual({ noImage: true, imagePos: undefined });
   });
 });
 

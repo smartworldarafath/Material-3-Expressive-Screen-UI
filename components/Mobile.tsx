@@ -2,43 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { motion, useDragControls } from "motion/react";
-import {
-  CONTRASTS,
-  CardAlign,
-  CardImageFit,
-  CardImagePos,
-  CardImageRatio,
-  Contrast,
-  FONTS,
-  Item,
-  KIND_SPEC,
-  NavTab,
-  PALETTES,
-  Palette,
-  SHAPES,
-  ShapeScale,
-  Theme,
-  cardContentAlignOf,
-  cardDefaultFillOf,
-  cardFillOf,
-  cardGapOf,
-  cardImageFitOf,
-  cardImagePosOf,
-  cardImageSizeOf,
-  cardPaddingOf,
-  cardTextAlignOf,
-  cardVariantPatch,
-  defaultTabsFor,
-  iconSlotsOf,
-  onToken,
-  setIconSlot,
-} from "@/lib/tokens";
+import { CONTRASTS, Contrast, FONTS, Item, KIND_SPEC, NavTab, PALETTES, Palette, SHAPES, ShapeScale, Theme, defaultTabsFor, iconSlotsOf, setIconSlot } from "@/lib/tokens";
 import { ensureFontLoaded } from "@/lib/theme";
 import { KIND_TEXT, LANGS, Lang, t, useLang } from "@/lib/i18n";
 import { IconPicker } from "./IconPicker";
 import { Icon } from "./M3Node";
 import { VariantSwatch, variantsOf } from "./Inspector";
-import { Field, IconBtn, Segmented, SizePresets, Slider, Toggle, TokenChips } from "./ui";
+import { Field, IconBtn, Segmented, Toggle } from "./ui";
 
 /** Sheet that slides up from the bottom edge; the canvas above stays usable.
  *  Dragging the handle moves the sheet with the finger; a flick or a long pull closes it. */
@@ -209,117 +179,6 @@ export function MobileInspector({
         </Row>
       )}
 
-      {item.kind === "card" && (
-        <>
-          <Row icon="image" label={t("image", lang)} p={p}>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              <Toggle on={!item.noImage} onChange={(on) => onChange({ noImage: on ? undefined : true })} p={p} icon="image" label={t("imageArea", lang)} grow />
-              {!item.noImage && (
-                <>
-                  <div style={{ fontSize: 12, fontWeight: 600, color: p.onSurfaceVariant }}>{t("imagePosition", lang)}</div>
-                  <div role="radiogroup" aria-label={t("imagePosition", lang)} style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
-                    {([
-                      { key: "top", icon: "vertical_align_top", label: t("imageTop", lang) },
-                      { key: "leading", icon: "align_horizontal_left", label: t("imageLeading", lang) },
-                      { key: "trailing", icon: "align_horizontal_right", label: t("imageTrailing", lang) },
-                      { key: "background", icon: "wallpaper", label: t("background", lang) },
-                    ] satisfies { key: CardImagePos; icon: string; label: string }[]).map((option) => {
-                      const on = cardImagePosOf(item) === option.key;
-                      return (
-                        <button
-                          key={option.key}
-                          type="button"
-                          role="radio"
-                          aria-checked={on}
-                          onClick={() => onChange({ imagePos: option.key === "top" ? undefined : option.key })}
-                          className="m3-press"
-                          style={{ height: 42, border: "none", borderRadius: 14, background: on ? p.primary : p.surfaceContainerHigh, color: on ? p.onPrimary : p.onSurfaceVariant, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, cursor: "pointer", fontSize: 13, fontWeight: 600 }}
-                        >
-                          <Icon name={option.icon} size={20} fill={on} />
-                          {option.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  {cardImagePosOf(item) === "top" && (
-                    <>
-                      <div style={{ fontSize: 12, fontWeight: 600, color: p.onSurfaceVariant }}>{t("aspectRatio", lang)}</div>
-                      <Segmented<"custom" | CardImageRatio>
-                        options={[
-                          { key: "custom", label: t("customSize", lang) },
-                          { key: "16:9", label: "16:9" },
-                          { key: "4:3", label: "4:3" },
-                          { key: "1:1", label: "1:1" },
-                        ]}
-                        value={item.imageRatio ?? "custom"}
-                        onChange={(imageRatio) => onChange({ imageRatio: imageRatio === "custom" ? undefined : imageRatio })}
-                        p={p}
-                        height={38}
-                      />
-                    </>
-                  )}
-                  {cardImagePosOf(item) !== "background" && !(cardImagePosOf(item) === "top" && item.imageRatio) && (
-                    <Slider
-                      icon={cardImagePosOf(item) === "top" ? "height" : "width"}
-                      title={t(cardImagePosOf(item) === "top" ? "height" : "width", lang)}
-                      value={cardImageSizeOf(item)}
-                      min={40}
-                      max={320}
-                      step={4}
-                      onChange={(imageSize) => onChange({ imageSize, imageRatio: undefined })}
-                      p={p}
-                    />
-                  )}
-                  <div style={{ fontSize: 12, fontWeight: 600, color: p.onSurfaceVariant }}>{t("imageFit", lang)}</div>
-                  <Segmented<CardImageFit>
-                    options={[
-                      { key: "cover", icon: "crop", label: t("imageCrop", lang) },
-                      { key: "contain", icon: "fit_screen", label: t("imageContain", lang) },
-                    ]}
-                    value={cardImageFitOf(item)}
-                    onChange={(imageFit) => onChange({ imageFit: imageFit === "cover" ? undefined : imageFit })}
-                    p={p}
-                    height={40}
-                  />
-                </>
-              )}
-            </div>
-          </Row>
-          <Row icon="dashboard" label={t("cardLayout", lang)} p={p}>
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              <Slider icon="padding" title={t("padding", lang)} value={cardPaddingOf(item)} min={0} max={32} step={1} onChange={(cardPadding) => onChange({ cardPadding })} p={p} />
-              <SizePresets values={[0, 8, 12, 16, 24]} value={cardPaddingOf(item)} min={0} max={32} onChange={(cardPadding) => onChange({ cardPadding })} p={p} />
-              <Slider icon="space_bar" title={t("spacing", lang)} value={cardGapOf(item)} min={0} max={24} step={1} onChange={(cardGap) => onChange({ cardGap })} p={p} />
-              <SizePresets values={[0, 4, 8, 12, 16, 24]} value={cardGapOf(item)} min={0} max={24} onChange={(cardGap) => onChange({ cardGap })} p={p} />
-              <div style={{ fontSize: 12, fontWeight: 600, color: p.onSurfaceVariant }}>{t("contentPosition", lang)}</div>
-              <Segmented<CardAlign>
-                options={[
-                  { key: "start", icon: "vertical_align_top", label: t("imageTop", lang) },
-                  { key: "center", icon: "vertical_align_center", label: t("placeCenter", lang) },
-                  { key: "end", icon: "vertical_align_bottom", label: t("bottom", lang) },
-                ]}
-                value={cardContentAlignOf(item)}
-                onChange={(contentAlign) => onChange({ contentAlign: contentAlign === "start" ? undefined : contentAlign })}
-                p={p}
-                height={40}
-              />
-              <div style={{ fontSize: 12, fontWeight: 600, color: p.onSurfaceVariant }}>{t("textAlignment", lang)}</div>
-              <Segmented<CardAlign>
-                options={[
-                  { key: "start", icon: "format_align_left", title: t("alignLeft", lang) },
-                  { key: "center", icon: "format_align_center", title: t("alignCenterH", lang) },
-                  { key: "end", icon: "format_align_right", title: t("alignRight", lang) },
-                ]}
-                value={cardTextAlignOf(item)}
-                onChange={(textAlign) => onChange({ textAlign: textAlign === "start" ? undefined : textAlign })}
-                p={p}
-                height={40}
-              />
-            </div>
-          </Row>
-        </>
-      )}
-
       {spec.hasTabs && (
         <Row icon={isSelect ? "list" : "view_column"} label={t(isSelect ? "options" : "tabs", lang)} p={p}>
           {!isSelect && (
@@ -453,26 +312,9 @@ export function MobileInspector({
         <Row icon="palette" label={t("style", lang)} p={p}>
           <div className="no-scrollbar" style={{ display: "flex", gap: 6, overflowX: "auto", padding: "3px 3px 6px" }}>
             {variants.map((v) => (
-              <VariantSwatch key={v.key} v={v.key} label={v.label} p={p} on={item.variant === v.key} onClick={() => onChange(item.kind === "card" ? cardVariantPatch(v.key) : { variant: v.key })} />
+              <VariantSwatch key={v.key} v={v.key} label={v.label} p={p} on={item.variant === v.key} onClick={() => onChange({ variant: v.key })} />
             ))}
           </div>
-        </Row>
-      )}
-
-      {item.kind === "card" && (
-        <Row icon="format_color_fill" label={t("background", lang)} p={p}>
-          <TokenChips
-            value={cardFillOf(item)}
-            onChange={(fill) => onChange({ fill })}
-            p={p}
-            none
-            noneOn={!item.fill}
-            onNone={() => onChange({ fill: undefined })}
-            noneColor={p[cardDefaultFillOf(item.variant)]}
-            noneTextColor={onToken(cardDefaultFillOf(item.variant), p)}
-            noneIcon="restart_alt"
-            noneLabel={t("variantDefault", lang)}
-          />
         </Row>
       )}
 
