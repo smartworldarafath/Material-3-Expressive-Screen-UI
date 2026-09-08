@@ -96,6 +96,11 @@ describe("complete on the openai-compatible path", () => {
     await expect(complete(settings(), "s", "u")).rejects.toThrow("long");
   });
 
+  it("throws the status and provider detail on an http error", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ error: { message: "bad key" } }), { status: 401, statusText: "Unauthorized" })));
+    await expect(complete(settings(), "s", "u")).rejects.toThrow("401 Unauthorized: bad key");
+  });
+
   it("throws empty when the reply has no content", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({ choices: [{ finish_reason: "stop", message: {} }] })));
     await expect(complete(settings(), "s", "u")).rejects.toThrow("empty");
