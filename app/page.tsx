@@ -458,6 +458,8 @@ export default function Page() {
   widthsRef.current = widths;
   const viewRef = useRef(view);
   viewRef.current = view;
+  const previewIdRef = useRef(previewId);
+  previewIdRef.current = previewId;
   const leftOpenRef = useRef(leftOpen);
   leftOpenRef.current = leftOpen;
   const leftWRef = useRef(leftW);
@@ -595,8 +597,18 @@ export default function Page() {
   /** Puts a stored or opened document into the editor. Fields a partial document
    *  leaves out keep their current value, or go back to the default when `reset`. */
   const applyDoc = (doc: Partial<Doc>, reset: boolean) => {
-    setPreviewId(null);
-    viewBeforePreview.current = null;
+    // A document can arrive during the opening glide, before previewId is set. The
+    // screen the glide was heading for belongs to the replaced document, so the pending
+    // opening is dropped and the camera returns; an open preview simply closes.
+    if (previewTimer.current !== null) abandonPreview();
+    else {
+      /* a return still on its way would drag the camera off the new document's fit */
+      cancelReturn();
+      if (previewIdRef.current !== null) {
+        setPreviewId(null);
+        viewBeforePreview.current = null;
+      }
+    }
     const frames = Array.isArray(doc.frames) ? doc.frames : framesRef.current;
     if (Array.isArray(doc.groups)) setGroups(migrateGroups(doc.groups, frames));
     if (Array.isArray(doc.frames)) setFrames(doc.frames);
@@ -2668,6 +2680,18 @@ export default function Page() {
 
   /** the view before the preview opened, restored when it closes */
   const viewBeforePreview = useRef<View | null>(null);
+  /** the opening scheduled after the glide, while it is still pending */
+  const previewTimer = useRef<number | null>(null);
+  /** the camera's return scheduled after a close, with the view it is heading back to */
+  const returnTimer = useRef<{ id: number; view: View } | null>(null);
+  const cancelReturn = () => {
+    if (returnTimer.current !== null) window.clearTimeout(returnTimer.current.id);
+    returnTimer.current = null;
+  };
+  useEffect(() => () => {
+    if (previewTimer.current !== null) window.clearTimeout(previewTimer.current);
+    if (returnTimer.current !== null) window.clearTimeout(returnTimer.current.id);
+  }, []);
   /** the camera glides for a moment: a screen is brought to the center before the
    *  preview opens over it, and the view returns once the preview closes */
   const glide = (v: View) => {
@@ -2694,19 +2718,42 @@ export default function Page() {
         const z = clamp(Math.min(1.4, (window.innerHeight - 32) / maxH, (window.innerWidth - (wide ? 236 : 16)) / maxW), MIN_Z, MAX_Z);
         const cx = (window.innerWidth - (wide ? 220 : 0)) / 2 - r.left;
         const cy = window.innerHeight / 2 - (wide ? 0 : 28) - r.top;
-        viewBeforePreview.current = viewRef.current;
+        /* reopening while the camera is still returning keeps the view it was returning
+         * to; reopening during the opening glide keeps the view already captured */
+        if (returnTimer.current !== null) {
+          viewBeforePreview.current = returnTimer.current.view;
+          cancelReturn();
+        } else if (previewTimer.current === null) {
+          viewBeforePreview.current = viewRef.current;
+        }
         glide({ x: cx - (f.x + w / 2) * z, y: cy - (f.y + h / 2) * z, z });
-        window.setTimeout(() => setPreviewId(id), SETTLE_MS);
+        if (previewTimer.current !== null) window.clearTimeout(previewTimer.current);
+        previewTimer.current = window.setTimeout(() => {
+          previewTimer.current = null;
+          /* the screen may have gone while the camera moved: an undo can remove it */
+          if (framesRef.current.some((x) => x.id === id)) setPreviewId(id);
+          else abandonPreview();
+        }, SETTLE_MS);
       } else {
         setPreviewId(id);
       }
     });
   };
+  /** Gives up an opening that has not happened yet and brings the camera straight back. */
+  const abandonPreview = () => {
+    if (previewTimer.current !== null) window.clearTimeout(previewTimer.current);
+    previewTimer.current = null;
+    cancelReturn();
+    const back = viewBeforePreview.current;
+    viewBeforePreview.current = null;
+    if (back) glide(back);
+  };
   const closePreview = () => {
     setPreviewId(null);
     const back = viewBeforePreview.current;
     viewBeforePreview.current = null;
-    if (back) window.setTimeout(() => glide(back), 220);
+    cancelReturn();
+    if (back) returnTimer.current = { id: window.setTimeout(() => { returnTimer.current = null; glide(back); }, 220), view: back };
   };
 
   useEffect(() => {
@@ -3184,8 +3231,9 @@ export default function Page() {
     <ThemeContext.Provider value={theme}>
       <div
         className={revealing ? "app-root m3e-reveal" : "app-root"}
-        inert={editAccess !== "editable"}
-        aria-hidden={editAccess !== "editable"}
+        /* the preview sits outside this tree and owns the keyboard while it is up */
+        inert={editAccess !== "editable" || previewId !== null}
+        aria-hidden={editAccess !== "editable" || previewId !== null}
         style={{
           display: "flex",
           overflow: "hidden",
@@ -4098,20 +4146,20 @@ export default function Page() {
           onCancel={() => setConfirmClear(false)}
           onConfirm={clearAll}
         />
-
-        <AnimatePresence>
-          {previewId !== null && frames.length > 0 && (
-            <Preview
-              key="preview"
-              doc={doc}
-              widths={widths}
-              palette={p}
-              startId={previewId}
-              onClose={closePreview}
-            />
-          )}
-        </AnimatePresence>
       </div>
+
+      <AnimatePresence>
+        {previewId !== null && frames.length > 0 && (
+          <Preview
+            key="preview"
+            doc={doc}
+            widths={widths}
+            palette={p}
+            startId={previewId}
+            onClose={closePreview}
+          />
+        )}
+      </AnimatePresence>
 
       {editAccess === "readonly" && (
         <div

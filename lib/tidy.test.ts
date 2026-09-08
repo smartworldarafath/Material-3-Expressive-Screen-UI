@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { tidyFrame } from "./tidy";
-import { Frame, Group, Item, Kind, NAV_BAR_H, PHONE_H, PHONE_MARGIN, PHONE_W, makeItem } from "./tokens";
+import { Frame, Group, Item, Kind, NAV_BAR_H, PHONE_H, PHONE_MARGIN, PHONE_W, groupBounds, makeItem } from "./tokens";
 
 const frame: Frame = { id: "f1", name: "Home", x: 0, y: 0 };
 const frames = [frame];
@@ -134,7 +134,7 @@ describe("tidyFrame with locked groups", () => {
     expect(find(out, "g-lock")).toEqual(run);
   });
 
-  it("still tidies the unlocked groups as if the locked one were not there", () => {
+  it("still tidies the unlocked groups, unchanged by a locked one that stands clear of them", () => {
     const mixed = tidyFrame([lockedRun(), neighbour(), buttons()], frame, frames, {})!;
     const solo = tidyFrame([neighbour(), buttons()], frame, frames, {})!;
     for (const id of ["g-nb", "g-btns"]) expect(find(mixed, id)).toEqual(find(solo, id));
@@ -153,5 +153,59 @@ describe("tidyFrame with locked groups", () => {
   it("yields no change when every group on the screen is locked", () => {
     const other = { ...grp("g-other", 60, 300, [part("listItem", "o1")]), locked: true };
     expect(tidyFrame([lockedRun(), other], frame, frames, {})).toBeNull();
+  });
+
+  /* Locked sections keep the room they stand in: the rest is laid out around them,
+   * never on top of them. */
+  const bounds = (g: Group) => groupBounds(g, {});
+  const overlaps = (a: Group, b: Group) => {
+    const ra = bounds(a);
+    const rb = bounds(b);
+    return Math.min(ra.r, rb.r) > Math.max(ra.l, rb.l) && Math.min(ra.b, rb.b) > Math.max(ra.t, rb.t);
+  };
+
+  it("starts the body below a locked app bar instead of flowing over it", () => {
+    const bar = { ...grp("g-bar", 0, 0, [part("topAppBar", "bar")]), locked: true };
+    const card = grp("g-card", 40, 400, [part("card", "c1")]);
+    const out = tidyFrame([bar, card], frame, frames, {})!;
+    expect(find(out, "g-bar")).toEqual(bar);
+    expect(find(out, "g-card").y).toBe(bounds(bar).b + PHONE_MARGIN);
+    expect(overlaps(find(out, "g-bar"), find(out, "g-card"))).toBe(false);
+  });
+
+  it("stacks an unlocked bar beyond a locked one at the same edge", () => {
+    const bar = { ...grp("g-bar", 0, 0, [part("topAppBar", "bar")]), locked: true };
+    const tabs = grp("g-tabs", 30, 300, [part("tabs", "tabs")]);
+    const out = tidyFrame([bar, tabs], frame, frames, {})!;
+    expect([find(out, "g-tabs").x, find(out, "g-tabs").y]).toEqual([0, bounds(bar).b]);
+  });
+
+  it("keeps the body to the right of a locked navigation rail", () => {
+    const rail = { ...grp("g-rail", 0, 0, [part("navRail", "rail")]), locked: true };
+    const card = grp("g-card", 10, 200, [part("card", "c1")]);
+    const out = tidyFrame([rail, card], frame, frames, {})!;
+    expect(find(out, "g-rail")).toEqual(rail);
+    expect(find(out, "g-card").x).toBe(bounds(rail).r + PHONE_MARGIN);
+    expect(overlaps(find(out, "g-rail"), find(out, "g-card"))).toBe(false);
+  });
+
+  it("flows the rows around a locked section in the body", () => {
+    const fixed = { ...grp("g-fixed", 16, 200, [part("card", "c0")]), locked: true };
+    const above = grp("g-a", 60, 40, [part("listItem", "l1")]);
+    const below = grp("g-b", 60, 600, [part("listItem", "l2")]);
+    const out = tidyFrame([fixed, above, below], frame, frames, {})!;
+    expect(find(out, "g-fixed")).toEqual(fixed);
+    for (const id of ["g-a", "g-b"]) expect(overlaps(find(out, "g-fixed"), find(out, id))).toBe(false);
+    /* the row that fit above stays above; the one that did not goes under the section */
+    expect(bounds(find(out, "g-a")).b).toBeLessThanOrEqual(bounds(fixed).t);
+    expect(bounds(find(out, "g-b")).t).toBeGreaterThanOrEqual(bounds(fixed).b);
+  });
+
+  it("keeps a FAB and the body above a locked navigation bar", () => {
+    const nav = { ...grp("g-nav", 0, PHONE_H - 80, [part("bottomNav", "nav")]), locked: true };
+    const fab = grp("g-fab", 40, 100, [part("fab", "fab")]);
+    const out = tidyFrame([nav, fab], frame, frames, {})!;
+    expect(find(out, "g-nav")).toEqual(nav);
+    expect(bounds(find(out, "g-fab")).b).toBeLessThanOrEqual(bounds(nav).t - PHONE_MARGIN);
   });
 });

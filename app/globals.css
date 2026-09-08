@@ -161,12 +161,6 @@ input.m3-number {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  [data-rail-motion] *,
-  [data-rail-motion] [data-wide-rail],
-  [data-rail-motion] [data-wide-rail] *,
-  [data-rail-motion] .m3-rail-hit {
-    transition: none !important;
-  }
   .m3-press,
   .m3-tile {
     transition: none;
