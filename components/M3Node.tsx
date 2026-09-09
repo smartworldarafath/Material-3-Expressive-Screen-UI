@@ -36,6 +36,9 @@ import {
   RAIL_GAP,
   isWideRail,
   railMetrics,
+  isScrollableTabs,
+  tabScrollOffset,
+  SCROLL_TAB_W,
 } from "@/lib/tokens";
 import { CircularProgress, LinearProgress, LoadingIndicator } from "./Loading";
 import { t, useLang } from "@/lib/i18n";
@@ -405,7 +408,7 @@ export function MeasuredContent({ item, p }: { item: Item; p: Palette }) {
   }
 }
 
-function Body({ item, p }: { item: Item; p: Palette }) {
+function Body({ item, p, tabScroll }: { item: Item; p: Palette; tabScroll?: number }) {
   const lang = useLang();
   const w = useWeight();
   const hasLabel = item.label.trim().length > 0;
@@ -1158,15 +1161,19 @@ function Body({ item, p }: { item: Item; p: Palette }) {
 
     case "tabs": {
       const tabs = item.tabs ?? [];
+      const scroll = isScrollableTabs(item);
+      const offset = tabScroll ?? tabScrollOffset(item, sizeOf(item, {}).w);
       return (
-        <div style={{ display: "flex", alignItems: "stretch", height: "100%", position: "relative" }}>
+        <div style={{ display: "flex", alignItems: "stretch", height: "100%", position: "relative", overflow: "hidden" }}>
           {tabs.map((tab, i) => {
             const on = i === Math.min(item.selected ?? 0, Math.max(0, tabs.length - 1));
             return (
               <div
                 key={i}
                 style={{
-                  flex: 1,
+                  flex: scroll ? "none" : 1,
+                  width: scroll ? SCROLL_TAB_W : undefined,
+                  marginLeft: scroll && i === 0 ? -offset : undefined,
                   minWidth: 0,
                   display: "flex",
                   flexDirection: "column",
@@ -1319,6 +1326,7 @@ export function M3Node({
   selected,
   interactive = true,
   onPointerDown,
+  tabScroll,
 }: {
   item: Item;
   palette: Palette;
@@ -1329,6 +1337,8 @@ export function M3Node({
   selected?: boolean;
   interactive?: boolean;
   onPointerDown?: (e: React.PointerEvent) => void;
+  /** how far a scrollable tab row is scrolled in the preview; the canvas uses the resting position */
+  tabScroll?: number;
 }) {
   const reducedMotion = useReducedMotion();
   const instantRail = reducedMotion && item.kind === "navRail" && isWideRail(item);
@@ -1378,7 +1388,7 @@ export function M3Node({
         flex: "0 0 auto",
       }}
     >
-      <Body item={item} p={palette} />
+      <Body item={item} p={palette} tabScroll={tabScroll} />
     </motion.div>
   );
 }

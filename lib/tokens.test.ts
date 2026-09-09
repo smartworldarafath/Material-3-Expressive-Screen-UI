@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 
-import { DEFAULT_THEME, R_FULL, baseRadii, makeItem, normalizeTheme, railLayoutWidth, railMetrics, runCorners, scaleR, setGlobalShape, sizeOf } from "./tokens";
+import { DEFAULT_THEME, R_FULL, baseRadii, makeItem, normalizeTheme, railLayoutWidth, railMetrics, runCorners, scaleR, setGlobalShape, sizeOf, isScrollableTabs, tabScrollOffset, removeTabPatch, tabCountPatch, SCROLL_TAB_W, type Item } from "./tokens";
 
 afterEach(() => setGlobalShape("rounded")); // restore the module default
 
@@ -94,5 +94,39 @@ describe("normalizeTheme", () => {
     expect(t.contrast).toBe(DEFAULT_THEME.contrast);
     expect(t.font).toBe(DEFAULT_THEME.font);
     expect(t.shape).toBe(DEFAULT_THEME.shape);
+  });
+});
+
+describe("scrollable tab rows", () => {
+  const row = (n: number, selected?: number): Item => ({ ...makeItem("tabs"), tabs: Array.from({ length: n }, (_, i) => ({ label: `T${i + 1}`, icon: "" })), selected });
+
+  it("keeps up to five tabs fixed and lets six or more scroll when they do not fit", () => {
+    expect(isScrollableTabs(row(5))).toBe(false);
+    expect(isScrollableTabs(row(6))).toBe(true);
+    expect(isScrollableTabs({ ...row(6), size: 1280 })).toBe(false);
+    expect(isScrollableTabs({ ...makeItem("bottomNav"), tabs: row(6).tabs })).toBe(false);
+    expect(tabScrollOffset(row(5, 4), 412)).toBe(0);
+    expect(tabScrollOffset(row(0), 412)).toBe(0);
+    expect(tabScrollOffset(row(7), 412)).toBe(0);
+    expect(tabScrollOffset(row(7, 99), 412)).toBe(7 * SCROLL_TAB_W - 412);
+  });
+
+  it("keeps the selection and the per-tab tap targets on their tabs when one is removed", () => {
+    const go = (to: string) => ({ to, transition: "slide" as const });
+    const it7 = { ...row(7, 3), actions: { "tab:1": go("a"), "tab:3": go("b"), "tab:6": go("c") } };
+    expect(removeTabPatch(it7, 1)).toEqual({ tabs: it7.tabs!.filter((_, j) => j !== 1), selected: 2, actions: { "tab:2": go("b"), "tab:5": go("c") } });
+    expect(removeTabPatch(it7, 3).selected).toBe(3);
+    expect(removeTabPatch(it7, 3).actions).toEqual({ "tab:1": go("a"), "tab:5": go("c") });
+    expect(removeTabPatch(row(2, 1), 1).selected).toBe(0);
+    expect(removeTabPatch({ ...makeItem("select"), tabs: row(3).tabs, selected: 1 }, 1).selected).toBeUndefined();
+    expect(tabCountPatch(it7, 4, [{ label: "x", icon: "" }])).toMatchObject({ selected: 3, actions: { "tab:1": go("a"), "tab:3": go("b") } });
+    expect(tabCountPatch(it7, 4, [{ label: "x", icon: "" }]).tabs).toHaveLength(4);
+  });
+
+  it("shifts the row only as far as the selected tab needs, never past the end", () => {
+    expect(tabScrollOffset(row(7, 0), 412)).toBe(0);
+    expect(tabScrollOffset(row(7, 4), 412)).toBe(5.5 * SCROLL_TAB_W - 412);
+    expect(tabScrollOffset(row(7, 6), 412)).toBe(7 * SCROLL_TAB_W - 412);
+    expect(tabScrollOffset(row(7, 6), 1280)).toBe(0);
   });
 });

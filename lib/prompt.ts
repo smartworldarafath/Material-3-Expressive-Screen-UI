@@ -31,6 +31,7 @@ import {
   paletteOf,
   railWidth,
   progressThickness,
+  isScrollableTabs,
 } from "./tokens";
 
 const VARIANT_TEXT: Record<Lang, Record<Variant, string>> = {
@@ -222,7 +223,7 @@ function itemJa(it: Item): string {
     }
     case "tabs": {
       const labels = (it.tabs ?? []).map((t) => q(t.label || "ラベルなし"));
-      return `${labels.join("、")}の ${labels.length} つのタブ（${selectedText(it, "ja")}）`;
+      return `${labels.join("、")}の ${labels.length} つのタブ（${selectedText(it, "ja")}${isScrollableTabs(it) ? "、横にスクロールするタブ" : ""}）`;
     }
     case "radio":
       return `${q(it.label)}のラジオボタン（初期状態は${it.checked ? "選択" : "未選択"}）`;
@@ -313,7 +314,7 @@ function itemEn(it: Item): string {
     }
     case "tabs": {
       const labels = (it.tabs ?? []).map((t) => q(t.label || "unlabeled"));
-      return `a tab row with ${labels.length} tabs: ${labels.join(", ")}; ${selectedText(it, "en")}`;
+      return `a ${isScrollableTabs(it) ? "horizontally scrolling " : ""}tab row with ${labels.length} tabs: ${labels.join(", ")}; ${selectedText(it, "en")}`;
     }
     case "radio":
       return `a radio button ${q(it.label)} (initially ${it.checked ? "selected" : "unselected"})`;
@@ -404,7 +405,7 @@ function itemZh(it: Item): string {
     }
     case "tabs": {
       const labels = (it.tabs ?? []).map((t) => q(t.label || "无标签"));
-      return `${labels.join("、")}这 ${labels.length} 个标签页（${selectedText(it, "zh")}）`;
+      return `${labels.join("、")}这 ${labels.length} 个标签页（${selectedText(it, "zh")}${isScrollableTabs(it) ? "，可横向滚动" : ""}）`;
     }
     case "radio":
       return `${q(it.label)}单选按钮（初始状态为${it.checked ? "选中" : "未选中"}）`;
@@ -471,7 +472,7 @@ function itemKo(it: Item): string {
     }
     case "tabs": {
       const labels = (it.tabs ?? []).map((t) => q(t.label || "레이블 없음"));
-      return `${labels.join(", ")}의 탭 ${labels.length}개(${selectedText(it, "ko")})`;
+      return `${labels.join(", ")}의 탭 ${labels.length}개(${selectedText(it, "ko")}${isScrollableTabs(it) ? ", 가로로 스크롤되는 탭" : ""})`;
     }
     case "radio": return `${q(it.label)} 라디오 버튼(초기 상태 ${it.checked ? "선택됨" : "선택 안 됨"})`;
     case "badge": return hasText(it.label) ? `${q(it.label)}을 표시하는 배지` : "작은 점 배지";

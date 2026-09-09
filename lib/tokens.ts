@@ -1835,6 +1835,66 @@ export function baseRadii(it: Item): Radii {
 }
 
 export const FAB_MENU_ITEM_H = 56;
+
+/** a tab row fits up to this many fixed tabs; more become M3 scrollable tabs */
+export const FIXED_TABS_MAX = 5;
+/** width of one scrollable tab; M3 asks for at least 90dp */
+export const SCROLL_TAB_W = 96;
+
+/** a tab row scrolls once it holds more tabs than M3 fixes in place and they would not fit its width */
+export const isScrollableTabs = (it: Item) => {
+  const n = it.tabs?.length ?? 0;
+  return it.kind === "tabs" && n > FIXED_TABS_MAX && n * SCROLL_TAB_W > sizeOf(it, {}).w;
+};
+
+/** per-tab tap targets renumbered after the tab list changed; `to(j)` gives the old index j its new one, or nothing */
+function remapTabActions(actions: Item["actions"], to: (j: number) => number | undefined): Item["actions"] {
+  if (!actions) return undefined;
+  const next: NonNullable<Item["actions"]> = {};
+  for (const [key, a] of Object.entries(actions)) {
+    const m = /^tab:(\d+)$/.exec(key);
+    if (!m) {
+      next[key] = a;
+      continue;
+    }
+    const j = to(Number(m[1]));
+    if (j !== undefined) next[`tab:${j}`] = a;
+  }
+  return Object.keys(next).length ? next : undefined;
+}
+
+/** the patch that drops entry i: later entries, the selected index and the tap targets move up one; a
+ *  dropdown may end with no initial value, a bar or tab row keeps the entry that takes the removed one's place */
+export function removeTabPatch(it: Item, i: number): Pick<Item, "tabs" | "selected" | "actions"> {
+  const tabs = (it.tabs ?? []).filter((_, j) => j !== i);
+  const sel = it.selected;
+  const last = Math.max(0, tabs.length - 1);
+  const selected =
+    sel === undefined ? undefined : sel > i ? sel - 1 : sel < i ? sel : it.kind === "select" ? undefined : Math.min(i, last);
+  return { tabs, selected, actions: remapTabActions(it.actions, (j) => (j === i ? undefined : j > i ? j - 1 : j)) };
+}
+
+/** the patch that sets the entry count: extra entries come from the defaults, and the tap targets of dropped entries go */
+export function tabCountPatch(it: Item, n: number, defaults: NavTab[]): Pick<Item, "tabs" | "selected" | "actions"> {
+  const cur = it.tabs ?? [];
+  const tabs: NavTab[] = [];
+  for (let i = 0; i < n; i++) tabs.push(cur[i] ? { ...cur[i] } : { ...defaults[i % defaults.length] });
+  return {
+    tabs,
+    selected: it.selected !== undefined && it.selected >= n ? undefined : it.selected,
+    actions: remapTabActions(it.actions, (j) => (j < n ? j : undefined)),
+  };
+}
+
+/** how far a scrollable tab row is shifted left so the selected tab is in view with half of the
+ *  next one peeking in; the drawing and the preview's hit areas share it, so a tap lands on the tab that is shown */
+export function tabScrollOffset(it: Item, width: number): number {
+  if (!isScrollableTabs(it)) return 0;
+  const n = it.tabs?.length ?? 0;
+  const sel = Math.min(it.selected ?? 0, Math.max(0, n - 1));
+  const max = Math.max(0, n * SCROLL_TAB_W - width);
+  return Math.max(0, Math.min(max, (sel + 1.5) * SCROLL_TAB_W - width));
+}
 export const FAB_MENU_GAP = 8;
 /** a toolbar hugs its icon buttons: 48dp each with 4dp between, 8dp at the ends */
 export const toolbarWidth = (it: Item) => {

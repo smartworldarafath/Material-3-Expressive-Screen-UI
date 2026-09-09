@@ -181,7 +181,7 @@ export function MobileInspector({
 
       {spec.hasTabs && (
         <Row icon={isSelect ? "list" : "view_column"} label={t(isSelect ? "options" : "tabs", lang)} p={p}>
-          {!isSelect && (
+          {!isSelect && item.kind !== "tabs" && (
             <Segmented
               options={(item.kind === "toolbar" ? [2, 3, 4, 5, 6] : [2, 3, 4, 5]).map((n) => ({ key: String(n), label: String(n) }))}
               value={String(tabs.length)}

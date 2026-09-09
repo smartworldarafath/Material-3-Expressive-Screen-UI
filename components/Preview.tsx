@@ -38,6 +38,9 @@ import {
   isWideRail,
   railMetrics,
   sizeOf,
+  isScrollableTabs,
+  tabScrollOffset,
+  SCROLL_TAB_W,
 } from "@/lib/tokens";
 import { Icon, M3Node } from "./M3Node";
 import { IconBtn } from "./ui";
@@ -173,6 +176,48 @@ function Tappable({
   const [pressed, setPressed] = useState(false);
   const [hot, setHot] = useState<string | null>(null);
   const menu = !!menuOpen;
+  /* a tab row with more tabs than fit scrolls: by wheel, touch, or dragging the row; a chosen tab is brought into view */
+  const scrollTabs = isScrollableTabs(item);
+  const rowW = sizeOf(item, widths).w;
+  const [tabScroll, setTabScroll] = useState(() => tabScrollOffset(item, rowW));
+  const scrollRef = useRef<HTMLDivElement>(null);
+  /** the click that ends a drag of the row must not pick a tab */
+  const swallowClick = useRef(false);
+  const settled = useRef(false);
+  const tabCount = item.tabs?.length ?? 0;
+  const restOffset = tabScrollOffset(item, rowW);
+  /* the row is brought to the chosen tab only when the choice or the row itself changes, not on every
+     render of the screen, so a position the visitor scrolled to by hand stays */
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!scrollTabs || !el) return;
+    el.scrollTo({ left: restOffset, behavior: settled.current ? "smooth" : "auto" });
+    settled.current = true;
+  }, [scrollTabs, item.id, item.selected, tabCount, restOffset]);
+  /** a mouse or pen drags the row; touch pans it natively, so it is left to the browser */
+  const dragRow = (e: React.PointerEvent<HTMLDivElement>) => {
+    swallowClick.current = false;
+    if (e.pointerType === "touch" || e.button !== 0) return;
+    const el = e.currentTarget;
+    const x0 = e.clientX;
+    const left0 = el.scrollLeft;
+    let moved = false;
+    const move = (ev: PointerEvent) => {
+      const dx = ev.clientX - x0;
+      if (Math.abs(dx) > 4) moved = true;
+      if (moved) el.scrollLeft = left0 - dx;
+    };
+    const end = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", end);
+      window.removeEventListener("pointercancel", end);
+      swallowClick.current = moved;
+      if (moved) setHot(null);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", end);
+    window.addEventListener("pointercancel", end);
+  };
   const live = !!onTap || !!onPick || (TAPPABLE.includes(item.kind) && item.kind !== "text");
   const ref = useRef<HTMLDivElement>(null);
 
@@ -207,7 +252,11 @@ function Tappable({
     if (item.icon) slots.push({ key: "icon", style: { left: 4, top: inset + 8, width: 48, height: 48, borderRadius: 24 } });
     if (item.icon2) slots.push({ key: "icon2", style: { right: 4, top: inset + 8, width: 48, height: 48, borderRadius: 24 } });
   }
-  if (onSlot && (item.kind === "bottomNav" || item.kind === "tabs")) {
+  if (onSlot && scrollTabs) {
+    /* hit areas sit inside the scrolling layer, one per tab, so they move with the row */
+    const n = item.tabs?.length ?? 0;
+    for (let i = 0; i < n; i++) slots.push({ key: `tab:${i}`, style: { left: i * SCROLL_TAB_W, width: SCROLL_TAB_W, top: 0, bottom: 0, borderRadius: 16 } });
+  } else if (onSlot && (item.kind === "bottomNav" || item.kind === "tabs")) {
     const n = item.tabs?.length ?? 0;
     for (let i = 0; i < n; i++)
       slots.push({ key: `tab:${i}`, style: { left: `${(i / n) * 100}%`, width: `${100 / n}%`, top: 0, bottom: item.kind === "bottomNav" ? NAV_BAR_H : 0, borderRadius: 16 } });
@@ -250,9 +299,9 @@ function Tappable({
       onPointerCancel={() => setPressed(false)}
       onPointerLeave={() => !onValue && setPressed(false)}
       onClick={onPick ? () => onMenu?.(!menu) : onTap}
-      style={{ cursor: live || onValue ? "pointer" : "default", display: "flex", position: "relative", touchAction: "none" }}
+      style={{ cursor: live || onValue ? "pointer" : "default", display: "flex", position: "relative", touchAction: scrollTabs ? "pan-x" : "none" }}
     >
-      <M3Node item={item} palette={p} widths={widths} radii={radii} interactive={false} pressed={pressed && !onValue} />
+      <M3Node item={item} palette={p} widths={widths} radii={radii} interactive={false} pressed={pressed && !onValue} tabScroll={scrollTabs ? tabScroll : undefined} />
       {live && (
         <motion.div
           aria-hidden
@@ -271,7 +320,8 @@ function Tappable({
           }}
         />
       )}
-      {slots.map((s) => {
+      {(() => {
+      const slotNodes = slots.map((s) => {
         const Slot = onRailToggle ? "button" : "div";
         return <Slot
           key={s.key}
@@ -304,7 +354,28 @@ function Tappable({
             ...s.style,
           }}
         />;
-      })}
+      });
+      if (!scrollTabs) return slotNodes;
+      const n = item.tabs?.length ?? 0;
+      return (
+        <div
+          ref={scrollRef}
+          className="m3-hidden-scrollbar"
+          onScroll={(e) => setTabScroll(e.currentTarget.scrollLeft)}
+          onPointerDownCapture={dragRow}
+          onClickCapture={(e) => {
+            if (swallowClick.current) {
+              e.stopPropagation();
+              e.preventDefault();
+            }
+            swallowClick.current = false;
+          }}
+          style={{ position: "absolute", inset: 0, overflowX: "auto", overflowY: "hidden", touchAction: "pan-x", cursor: "grab" }}
+        >
+          <div style={{ position: "relative", width: n * SCROLL_TAB_W, height: "100%" }}>{slotNodes}</div>
+        </div>
+      );
+      })()}
       {onPick && menu && (
         /* the dropdown's menu, under the field: surfaceContainer, 48dp items, the chosen one tinted */
         <div

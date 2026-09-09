@@ -43,6 +43,13 @@ body {
   font-variation-settings: "FILL" 1, "wght" 400, "GRAD" 0, "opsz" 24;
 }
 
+.m3-hidden-scrollbar {
+  scrollbar-width: none;
+}
+.m3-hidden-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
 .no-scrollbar {
   scrollbar-width: thin;
   scrollbar-color: var(--sb, #d6cfe0) transparent;

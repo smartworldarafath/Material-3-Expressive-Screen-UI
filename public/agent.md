@@ -101,7 +101,7 @@ Sizes are in dp; `size` is the width unless noted. Content width inside the phon
 | `topAppBar` | top app bar | `label` title, `icon` leading, `icon2` trailing, `actions` with keys `icon` / `icon2` | 412 × 88, at the top |
 | `bottomNav` | navigation bar | `tabs` (3–5 of `{icon,label}`), `selected` index, `actions` with keys `tab:0`… | 412 × 104, at the bottom |
 | `navRail` | navigation rail (desktop) | `tabs`, `selected`, `railExpanded` false / true for M3 Expressive collapsed / expanded, `railModal` for modal expansion, `size2` height | 96 collapsed / 220 expanded; omit both rail fields for the original 80-wide rail |
-| `tabs` | tab row | `tabs`, `selected` | 412 × 48 |
+| `tabs` | tab row | `tabs` (any count; six or more scroll horizontally), `selected` | 412 × 48 |
 | `searchBar` | search bar | `label` placeholder, `icon2` trailing | 380 × 56 |
 | `button` | button | `label`, `icon`, `variant`, `action`, `toggle`, `size` width (omit for text-sized; 380 fills the content width, 182 is half) | text-sized × 56 |
 | `iconButton` | icon button | `icon`, `variant`, `action` | 48 × 48 |

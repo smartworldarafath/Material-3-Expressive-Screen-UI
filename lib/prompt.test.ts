@@ -342,3 +342,18 @@ describe("buildPrompt for the camera, map and dropdown parts", () => {
     expect(noValue.indexOf("Latte")).toBe(noValue.lastIndexOf("Latte"));
   });
 });
+
+describe("scrollable tab rows in the prompt", () => {
+  const withTabs = (n: number): Item => ({ ...makeItem("tabs"), id: "tabs", tabs: Array.from({ length: n }, (_, i) => ({ label: `Tab ${i + 1}`, icon: "" })) });
+  const doc = (n: number): Doc => ({
+    title: "T", brief: "", paletteKey: "purple", frame: "phone", platform: "web",
+    frames: [{ id: "f", name: "Home", x: 0, y: 0 }],
+    groups: [{ id: "g", x: 0, y: 100, axis: "x", items: [withTabs(n)] }],
+  });
+  const marker: Record<Lang, string> = { ja: "横にスクロールするタブ", en: "horizontally scrolling tab row", zh: "可横向滚动", ko: "가로로 스크롤되는 탭" };
+
+  it.each(LANGS)("says a row of seven tabs scrolls in %s, and a row of five does not", (lang) => {
+    expect(buildPrompt(doc(7), {}, undefined, lang)).toContain(marker[lang]);
+    expect(buildPrompt(doc(5), {}, undefined, lang)).not.toContain(marker[lang]);
+  });
+});
