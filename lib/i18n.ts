@@ -142,6 +142,7 @@ export const UI = {
   draftUndo: { ja: "前の設計に戻す", en: "Back to the previous design", zh: "恢复之前的设计" },
   askAiGenerating: { ja: "作成中…", en: "Drafting…", zh: "生成中…" },
   selectedTab: { ja: "選択中にする", en: "Make this the selected one", zh: "设为选中项" },
+  selectedHint: { ja: "塗りつぶした丸が、この画面で選択中として表示される項目です。", en: "The filled dot marks the item shown as selected on this screen.", zh: "实心圆点表示此屏幕上显示为选中的项目。" },
   shareLinkCopy: { ja: "リンクをコピー", en: "Copy link", zh: "复制链接" },
   shareLinkHint: { ja: "この設計を開くリンク（画像は含まない）", en: "A link that opens this design (no images)", zh: "打开此设计的链接（不含图片）" },
   replaceProject: {
@@ -450,6 +451,7 @@ export const KO: Record<UIKey, string> = {
   askAiIdea: "만들고 싶은 것(예: 레시피를 저장하고 검색하는 앱)", askAiIdeaFallback: "(여기에 만들고 싶은 것을 적으세요)", askAiCopy: "지시 복사",
   askAiText: "M3E Canvas 스케치를 만들어 주세요. 먼저 {url}을 읽고 그 절차대로 설계를 JSON으로 구성한 뒤, 공유 링크 형태로 답해 주세요. 코드를 실행할 수 없다면 설계 JSON을 코드 블록으로 답해 주세요(파일로 저장해 불러옵니다). 검증은 필요 없습니다.\n\n만들고 싶은 것: {idea}",
   selectedTab: "선택 항목으로 지정",
+  selectedHint: "채워진 점이 이 화면에서 선택 상태로 표시되는 항목입니다.",
   shareLinkCopy: "링크 복사", shareLinkHint: "이 설계를 여는 링크(이미지 제외)",
   invalidProject: "프로젝트 파일을 열 수 없습니다.", readOnlyTitle: "다른 탭에서 편집 중입니다",
   readOnlyBody: "이 캔버스는 다른 탭에서 편집 중입니다. 해당 탭을 닫은 다음 이 페이지를 새로고침하세요.",

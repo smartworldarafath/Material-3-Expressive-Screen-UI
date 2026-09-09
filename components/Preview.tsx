@@ -632,6 +632,8 @@ function Screen({
             /* bars with the same destinations are one bar to the visitor: the choice follows them across screens */
             const navKey = navKind ? `nav:${it.kind}:${(it.tabs ?? []).map((t) => t.label).join("|")}` : "";
             if (navKind && values[navKey] !== undefined && values[navKey] >= 0) shown = { ...shown, selected: values[navKey] };
+            /* a row whose selection the author never set shows the destination the visitor tapped to open this screen */
+            else if (navKind && it.selected === undefined && values[`${navKey}:opened:${frame.id}`] !== undefined) shown = { ...shown, selected: values[`${navKey}:opened:${frame.id}`] };
             const tap =
               act || flips(it)
                 ? () => {
@@ -653,9 +655,13 @@ function Screen({
                   slotActions || navKind
                     ? (slot, animate) => {
                         /* a tapped destination lights up where it opens nothing; where it opens a
-                           screen, that screen's bar shows its own selected destination */
+                           screen, that screen's bar shows the destination its author chose, or the
+                           tapped one when the author chose none */
                         const a = slotActions?.[slot];
-                        if (navKind && slot.startsWith("tab:")) onValue(navKey, a ? -1 : Number(slot.slice(4)));
+                        if (navKind && slot.startsWith("tab:")) {
+                          onValue(navKey, a ? -1 : Number(slot.slice(4)));
+                          if (a) onValue(`${navKey}:opened:${a.to}`, Number(slot.slice(4)));
+                        }
                         if (modalIds.has(it.id)) closeRails(animate);
                         if (a) onAction(a);
                       }

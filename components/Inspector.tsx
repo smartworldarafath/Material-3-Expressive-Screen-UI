@@ -1015,6 +1015,9 @@ export function Inspector({
               {t(isSelect ? "addOption" : "addTab", lang)}
             </button>
           )}
+          {hasSelected && !isSelect && (
+            <div style={{ fontSize: 12, lineHeight: 1.5, color: p.onSurfaceVariant, padding: "8px 6px 0" }}>{t("selectedHint", lang)}</div>
+          )}
         </Section>
       )}
 
