@@ -137,6 +137,135 @@ export function Segmented<K extends string>({
   );
 }
 
+export type SelectOption = { key: string; label: string; icon?: string };
+
+/** A single-choice dropdown: the trigger shows what is picked, and the list that drops from it
+ *  scrolls in place once the choices outgrow the box. */
+export function Select({
+  options,
+  value,
+  onChange,
+  p,
+  label,
+}: {
+  options: SelectOption[];
+  value: string;
+  onChange: (k: string) => void;
+  p: Palette;
+  label: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const box = useRef<HTMLDivElement | null>(null);
+  const current = options.find((o) => o.key === value) ?? options[0];
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: PointerEvent) => {
+      if (!box.current?.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        setOpen(false);
+      }
+    };
+    window.addEventListener("pointerdown", onDown, true);
+    window.addEventListener("keydown", onKey, true);
+    return () => {
+      window.removeEventListener("pointerdown", onDown, true);
+      window.removeEventListener("keydown", onKey, true);
+    };
+  }, [open]);
+  return (
+    <div ref={box} style={{ position: "relative" }}>
+      <button
+        onClick={() => setOpen((o) => !o)}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-label={label}
+        className="m3-press"
+        style={{
+          width: "100%",
+          height: 48,
+          padding: "0 12px 0 14px",
+          borderRadius: open ? "12px 12px 4px 4px" : 12,
+          border: "none",
+          background: p.surfaceContainerHigh,
+          color: p.onSurface,
+          cursor: "pointer",
+          display: "flex",
+          alignItems: "center",
+          gap: 10,
+          fontSize: 14,
+          fontWeight: 600,
+          textAlign: "left",
+          transition: "border-radius 120ms",
+        }}
+      >
+        {current?.icon && <Icon name={current.icon} size={20} />}
+        <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{current?.label ?? ""}</span>
+        <Icon name={open ? "expand_less" : "expand_more"} size={20} />
+      </button>
+      {open && (
+        <div
+          role="listbox"
+          aria-label={label}
+          className="no-scrollbar"
+          style={{
+            position: "absolute",
+            left: 0,
+            right: 0,
+            top: 52,
+            zIndex: 40,
+            maxHeight: 232,
+            overflowY: "auto",
+            overscrollBehavior: "contain",
+            padding: 4,
+            borderRadius: 12,
+            background: p.surfaceContainerHigh,
+            boxShadow: "0 8px 24px rgba(0,0,0,0.18), 0 2px 6px rgba(0,0,0,0.10)",
+          }}
+        >
+          {options.map((o) => {
+            const on = o.key === value;
+            return (
+              <button
+                key={o.key}
+                role="option"
+                aria-selected={on}
+                onClick={() => {
+                  onChange(o.key);
+                  setOpen(false);
+                }}
+                className="m3-press"
+                style={{
+                  width: "100%",
+                  height: 44,
+                  padding: "0 10px",
+                  border: "none",
+                  borderRadius: 8,
+                  background: on ? p.secondaryContainer : "transparent",
+                  color: on ? p.onSecondaryContainer : p.onSurface,
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 10,
+                  fontSize: 14,
+                  fontWeight: on ? 600 : 500,
+                  textAlign: "left",
+                }}
+              >
+                {o.icon && <Icon name={o.icon} size={20} />}
+                <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{o.label}</span>
+                {on && <Icon name="check" size={18} />}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function Field({
   value,
   onChange,
@@ -147,6 +276,8 @@ export function Field({
   rows = 3,
   grow,
   height = 44,
+  action,
+  maxHeight,
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -155,6 +286,11 @@ export function Field({
   icon?: string;
   multiline?: boolean;
   rows?: number;
+  /** a control that joins the clear button in a run pinned over the bottom right of a multiline
+   *  field; the text runs the full width and passes under it */
+  action?: React.ReactNode;
+  /** tallest a growing field gets before it starts to scroll */
+  maxHeight?: number;
   /** a multiline field that grows with its text instead of scrolling, starting at `rows` lines;
    *  it wraps but never takes a line break, since the canvas wraps the text on its own */
   grow?: boolean;
@@ -167,11 +303,36 @@ export function Field({
     const el = areaRef.current;
     if (!el || !grow) return;
     el.style.height = "auto";
-    el.style.height = `${el.scrollHeight}px`;
-  }, [value, grow]);
+    const full = el.scrollHeight;
+    const capped = maxHeight ? Math.min(full, maxHeight) : full;
+    el.style.height = `${capped}px`;
+    el.style.overflowY = full > capped ? "auto" : "hidden";
+  }, [value, grow, maxHeight]);
+  /* with a pinned run the text keeps the full width and passes under it; otherwise the clear
+   * button takes a column of its own at the trailing edge */
+  const pinned = !!(multiline && action);
+  const padRight = !pinned && filled ? 40 : 14;
+  /* as tall as the fade, so the line being typed always sits clear of it */
+  const padBottom = pinned ? 40 : 12;
+  /* one cell of the pinned run: a faint plate behind the button, rounded on the outer side only */
+  const run = (child: React.ReactNode, first: boolean, last: boolean) => (
+    <span
+      style={{
+        display: "inline-flex",
+        overflow: "hidden",
+        background: p.surfaceContainerHighest,
+        borderTopLeftRadius: first ? 15 : R_INNER,
+        borderBottomLeftRadius: first ? 15 : R_INNER,
+        borderTopRightRadius: last ? 15 : R_INNER,
+        borderBottomRightRadius: last ? 15 : R_INNER,
+      }}
+    >
+      {child}
+    </span>
+  );
   const base: React.CSSProperties = {
     width: "100%",
-    padding: multiline ? `12px ${filled ? 40 : 14}px 12px ${icon ? 42 : 14}px` : `0 ${filled ? 40 : 14}px 0 ${icon ? 42 : 14}px`,
+    padding: multiline ? `12px ${padRight}px ${padBottom}px ${icon ? 42 : 14}px` : `0 ${padRight}px 0 ${icon ? 42 : 14}px`,
     borderRadius: multiline ? 18 : height / 2,
     border: "none",
     background: p.surfaceContainerHigh,
@@ -202,6 +363,7 @@ export function Field({
       {multiline ? (
         <textarea
           ref={areaRef}
+          className={maxHeight ? "no-scrollbar" : undefined}
           value={value}
           rows={rows}
           onChange={(e) => onChange(grow ? e.target.value.replace(/[\r\n]+/g, " ") : e.target.value)}
@@ -217,28 +379,71 @@ export function Field({
           style={{ ...base, height }}
         />
       )}
-      {filled && (
-        <button
-          onClick={() => onChange("")}
-          title={t("clear", lang)}
-          aria-label={t("clear", lang)}
-          style={{
-            position: "absolute",
-            right: 6,
-            top: multiline ? 8 : (height - 30) / 2,
-            width: 30,
-            height: 30,
-            borderRadius: 15,
-            border: "none",
-            background: "transparent",
-            color: p.onSurfaceVariant,
-            cursor: "pointer",
-            display: "grid",
-            placeItems: "center",
-          }}
-        >
-          <Icon name="close" size={16} />
-        </button>
+      {pinned ? (
+        <>
+          {/* the text fades out into the field's own colour as it passes under the run */}
+          <div
+            aria-hidden
+            style={{
+              position: "absolute",
+              left: 2,
+              right: 2,
+              bottom: 2,
+              height: 40,
+              borderRadius: "0 0 16px 16px",
+              background: `linear-gradient(to top, ${p.surfaceContainerHigh}, transparent)`,
+              pointerEvents: "none",
+            }}
+          />
+          <div style={{ position: "absolute", right: 6, bottom: 6, display: "flex", gap: 2 }}>
+            {filled && run(
+            <button
+              onClick={() => onChange("")}
+              title={t("clear", lang)}
+              aria-label={t("clear", lang)}
+              style={{
+                width: 30,
+                height: 30,
+                border: "none",
+                background: "transparent",
+                color: p.onSurfaceVariant,
+                cursor: "pointer",
+                display: "grid",
+                placeItems: "center",
+              }}
+            >
+              <Icon name="close" size={16} />
+            </button>,
+              true,
+              false,
+            )}
+            {run(action, !filled, true)}
+          </div>
+        </>
+      ) : (
+        filled && (
+          <button
+            onClick={() => onChange("")}
+            title={t("clear", lang)}
+            aria-label={t("clear", lang)}
+            style={{
+              position: "absolute",
+              right: 6,
+              top: multiline ? 8 : (height - 30) / 2,
+              width: 30,
+              height: 30,
+              borderRadius: 15,
+              border: "none",
+              background: "transparent",
+              color: p.onSurfaceVariant,
+              cursor: "pointer",
+              display: "grid",
+              placeItems: "center",
+            }}
+          >
+            <Icon name="close" size={16} />
+          </button>
+        )
       )}
     </div>
   );

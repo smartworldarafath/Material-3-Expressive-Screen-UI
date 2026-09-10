@@ -563,7 +563,8 @@ export const KIND_SPEC: Record<Kind, KindSpec> = {
     hasSupporting: false,
     hasIcon: true,
     connect: { axis: "x", outer: R_FULL, inner: R_INNER, family: "button" },
-    size: { min: 64, max: PHONE_W, step: 4, icon: "width", presets: [HALF_W, CONTENT_W] },
+    /* 56 is the height: an icon-only button is a circle at its narrowest */
+    size: { min: 56, max: PHONE_W, step: 4, icon: "width", presets: [HALF_W, CONTENT_W] },
     defLabel: "ボタン",
     defIcon: "add",
   },

@@ -1328,6 +1328,7 @@ export function M3Node({
   interactive = true,
   onPointerDown,
   tabScroll,
+  instant,
 }: {
   item: Item;
   palette: Palette;
@@ -1338,6 +1339,8 @@ export function M3Node({
   selected?: boolean;
   /** the part sits in a connected run (non-free group, or a hidden run inside a free group) */
   inRun?: boolean;
+  /** the width is being dragged on the canvas: it must follow the pointer with no easing */
+  instant?: boolean;
   interactive?: boolean;
   onPointerDown?: (e: React.PointerEvent) => void;
   /** how far a scrollable tab row is scrolled in the preview; the canvas uses the resting position */
@@ -1393,7 +1396,7 @@ export function M3Node({
         outline: selected ? `2px solid ${palette.primary}` : "2px solid transparent",
         outlineOffset: 3,
         /* a part that changes width with its screen eases the way the screen does */
-        transition: measured ? "outline-color 120ms" : `outline-color 120ms, width ${SETTLE_MS}ms cubic-bezier(0.2, 0, 0, 1)`,
+        transition: measured || instant ? "outline-color 120ms" : `outline-color 120ms, width ${SETTLE_MS}ms cubic-bezier(0.2, 0, 0, 1)`,
         flex: "0 0 auto",
       }}
     >

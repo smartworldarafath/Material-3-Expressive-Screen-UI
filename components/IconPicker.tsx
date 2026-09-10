@@ -3,7 +3,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Palette } from "@/lib/tokens";
 import { t, useLang } from "@/lib/i18n";
-import { IconBtn } from "./ui";
 
 type IconMeta = { n: string; p: number; t: string };
 
@@ -141,12 +140,32 @@ export function IconPicker({
         ))}
       </div>
 
-      <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8 }}>
-        <div style={{ position: "relative", flex: 1, minWidth: 0 }}>
-          <span
-            className="msr"
-            style={{ position: "absolute", left: 12, top: 10, fontSize: 20, color: palette.outline }}
-          >
+      {/* search line and grid share one surface: the line stays put while the icons scroll under it */}
+      <div
+        className="no-scrollbar"
+        style={{
+          height: 292,
+          overflowY: "auto",
+          overflowX: "hidden",
+          borderRadius: 16,
+          background: palette.surfaceContainerLow,
+        }}
+      >
+        <div
+          style={{
+            position: "sticky",
+            top: 0,
+            zIndex: 1,
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            height: 44,
+            padding: "0 12px",
+            background: palette.surfaceContainerLow,
+            borderBottom: `1px solid ${palette.outlineVariant}`,
+          }}
+        >
+          <span className="msr" style={{ fontSize: 20, color: palette.outline, flex: "0 0 auto" }}>
             search
           </span>
           <input
@@ -155,71 +174,88 @@ export function IconPicker({
             onChange={(e) => setQ(e.target.value)}
             placeholder={icons ? t("searchIcons", lang) : "…"}
             style={{
-              width: "100%",
+              flex: 1,
+              minWidth: 0,
               height: 40,
-              paddingLeft: 40,
-              paddingRight: 12,
-              borderRadius: 20,
               border: "none",
-              background: palette.surfaceContainerHigh,
+              background: "transparent",
               color: palette.onSurface,
               fontSize: 14,
+              fontFamily: "inherit",
               outline: "none",
             }}
           />
         </div>
-        <IconBtn icon="close" p={palette} size={40} onClick={onClose} title={t("close", lang)} />
-      </div>
-
-      <div
-        className="no-scrollbar"
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fill, minmax(42px, 1fr))",
-          gap: 4,
-          height: 244,
-          overflowY: "auto",
-          overflowX: "hidden",
-          padding: 6,
-          borderRadius: 16,
-          background: palette.surfaceContainerLow,
-          alignContent: "start",
-        }}
-      >
-        {visible.map((i) => (
-          <button
-            key={i.n}
-            title={i.n}
-            aria-label={i.n}
-            aria-pressed={value === i.n}
-            onClick={() => onChange(i.n)}
-            style={{
-              aspectRatio: "1",
-              minWidth: 0,
-              display: "grid",
-              placeItems: "center",
-              borderRadius: 12,
-              border: "none",
-              background: value === i.n ? palette.primary : "transparent",
-              color: value === i.n ? palette.onPrimary : palette.onSurfaceVariant,
-              cursor: "pointer",
-            }}
-          >
-            <span className="msr" style={{ fontSize: 22 }}>
-              {i.n}
-            </span>
-          </button>
-        ))}
-        {!loading && visible.length === 0 && (
-          <div style={{ gridColumn: "1 / -1", padding: 16, fontSize: 13, color: palette.outline }}>
-            <span className="msr" style={{ fontSize: 24 }}>search_off</span>
-          </div>
-        )}
-        {loading && (
-          <div style={{ gridColumn: "1 / -1", padding: 16, fontSize: 13, color: palette.outline }}>
-            <span className="msr" style={{ fontSize: 24 }}>hourglass_top</span>
-          </div>
-        )}
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fill, minmax(42px, 1fr))",
+            gap: 4,
+            padding: 6,
+            alignContent: "start",
+          }}
+        >
+          {!q && (
+            /* the first tile stands for "no icon"; it sits where the eye lands first */
+            <button
+              title={t("noIcon", lang)}
+              aria-label={t("noIcon", lang)}
+              aria-pressed={value === null}
+              onClick={() => onChange(null)}
+              style={{
+                aspectRatio: "1",
+                minWidth: 0,
+                display: "grid",
+                placeItems: "center",
+                borderRadius: 12,
+                border: `1.5px dashed ${value === null ? "transparent" : palette.outline}`,
+                background: value === null ? palette.primary : "transparent",
+                color: value === null ? palette.onPrimary : palette.onSurfaceVariant,
+                cursor: "pointer",
+              }}
+            >
+              {/* a crossed-out circle: the same drawn language the width presets use */}
+              <svg width={22} height={22} viewBox="0 0 22 22" aria-hidden>
+                <circle cx={11} cy={11} r={8} fill="none" stroke="currentColor" strokeWidth={1.6} />
+                <line x1={5.3} y1={5.3} x2={16.7} y2={16.7} stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" />
+              </svg>
+            </button>
+          )}
+          {visible.map((i) => (
+            <button
+              key={i.n}
+              title={i.n}
+              aria-label={i.n}
+              aria-pressed={value === i.n}
+              onClick={() => onChange(i.n)}
+              style={{
+                aspectRatio: "1",
+                minWidth: 0,
+                display: "grid",
+                placeItems: "center",
+                borderRadius: 12,
+                border: "none",
+                background: value === i.n ? palette.primary : "transparent",
+                color: value === i.n ? palette.onPrimary : palette.onSurfaceVariant,
+                cursor: "pointer",
+              }}
+            >
+              <span className="msr" style={{ fontSize: 22 }}>
+                {i.n}
+              </span>
+            </button>
+          ))}
+          {!loading && visible.length === 0 && (
+            <div style={{ gridColumn: "1 / -1", padding: 16, fontSize: 13, color: palette.outline }}>
+              <span className="msr" style={{ fontSize: 24 }}>search_off</span>
+            </div>
+          )}
+          {loading && (
+            <div style={{ gridColumn: "1 / -1", padding: 16, fontSize: 13, color: palette.outline }}>
+              <span className="msr" style={{ fontSize: 24 }}>hourglass_top</span>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

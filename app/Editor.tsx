@@ -69,6 +69,7 @@ import {
   Radii,
   SETTLE_MS,
   sizeOf,
+  toggleIcon,
   SNAP_CROSS,
   SNAP_MAIN,
   Transition,
@@ -1226,6 +1227,62 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
     setDrag({ ...d });
   };
 
+  /** the in-flight width drag on a lone button's edge handle */
+  const [widthDragId, setWidthDragId] = useState<string | null>(null);
+  /** a size patch from the panel's slider is in flight: the part follows the slider with no easing */
+  const [sizeEditId, setSizeEditId] = useState<string | null>(null);
+  const sizeEditTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const markSizeEdit = (id: string) => {
+    setSizeEditId(id);
+    if (sizeEditTimer.current) clearTimeout(sizeEditTimer.current);
+    sizeEditTimer.current = setTimeout(() => setSizeEditId(null), 400);
+  };
+  /** how far the group under a left-edge width drag is drawn from where it sits, so the right edge
+   *  stays put. It rides on the same commit as the new width, which keeps the two in step; the
+   *  group's own x only moves once the drag ends. */
+  const [widthShift, setWidthShift] = useState<{ gid: string; dx: number } | null>(null);
+  const widthDragRef = useRef<{ id: string; gid: string; side: "left" | "right"; startX: number; startW: number; w: number; max: number } | null>(null);
+  const onWidthHandleDown = (e: React.PointerEvent, g: Group, item: Item, side: "left" | "right") => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+    flushPending();
+    const f = frameOfGroup(g, framesRef.current, widthsRef.current);
+    snapshot();
+    const startW = sizeOf(item, widthsRef.current).w;
+    widthDragRef.current = { id: item.id, gid: g.id, side, startX: e.clientX, startW, w: startW, max: f ? frameSizeOf(f).w : PHONE_W };
+    setWidthDragId(item.id);
+    const move = (ev: PointerEvent) => {
+      const d = widthDragRef.current;
+      if (!d) return;
+      const dx = (ev.clientX - d.startX) / viewRef.current.z;
+      const raw = d.startW + (d.side === "right" ? dx : -dx);
+      const w = clamp(Math.round(raw / 4) * 4, KIND_SPEC.button.size!.min, d.max);
+      if (w === d.w) return;
+      d.w = w;
+      if (d.side === "left") setWidthShift({ gid: d.gid, dx: d.startW - w });
+      setGroups((prev) => prev.map((gr) => (gr.id !== d.gid ? gr : { ...gr, items: gr.items.map((it) => (it.id === d.id ? { ...it, size: w } : it)) })));
+    };
+    const up = () => {
+      const d = widthDragRef.current;
+      /* the drawn offset becomes the group's real position, in one step and with no easing */
+      if (d && d.side === "left" && d.w !== d.startW) {
+        const dx = d.startW - d.w;
+        instantRef.current.add(d.gid);
+        setGroups((prev) => prev.map((gr) => (gr.id !== d.gid ? gr : { ...gr, x: gr.x + dx })));
+      }
+      setWidthShift(null);
+      widthDragRef.current = null;
+      setWidthDragId(null);
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointercancel", up);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+    window.addEventListener("pointercancel", up);
+  };
+
   const isDragging = drag !== null;
 
   useEffect(() => {
@@ -1736,6 +1793,7 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
       return;
     }
     snapshotFor(id + ":" + Object.keys(patch).join(","));
+    if ("size" in patch) markSizeEdit(id);
     setGroups((prev) =>
       "railExpanded" in patch || "railModal" in patch ? updateRail(prev, framesRef.current, widthsRef.current, id, patch) : prev.map((g) => {
         const idx = g.items.findIndex((it) => it.id === id);
@@ -1786,6 +1844,23 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
         .filter((g) => g.items.length > 0),
     );
     setSelectedIds([]);
+  }, [selectedIds, snapshot]);
+
+  /** every group holding a selected part is locked, so the menu offers to unlock instead */
+  const selectedLocked = useMemo(() => {
+    const ids = new Set(selectedIds);
+    const held = groups.filter((g) => g.items.some((it) => ids.has(it.id)));
+    return held.length > 0 && held.every((g) => !!g.locked);
+  }, [groups, selectedIds]);
+
+  /** locks every group holding a selected part, or unlocks them all when they already are */
+  const toggleLockSelected = useCallback(() => {
+    const ids = new Set(selectedIds);
+    const held = groupsRef.current.filter((g) => g.items.some((it) => ids.has(it.id)));
+    if (!held.length) return;
+    const next = !held.every((g) => !!g.locked);
+    snapshot();
+    setGroups((gs) => gs.map((g) => (g.items.some((it) => ids.has(it.id)) ? { ...g, locked: next || undefined } : g)));
   }, [selectedIds, snapshot]);
 
   const duplicateSelected = useCallback(() => {
@@ -1913,6 +1988,53 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
    *  other's bounding box; a lone part lines up with the screen's body area, the box Tidy
    *  fills between the bars. A unit that would land on another part steps away from the
    *  edge it was aligned to until it is clear. */
+  /** Puts a lone part at one of nine spots in its screen's body, the box Tidy fills between
+   *  the bars. Parts already there are obstacles: the moved part slides along the vertical
+   *  axis, away from the edge it was sent to (down from the top, up from the bottom, the
+   *  nearer way from the middle), until it sits clear of them or the body runs out. */
+  const placeSelected = useCallback(
+    (col: "left" | "centerH" | "right", row: "top" | "centerV" | "bottom") => {
+      if (selectedIds.length !== 1) return;
+      const all = groupsRef.current;
+      const g = all.find((x) => !x.locked && x.items.some((it) => it.id === selectedIds[0]));
+      if (!g) return;
+      const f = frameOfGroup(g, framesRef.current, widthsRef.current);
+      if (!f) return;
+      const rects = new Map(all.map((x) => [x.id, groupBounds(x, widthsRef.current)]));
+      const r = rects.get(g.id)!;
+      const w = r.r - r.l;
+      const h = r.b - r.t;
+      const bb = bodyRect(all, f, framesRef.current, widthsRef.current, new Set([g.id]));
+      const x = col === "left" ? bb.l : col === "right" ? bb.r - w : Math.round((bb.l + bb.r) / 2 - w / 2);
+      const y0 = row === "top" ? bb.t : row === "bottom" ? bb.b - h : Math.round((bb.t + bb.b) / 2 - h / 2);
+      const others = all
+        .filter((x) => x.id !== g.id && frameOfGroup(x, framesRef.current, widthsRef.current)?.id === f.id)
+        .map((x) => rects.get(x.id)!)
+        /* only parts in the same column can be in the way */
+        .filter((o) => o.l < x + w && o.r > x);
+      const hits = (y: number) => others.filter((o) => o.t < y + h && o.b > y);
+      const free = (y: number) => y >= bb.t && y + h <= bb.b && hits(y).length === 0;
+      const gap = 8;
+      /* candidate rows: just below or just above every obstacle, nearest to the target first */
+      const spots = [y0, ...others.flatMap((o) => [o.b + gap, o.t - gap - h])]
+        .filter((y) => free(y))
+        .sort((a, b) => {
+          const da = Math.abs(a - y0);
+          const db = Math.abs(b - y0);
+          if (da !== db) return da - db;
+          /* a tie breaks away from the edge the part was sent to */
+          return row === "top" ? a - b : row === "bottom" ? b - a : 0;
+        });
+      const y = spots[0] ?? y0;
+      const dx = x - r.l;
+      const dy = y - r.t;
+      if (!dx && !dy) return;
+      snapshot();
+      setGroups((gs) => gs.map((x) => (x.id === g.id ? { ...x, x: x.x + dx, y: x.y + dy } : x)));
+    },
+    [selectedIds, snapshot],
+  );
+
   const alignSelected = useCallback(
     (kind: AlignKind) => {
       const ids = new Set(selectedIds);
@@ -2242,6 +2364,19 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
     () => frames.find((f) => f.id === selectedFrameId) ?? null,
     [frames, selectedFrameId],
   );
+  /** the selected toggle button is drawn in its "on" look while the panel edits that look */
+  const [showOnId, setShowOnId] = useState<string | null>(null);
+  useEffect(() => setShowOnId(null), [primaryId]);
+  const onLook = (it: Item): Item =>
+    it.id === showOnId && it.toggle ? { ...it, label: it.toggle.label ?? it.label, icon: toggleIcon(it), variant: it.toggle.variant ?? it.variant } : it;
+  const selectedRect = useMemo(() => {
+    if (!primaryId) return null;
+    const g = groups.find((g) => g.items.some((it) => it.id === primaryId));
+    if (!g) return null;
+    const b = groupBounds(g, widths);
+    return { x: b.l, y: b.t, w: b.r - b.l, h: b.b - b.t };
+  }, [primaryId, groups, widths]);
+
   const selectedPartFrame = useMemo(() => {
     if (!primaryId || frame !== "phone") return null;
     const g = groups.find((g) => g.items.some((it) => it.id === primaryId));
@@ -3151,6 +3286,7 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
           position: "absolute",
           left: 0,
           top: 0,
+          marginLeft: widthShift?.gid === g.id ? widthShift.dx : undefined,
           display: "flex",
           flexDirection: g.axis === "x" ? "row" : "column",
           alignItems: g.axis === "x" ? "center" : "stretch",
@@ -3194,13 +3330,14 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
           return (
             <M3Node
               key={c.item.id}
-              item={c.item}
+              item={onLook(c.item)}
               palette={p}
               widths={widths}
               radii={radii}
               pressed={pressedId === c.item.id}
               selected={selectedSet.has(c.item.id)}
               inRun={g.items.length > 1}
+              instant={widthDragId === c.item.id || sizeEditId === c.item.id}
               interactive={!handMode}
               onPointerDown={(e) => onItemPointerDown(e, g, c.index, c.item)}
             />
@@ -3669,6 +3806,41 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
                 .filter((g) => !frameOf.has(g.id))
                 .map((g) => renderGroup(g, 0, 0))}
 
+              {/* a lone button shows a handle on each side: dragging one changes its width in place */}
+              {!handMode && !drag && selectedIds.length === 1 && selected?.kind === "button" && (() => {
+                const g = groups.find((x) => x.items.length === 1 && !x.free && !x.locked && x.items[0].id === selected.id);
+                if (!g) return null;
+                const b = groupBounds(g, widths);
+                /* the handle follows the button's height on screen, within bounds: it must
+                 * neither dwarf a button zoomed far out nor vanish on one zoomed far in */
+                const hh = clamp((b.b - b.t) * 0.55, 12 / view.z, 32 / view.z);
+                const hw = clamp(hh * 0.22, 3 / view.z, 7 / view.z);
+                const cy = (b.t + b.b) / 2;
+                /* the same offset the group is drawn with while its left edge is being dragged */
+                const sh = widthShift?.gid === g.id ? widthShift.dx : 0;
+                return (["left", "right"] as const).map((side) => (
+                  <div
+                    key={side}
+                    onPointerDown={(e) => onWidthHandleDown(e, g, selected, side)}
+                    title={t("resizeWidth", lang)}
+                    style={{
+                      position: "absolute",
+                      left: (side === "left" ? b.l : b.r) + sh - hw / 2,
+                      top: cy - hh / 2,
+                      width: hw,
+                      height: hh,
+                      borderRadius: hw,
+                      background: p.primary,
+                      border: `${1 / view.z}px solid ${p.surface}`,
+                      boxSizing: "border-box",
+                      cursor: "ew-resize",
+                      zIndex: 55,
+                      touchAction: "none",
+                    }}
+                  />
+                ));
+              })()}
+
 
               {links.length > 0 && (
                 <svg
@@ -4025,7 +4197,11 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
                 display: "flex",
                 alignItems: "center",
                 gap: 8,
-                padding: "10px 10px 6px 12px",
+                /* the close button lands exactly where the button that reopens the panel sits */
+                padding: "20px 20px 8px 16px",
+                /* the band the tabs sit on dissolves into the panel below it */
+                /* the band is the panel's own colour; the strip below it carries the fade */
+                background: p.surface,
               }}
             >
               <div style={{ flex: 1, minWidth: 0 }}>
@@ -4040,14 +4216,31 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
                   height={40}
                 />
               </div>
+              {/* the same button in the same spot as the one that reopens the panel, but plain:
+                * the filled look belongs to the one that has to be found over the canvas */}
               <IconBtn
                 icon="right_panel_close"
                 p={p}
+                size={44}
                 onClick={() => setRightOpen(false)}
                 title={t("closePanel", lang)}
               />
             </div>
-            <div style={{ flex: 1, minHeight: 0 }}>
+            <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
+              {/* what scrolls past the top of the panel dissolves into the band instead of being cut */}
+              <div
+                aria-hidden
+                style={{
+                  position: "absolute",
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  height: 28,
+                  zIndex: 3,
+                  background: `linear-gradient(to bottom, ${p.surface}, ${p.surface}00)`,
+                  pointerEvents: "none",
+                }}
+              />
               {rightTab === "edit" && selectedFrame && !selected ? (
                 <FrameInspector
                   frame={selectedFrame}
@@ -4084,7 +4277,14 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
                   onChange={patchSelected}
                   onDelete={deleteSelected}
                   onDuplicate={duplicateSelected}
+                  locked={selectedLocked}
+                  onToggleLock={toggleLockSelected}
                   onAlign={alignSelected}
+                  onPlace={placeSelected}
+                  widths={widths}
+                  selfRect={selectedRect}
+                  allFrames={frames}
+                  onShowOn={(on) => setShowOnId(on && selected ? selected.id : null)}
                   multi={selectedIds.length}
                   grouped={!!selectedGroup}
                   onGroup={groupSelected}

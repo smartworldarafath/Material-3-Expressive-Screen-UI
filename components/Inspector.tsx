@@ -59,6 +59,7 @@ import {
   AlignKind,
 } from "@/lib/tokens";
 import { IconPicker } from "./IconPicker";
+import { ButtonInspector } from "./ButtonInspector";
 import { Icon } from "./M3Node";
 import { ButtonRun, CardLayoutPicker, CornerIcon, Field, IconBtn, Section, Segmented, SizePresets, Slider, TextTokenChips, TidyButton, TidyState, Toggle, TokenChips } from "./ui";
 import { AiWriteBtn } from "./AiPanel";
@@ -298,7 +299,7 @@ function FrameChips({
   );
 }
 
-function TransitionPicker({ value, onChange, p }: { value: Transition; onChange: (t: Transition) => void; p: Palette }) {
+export function TransitionPicker({ value, onChange, p }: { value: Transition; onChange: (t: Transition) => void; p: Palette }) {
   const lang = useLang();
   return (
     <Segmented<Transition>
@@ -312,7 +313,7 @@ function TransitionPicker({ value, onChange, p }: { value: Transition; onChange:
 }
 
 /** target frame (or back) plus the transition, for one tap target */
-function ActionEditor({
+export function ActionEditor({
   frames,
   action,
   onChange,
@@ -343,7 +344,7 @@ function ActionEditor({
 export type AiHooks = { ready: boolean; reason?: string; busy: boolean; onRun: () => void; onCancel: () => void };
 
 /** a multiline field with the AI button under it, fused with a button that swaps the AI text and the original once the AI has written it */
-function AiField({ ai, history, onRestore, p, value, onChange, placeholder }: { ai: AiHooks; history?: string[]; onRestore: () => void; p: Palette; value: string; onChange: (v: string) => void; placeholder: string }) {
+export function AiField({ ai, history, onRestore, p, value, onChange, placeholder }: { ai: AiHooks; history?: string[]; onRestore: () => void; p: Palette; value: string; onChange: (v: string) => void; placeholder: string }) {
   const lang = useLang();
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -444,7 +445,7 @@ export function FrameInspector({
         <span style={{ fontSize: 14, fontWeight: 600, flex: 1, minWidth: 0 }}>{t("screen", lang)}</span>
         <IconBtn icon="play_arrow" p={p} onClick={onPreview} title={t("previewFrom", lang)} size={32} fill />
         <IconBtn icon="content_copy" p={p} onClick={onDuplicate} title={t("duplicate", lang)} size={32} />
-        <IconBtn icon="delete" p={p} danger onClick={onDelete} title={t("delete", lang)} size={32} />
+        <IconBtn icon="delete" p={p} danger onClick={onDelete} title={t("deleteKey", lang)} size={32} />
       </div>
       <Section id="frame-size" icon="aspect_ratio" title={t("frameSize", lang)} p={p}>
         <FrameSizePicker frame={frame} palette={p} onChange={onSize} />
@@ -617,12 +618,19 @@ export function Inspector({
   onChange,
   onDelete,
   onDuplicate,
+  locked,
+  onToggleLock,
   multi,
   grouped,
   railStandalone = false,
   onGroup,
   onUngroup,
   onAlign,
+  widths,
+  onPlace,
+  selfRect,
+  allFrames,
+  onShowOn,
 }: {
   /** the AI button beside the behavior field */
   ai: AiHooks;
@@ -634,6 +642,9 @@ export function Inspector({
   onChange: (patch: Partial<Item>) => void;
   onDelete: () => void;
   onDuplicate: () => void;
+  /** every group holding the selection is locked */
+  locked?: boolean;
+  onToggleLock?: () => void;
   multi: number;
   /** the selection is exactly one hand-made group */
   grouped?: boolean;
@@ -643,6 +654,16 @@ export function Inspector({
   onUngroup?: () => void;
   /** lines the selected parts up with each other, or spaces them evenly */
   onAlign?: (kind: AlignKind) => void;
+  /** measured widths of the parts that size themselves to their text */
+  widths?: Record<string, number>;
+  /** puts a lone part at one of nine spots in its screen's body, clear of the parts already there */
+  onPlace?: (col: "left" | "centerH" | "right", row: "top" | "centerV" | "bottom") => void;
+  /** where the selected part sits on the canvas, for the tap map */
+  selfRect?: { x: number; y: number; w: number; h: number } | null;
+  /** every screen on the canvas, whatever the frame mode; the tap map draws them all */
+  allFrames?: Frame[];
+  /** the canvas should draw the selected toggle button in its "on" look */
+  onShowOn?: (on: boolean) => void;
 }) {
   const lang = useLang();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -728,6 +749,10 @@ export function Inspector({
         <Icon name="ads_click" size={44} />
       </div>
     );
+  }
+
+  if (item.kind === "button") {
+    return <ButtonInspector ai={ai} item={item} palette={p} frame={frame ?? null} onChange={onChange} onDelete={onDelete} onDuplicate={onDuplicate} locked={locked} onToggleLock={onToggleLock} onPlace={onPlace} measured={widths?.[item.id]} selfRect={selfRect ?? null} allFrames={allFrames ?? frames} onShowOn={onShowOn} />;
   }
 
   const spec = KIND_SPEC[item.kind];
@@ -840,7 +865,7 @@ export function Inspector({
         <Icon name={spec.paletteIcon} size={20} />
         <span style={{ fontSize: 14, fontWeight: 600, flex: 1, minWidth: 0 }}>{KIND_TEXT[lang][item.kind]?.noun ?? spec.label}</span>
         <IconBtn icon="content_copy" p={p} onClick={onDuplicate} title={t("duplicateKey", lang)} size={32} />
-        <IconBtn icon="delete" p={p} danger onClick={onDelete} title={t("delete", lang)} size={32} />
+        <IconBtn icon="delete" p={p} danger onClick={onDelete} title={t("deleteKey", lang)} size={32} />
       </div>
 
       {TOGGLEABLE.includes(item.kind) && (
@@ -1329,7 +1354,7 @@ export function Inspector({
                 />
                 {spec.size.presets && (
                   <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                    {(item.kind === "button" || item.kind === "switch") && (
+                    {item.kind === "switch" && (
                       /* these two are as wide as their text unless a width was set; this chip goes back to that */
                       <button
                         onClick={() => onChange({ size: undefined })}
@@ -1561,7 +1586,7 @@ export function Inspector({
           p={p}
           value={item.note ?? ""}
           onChange={(note) => onChange({ note })}
-          placeholder={item.kind === "button" || item.kind === "fab" || item.kind === "iconButton" || item.kind === "extendedFab" ? t("whenPressed", lang) : t("whatItDoes", lang)}
+          placeholder={item.kind === "fab" || item.kind === "iconButton" || item.kind === "extendedFab" ? t("whenPressed", lang) : t("whatItDoes", lang)}
         />
       </Section>
       )}
