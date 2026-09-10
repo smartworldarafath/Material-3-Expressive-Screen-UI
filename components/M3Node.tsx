@@ -1376,6 +1376,10 @@ export function M3Node({
         display: measured ? "inline-flex" : "block",
         alignItems: "center",
         overflow: clips ? "hidden" : "visible",
+        /* the selection ring sticks out 5px (3px offset + 2px ring); in a connected run the next
+           sibling sits 3px below and would overpaint its bottom edge — lift selected parts instead */
+        position: selected ? "relative" : undefined,
+        zIndex: selected ? 1 : undefined,
         cursor: !interactive ? "default" : dragging ? "grabbing" : "grab",
         userSelect: "none",
         touchAction: "none",
