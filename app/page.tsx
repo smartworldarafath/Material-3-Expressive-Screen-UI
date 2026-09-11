@@ -19,6 +19,7 @@ import {
   baseRadii,
   explodeGroup,
   freeRadii,
+  radiiOfRuns,
   BEZEL,
   canJoin,
   clamp,
@@ -3072,10 +3073,12 @@ export default function Page() {
     if (g.free) {
       const instantG = instantRef.current.has(g.id);
       const allOn = g.items.every((it) => selectedSet.has(it.id));
-      const corners = freeRadii(g, widths);
+      /* explode once: the runs feed both the corner radii and the lift gate below */
+      const runs = explodeGroup(g, widths);
+      const corners = radiiOfRuns(runs);
       /* hidden runs are connected too: only their members may lift above siblings when selected */
       const runIds = new Set(
-        explodeGroup(g, widths)
+        runs
           .filter((r) => r.items.length > 1)
           .flatMap((r) => r.items.map((it) => it.id)),
       );

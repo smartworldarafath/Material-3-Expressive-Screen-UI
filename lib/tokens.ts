@@ -1590,10 +1590,10 @@ export function runCorners(axis: Axis, first: boolean, last: boolean, outer: num
   return axis === "x" ? { tl: a, bl: a, tr: b, br: b } : { tl: a, tr: a, bl: b, br: b };
 }
 
-/** the corner radii of every part in a free group, with its hidden runs kept connected */
-export function freeRadii(g: Group, widths: Record<string, number>): Map<string, Radii> {
+/** the corner radii of every part across the given runs */
+export function radiiOfRuns(runs: Group[]): Map<string, Radii> {
   const out = new Map<string, Radii>();
-  for (const run of explodeGroup(g, widths)) {
+  for (const run of runs) {
     const n = run.items.length;
     run.items.forEach((it, i) => {
       const c = connectSpecOf(it);
@@ -1601,6 +1601,11 @@ export function freeRadii(g: Group, widths: Record<string, number>): Map<string,
     });
   }
   return out;
+}
+
+/** the corner radii of every part in a free group, with its hidden runs kept connected */
+export function freeRadii(g: Group, widths: Record<string, number>): Map<string, Radii> {
+  return radiiOfRuns(explodeGroup(g, widths));
 }
 
 /** a run belongs to the frame that contains its centre */
