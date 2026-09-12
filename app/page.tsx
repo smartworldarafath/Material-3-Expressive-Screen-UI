@@ -2,22 +2,23 @@
 
 import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
-import { Logo } from "@/components/Logo";
+import { LogoLoading } from "@/components/LogoLoading";
 import { isLang, setGlobalLang, type Lang } from "@/lib/i18n";
 
-const Editor = dynamic(() => import("./Editor"), {
-  ssr: false,
-  loading: () => <EditorLoading />,
-});
+const loadEditor = () => import("./Editor");
+/* the editor chunk starts downloading as soon as this module runs, alongside hydration,
+   instead of waiting for the first client render */
+if (typeof window !== "undefined") void loadEditor();
 
-function EditorLoading() {
+const Editor = dynamic(loadEditor, { ssr: false, loading: () => null });
+
+/** the static page: the mark as a loading indicator, and it stays over the editor
+ *  until the document has been read, then fades away */
+function Boot({ done }: { done: boolean }) {
   return (
-    <main
-      aria-busy="true"
-      style={{ minHeight: "100vh", height: "100dvh", display: "grid", placeItems: "center", background: "#fffbfe" }}
-    >
-      <Logo size={48} color="#6750a4" />
-    </main>
+    <div className="m3e-boot" data-done={done ? "" : undefined} aria-busy={!done} aria-hidden={done}>
+      <LogoLoading size={48} color="#6750a4" />
+    </div>
   );
 }
 
@@ -30,13 +31,27 @@ function initialLanguage(): Lang {
   return language.startsWith("zh") ? "zh" : language.startsWith("ko") ? "ko" : language.startsWith("ja") ? "ja" : "en";
 }
 
+/** how long the overlay takes to fade; matches .m3e-boot in globals.css */
+const BOOT_FADE_MS = 360;
+
 export default function Page() {
   const [lang, setLang] = useState<Lang | null>(null);
+  const [phase, setPhase] = useState<"loading" | "fading" | "done">("loading");
   useEffect(() => {
     const initialLang = initialLanguage();
     document.documentElement.lang = initialLang;
     setGlobalLang(initialLang);
     setLang(initialLang);
   }, []);
-  return lang ? <Editor initialLang={lang} /> : <EditorLoading />;
+  useEffect(() => {
+    if (phase !== "fading") return;
+    const id = setTimeout(() => setPhase("done"), BOOT_FADE_MS);
+    return () => clearTimeout(id);
+  }, [phase]);
+  return (
+    <>
+      {lang && <Editor initialLang={lang} onReady={() => setPhase((p) => (p === "loading" ? "fading" : p))} />}
+      {phase !== "done" && <Boot done={phase === "fading"} />}
+    </>
+  );
 }

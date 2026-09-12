@@ -334,7 +334,9 @@ const LEFT_TABS: { key: LeftTab; icon: string; title: "parts" | "layers" | "colo
   { key: "ai", icon: "auto_awesome", title: "ai" },
 ];
 
-export default function Editor({ initialLang }: { initialLang: Lang }) {
+export default function Editor({ initialLang, onReady }: { initialLang: Lang; onReady?: () => void }) {
+  const onReadyRef = useRef(onReady);
+  onReadyRef.current = onReady;
   /* ---------- document ---------- */
   const [lang, setLang] = useState<Lang>(initialLang);
   const [editAccess, setEditAccess] = useState<"checking" | "editable" | "readonly">("checking");
@@ -671,6 +673,9 @@ export default function Editor({ initialLang }: { initialLang: Lang }) {
     } catch {}
     setAiSettings(loadAiSettings());
     loadedRef.current = true;
+    /* the document is in state; one frame later it is on screen and the boot overlay may go.
+       Not cancelled on cleanup: the development double-run skips this effect the second time. */
+    requestAnimationFrame(() => onReadyRef.current?.());
   }, []);
 
   useEffect(() => {
