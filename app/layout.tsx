@@ -8,6 +8,7 @@ export const metadata: Metadata = {
   title: "M3E Canvas",
   description:
     "Sketch Material 3 Expressive screens in the browser and turn them into vibe-coding prompts. / Material 3 Expressive の画面をブラウザで組み立てて、そのままプロンプトに。",
+  icons: { apple: `${BASE}/icons/icon-180.png` },
   openGraph: {
     title: "M3E Canvas",
     description: "Design Material 3 Expressive screens, link them, preview them, and copy a prompt for your AI coding tool.",
@@ -21,6 +22,7 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
+  themeColor: "#6750A4",
 };
 
 export default function RootLayout({
