@@ -518,7 +518,44 @@ export type Kind =
   | "toolbar"
   | "tabs"
   | "radio"
-  | "badge";
+  | "badge"
+  | "carousel"
+  | "datePicker"
+  | "timePicker";
+
+/** how a carousel arranges its items: M3's four layouts */
+export type CarouselLayout = "multiBrowse" | "uncontained" | "hero" | "fullScreen";
+export const CAROUSEL_LAYOUTS: { key: CarouselLayout; icon: string }[] = [
+  { key: "multiBrowse", icon: "view_carousel" },
+  { key: "uncontained", icon: "view_week" },
+  { key: "hero", icon: "view_sidebar" },
+  { key: "fullScreen", icon: "crop_din" },
+];
+/** a date picker is a dialog, a calendar hanging off a field, or the field on its own */
+export type DateLayout = "modal" | "docked" | "input";
+export const DATE_LAYOUTS: { key: DateLayout; icon: string }[] = [
+  { key: "modal", icon: "calendar_month" },
+  { key: "docked", icon: "event" },
+  { key: "input", icon: "keyboard" },
+];
+/** a time picker is read off a dial or typed in */
+export type TimeLayout = "dial" | "input";
+export const TIME_LAYOUTS: { key: TimeLayout; icon: string }[] = [
+  { key: "dial", icon: "schedule" },
+  { key: "input", icon: "keyboard" },
+];
+export type PartLayout = CarouselLayout | DateLayout | TimeLayout;
+export const carouselLayoutOf = (it: Item): CarouselLayout =>
+  CAROUSEL_LAYOUTS.some((l) => l.key === it.layout) ? (it.layout as CarouselLayout) : "multiBrowse";
+export const dateLayoutOf = (it: Item): DateLayout =>
+  DATE_LAYOUTS.some((l) => l.key === it.layout) ? (it.layout as DateLayout) : "modal";
+export const timeLayoutOf = (it: Item): TimeLayout => (it.layout === "input" ? "input" : "dial");
+/** the day a date picker has circled, and the time a clock's hands are set to */
+export const dayOf = (it: Item) => clamp(Math.round(it.day ?? 17), 1, 31);
+export const hourOf = (it: Item) => clamp(Math.round(it.hour ?? 10), 0, 23);
+export const minuteOf = (it: Item) => clamp(Math.round(it.minute ?? 30), 0, 59);
+/** how many cards a carousel holds */
+export const carouselCountOf = (it: Item) => clamp(Math.round(it.count ?? 4), 2, 8);
 
 export type Axis = "x" | "y";
 /** kinds that fuse into a run: buttons side by side, list items stacked */
@@ -623,10 +660,11 @@ export const KIND_SPEC: Record<Kind, KindSpec> = {
     hasSupporting: false,
     hasIcon: true,
     connect: { axis: "x", outer: 24, inner: R_INNER, family: "button" },
-    size: { min: 40, max: 96, step: 4, icon: "open_in_full", presets: [40, 48, 56, 96] },
+    /* the same five sizes a button has: an icon button is the one that is all icon */
+    size: { min: BUTTON_H_MIN, max: BUTTON_H_MAX, step: 4, icon: "open_in_full", presets: BUTTON_SIZES.map((b) => b.h) },
     defLabel: "",
     defIcon: "favorite",
-    defSize: 48,
+    defSize: H,
     defVariant: "tonal",
   },
   fab: {
@@ -1059,6 +1097,58 @@ export const KIND_SPEC: Record<Kind, KindSpec> = {
     defIcon: null,
     defSize: 48,
   },
+  carousel: {
+    label: "Carousel",
+    noun: "カルーセル",
+    category: "content",
+    paletteIcon: "view_carousel",
+    w: PHONE_W,
+    h: 180,
+    radius: 16,
+    hasVariant: false,
+    hasLabel: false,
+    hasSupporting: false,
+    hasIcon: false,
+    size: { min: 200, max: PHONE_W, step: 4, icon: "width", presets: [CONTENT_W, PHONE_W] },
+    size2: { min: 100, max: 400, step: 4, icon: "height", presets: [140, 180, 260] },
+    defLabel: "",
+    defIcon: null,
+    defSize: PHONE_W,
+  },
+  datePicker: {
+    label: "Date Picker",
+    noun: "日付ピッカー",
+    category: "inputs",
+    paletteIcon: "calendar_month",
+    w: 328,
+    h: 484,
+    radius: 28,
+    hasVariant: false,
+    hasLabel: false,
+    hasSupporting: false,
+    hasIcon: false,
+    size: { min: 280, max: PHONE_W, step: 4, icon: "width", presets: [328, CONTENT_W, PHONE_W] },
+    defLabel: "",
+    defIcon: null,
+    defSize: 328,
+  },
+  timePicker: {
+    label: "Time Picker",
+    noun: "時刻ピッカー",
+    category: "inputs",
+    paletteIcon: "schedule",
+    w: 328,
+    h: 420,
+    radius: 28,
+    hasVariant: false,
+    hasLabel: false,
+    hasSupporting: false,
+    hasIcon: false,
+    size: { min: 280, max: PHONE_W, step: 4, icon: "width", presets: [328, CONTENT_W] },
+    defLabel: "",
+    defIcon: null,
+    defSize: 328,
+  },
   splitButton: {
     label: "Split Button",
     noun: "スプリットボタン",
@@ -1187,8 +1277,11 @@ export const KIND_ORDER: Kind[] = [
   "checkbox",
   "radio",
   "slider",
+  "datePicker",
+  "timePicker",
   "text",
   "image",
+  "carousel",
   "camera",
   "map",
   "badge",
@@ -1263,6 +1356,15 @@ export type Item = {
   actions?: Record<string, Action>;
   /** the look a toggle button takes once tapped; undefined = not a toggle */
   toggle?: ToggleLook;
+  /** which arrangement a carousel or a picker takes */
+  layout?: PartLayout;
+  /** how many cards a carousel holds */
+  count?: number;
+  /** the day a date picker has circled */
+  day?: number;
+  /** the time a clock is set to */
+  hour?: number;
+  minute?: number;
 };
 
 export type ToggleLook = { icon?: string | null; variant?: Variant; label?: string };
@@ -1320,10 +1422,35 @@ export const SLIDE_SPEC: Partial<Record<Transition, { axis: "x" | "y"; enter: nu
 export type Transition = "slide" | "slideLeft" | "slideUp" | "slideDown" | "fade" | "expand" | "none";
 export type Action = { to: string; transition: Transition; /** the address a `LINK_TARGET` action opens */ url?: string };
 
-/** the height a button is drawn at: the author's, else M3's medium button */
-export const buttonHeightOf = (it: Item) => clamp(Math.round(it.size2 ?? H), BUTTON_H_MIN, BUTTON_H_MAX);
+/** the height a button is drawn at: the author's, else M3's medium button. An icon button has
+ *  only the one measure -- it is a circle -- so its diameter is its height. */
+export const buttonHeightOf = (it: Item) =>
+  clamp(Math.round(it.kind === "iconButton" ? (it.size ?? H) : (it.size2 ?? H)), BUTTON_H_MIN, BUTTON_H_MAX);
 /** a button is at its narrowest a circle, so how short it is sets how narrow it can be */
 export const buttonMinWidth = (it: Item) => buttonHeightOf(it);
+
+/** the one measure a run of buttons shares: the part that is standing still sets it, and
+ *  whatever joins the run takes it, so the run reads as one band rather than a staircase.
+ *  A button keeps the width it was given unless it is now narrower than it is tall. */
+export function matchRunSize(item: Item, host: Item): Item {
+  const family = KIND_SPEC[item.kind].connect?.family;
+  if (!family || family !== "button" || family !== KIND_SPEC[host.kind].connect?.family) return item;
+  const h = buttonHeightOf(host);
+  if (buttonHeightOf(item) === h) return item;
+  if (item.kind === "iconButton") return { ...item, size: h };
+  return { ...item, size2: h, ...(item.size && item.size < h ? { size: h } : {}) };
+}
+
+/** the patch that sets a part's measure, carried across a run it belongs to: the parts of one
+ *  run share a height, and each keeps its own width. */
+export function runSizePatch(items: Item[], id: string, patch: Partial<Item>): Item[] {
+  const at = items.findIndex((it) => it.id === id);
+  if (at < 0) return items;
+  const next = { ...items[at], ...patch };
+  const carries = items.length > 1 && ("size2" in patch || (items[at].kind === "iconButton" && "size" in patch));
+  if (!carries) return items.map((it, i) => (i === at ? next : it));
+  return items.map((it, i) => (i === at ? next : matchRunSize(it, next)));
+}
 
 export const TRANSITIONS: { key: Transition; label: string; icon: string }[] = [
   { key: "slide", label: "Slide from right", icon: "arrow_back" },
@@ -1362,7 +1489,7 @@ export function actionsOf(it: Item): { slot: string; action: Action }[] {
 }
 
 /** kinds a user can tap in the preview */
-export const TAPPABLE: Kind[] = ["button", "iconButton", "fab", "extendedFab", "chip", "listItem", "card", "image", "text", "splitButton", "radio"];
+export const TAPPABLE: Kind[] = ["button", "iconButton", "fab", "extendedFab", "chip", "listItem", "card", "image", "text", "splitButton", "radio", "carousel", "datePicker", "timePicker"];
 
 /** palette roles a user may pick as a background */
 export type ColorToken =
@@ -1779,6 +1906,20 @@ export function makeItem(kind: Kind): Item {
     it.fill = "surfaceContainerHigh";
   }
   if (kind === "slider") it.value = 40;
+  if (kind === "carousel") {
+    it.layout = "multiBrowse";
+    it.count = 4;
+    it.size2 = 180;
+  }
+  if (kind === "datePicker") {
+    it.layout = "modal";
+    it.day = 17;
+  }
+  if (kind === "timePicker") {
+    it.layout = "dial";
+    it.hour = 10;
+    it.minute = 30;
+  }
   if (kind === "bottomNav") {
     it.tabs = defaultTabs();
     it.radiusTop = 0;
@@ -1856,6 +1997,20 @@ export function sizeOf(it: Item, widths: Record<string, number>) {
     case "linearProgress":
     case "divider":
       return { w: n, h: s.h };
+    case "carousel":
+      return { w: n, h: it.size2 ?? s.h };
+    case "datePicker": {
+      const l = dateLayoutOf(it);
+      /* the calendar's rows follow its width, so a wider dialog is a taller one */
+      const cell = Math.round((n - 24 * 2) / 7);
+      /* the headline, the month row, seven rows of days and the two text buttons */
+      return { w: n, h: l === "input" ? 96 : l === "docked" ? 112 + cell * 7 : 164 + cell * 7 };
+    }
+    case "timePicker": {
+      const dial = Math.min(256, n - 48);
+      /* the heading, the two plates, the dial and the two text buttons */
+      return { w: n, h: timeLayoutOf(it) === "input" ? 204 : 196 + dial };
+    }
     case "card":
       return { w: n, h: it.size2 ?? Math.round(n * 0.5875) };
     case "box":
@@ -1908,6 +2063,8 @@ export function baseRadii(it: Item): Radii {
     case "camera":
     case "map":
       return uniformRadii(it.radiusTop ?? scaleR(s.radius));
+    case "carousel":
+      return uniformRadii(it.radiusTop ?? 0);
     case "badge":
     case "radio":
     case "splitButton":
@@ -1988,7 +2145,7 @@ export const toolbarWidth = (it: Item) => {
 export const connectSpecOf = (it: Item): ConnectSpec | undefined => {
   const c = KIND_SPEC[it.kind].connect;
   /* the ends of a run are as round as the part is tall, so a taller button keeps its full corners */
-  const outer = it.kind === "button" ? buttonHeightOf(it) / 2 : c?.outer ?? 0;
+  const outer = it.kind === "button" || it.kind === "iconButton" ? buttonHeightOf(it) / 2 : c?.outer ?? 0;
   return c && { ...c, outer: scaleR(outer), inner: scaleR(c.inner) };
 };
 export const connectable = (it: Item) => !!KIND_SPEC[it.kind].connect;

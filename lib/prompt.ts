@@ -7,6 +7,13 @@ import {
   Action,
   BACK_TARGET,
   H,
+  carouselCountOf,
+  carouselLayoutOf,
+  dateLayoutOf,
+  dayOf,
+  hourOf,
+  minuteOf,
+  timeLayoutOf,
   LINK_TARGET,
   buttonHeightOf,
   buttonSizeKeyOf,
@@ -162,6 +169,31 @@ function buttonSize(it: Item, lang: Lang): string {
   return lang === "en" || lang === "ko" ? ` (${body})` : `（${body}）`;
 }
 
+/** the words each language uses for a carousel's layout and a picker's shape */
+const CAROUSEL_TEXT: Record<Lang, Record<string, string>> = {
+  ja: { multiBrowse: "マルチブラウズ", uncontained: "アンコンテインド", hero: "ヒーロー", fullScreen: "全画面" },
+  en: { multiBrowse: "multi-browse", uncontained: "uncontained", hero: "hero", fullScreen: "full-screen" },
+  zh: { multiBrowse: "多浏览", uncontained: "等宽滚动", hero: "主图", fullScreen: "全屏" },
+  ko: { multiBrowse: "멀티 브라우즈", uncontained: "언컨테인드", hero: "히어로", fullScreen: "전체 화면" },
+};
+const DATE_TEXT: Record<Lang, Record<string, string>> = {
+  ja: { modal: "モーダルのダイアログ", docked: "入力欄に付くドッキング", input: "入力欄のみ" },
+  en: { modal: "modal dialog", docked: "docked under a field", input: "text input only" },
+  zh: { modal: "模态对话框", docked: "停靠在输入框下", input: "仅输入框" },
+  ko: { modal: "모달 대화상자", docked: "입력란에 붙는 도킹", input: "입력란만" },
+};
+const TIME_TEXT: Record<Lang, Record<string, string>> = {
+  ja: { dial: "時計盤", input: "入力欄" },
+  en: { dial: "dial", input: "text input" },
+  zh: { dial: "表盘", input: "输入框" },
+  ko: { dial: "시계판", input: "입력란" },
+};
+/** the clock a time picker is set to, as a 12-hour reading with its half of the day */
+function clockText(it: Item): string {
+  const h = hourOf(it);
+  return `${String(h % 12 || 12).padStart(2, "0")}:${String(minuteOf(it)).padStart(2, "0")} ${h >= 12 ? "PM" : "AM"}`;
+}
+
 function itemJa(it: Item): string {
   const q = qj;
   const v = VARIANT_TEXT.ja[it.variant];
@@ -169,6 +201,12 @@ function itemJa(it: Item): string {
   switch (it.kind) {
     case "button":
       return `${hasText(it.label) ? q(it.label) : "ラベルなし"}の${v}ボタン${it.icon ? `（${it.icon} アイコン付き）` : ""}${buttonSize(it, "ja")}`;
+    case "carousel":
+      return `${CAROUSEL_TEXT.ja[carouselLayoutOf(it)]}レイアウトのカルーセル（カード ${carouselCountOf(it)} 枚、高さ ${it.size2 ?? 180}dp、角丸 16dp、横スクロール）`;
+    case "datePicker":
+      return `${DATE_TEXT.ja[dateLayoutOf(it)]}の日付ピッカー（${dayOf(it)} 日を選択中${dateLayoutOf(it) === "input" ? "" : "、月のグリッドとキャンセル／OK"}）`;
+    case "timePicker":
+      return `${TIME_TEXT.ja[timeLayoutOf(it)]}の時刻ピッカー（${clockText(it)}、AM/PM 切り替えとキャンセル／OK）`;
     case "iconButton":
       return `${it.icon ?? "空"} アイコンの${v}アイコンボタン`;
     case "fab":
@@ -260,6 +298,12 @@ function itemEn(it: Item): string {
   switch (it.kind) {
     case "button":
       return `a ${v} button ${hasText(it.label) ? q(it.label) : "with no label"}${it.icon ? ` with a ${it.icon} icon` : ""}${buttonSize(it, "en")}`;
+    case "carousel":
+      return `a ${CAROUSEL_TEXT.en[carouselLayoutOf(it)]} carousel of ${carouselCountOf(it)} cards (${it.size2 ?? 180}dp tall, 16dp corners, scrolling sideways)`;
+    case "datePicker":
+      return `a date picker as a ${DATE_TEXT.en[dateLayoutOf(it)]} (day ${dayOf(it)} selected${dateLayoutOf(it) === "input" ? "" : ", with the month grid and Cancel / OK"})`;
+    case "timePicker":
+      return `a time picker on a ${TIME_TEXT.en[timeLayoutOf(it)]} set to ${clockText(it)}, with the AM/PM toggle and Cancel / OK`;
     case "iconButton":
       return `a ${v} icon button with the ${it.icon ?? "empty"} icon`;
     case "fab":
@@ -351,6 +395,12 @@ function itemZh(it: Item): string {
   switch (it.kind) {
     case "button":
       return `${hasText(it.label) ? q(it.label) : "无标签"}的${v}按钮${it.icon ? `（带 ${it.icon} 图标）` : ""}${buttonSize(it, "zh")}`;
+    case "carousel":
+      return `${CAROUSEL_TEXT.zh[carouselLayoutOf(it)]}布局的轮播（${carouselCountOf(it)} 张卡片，高 ${it.size2 ?? 180}dp，圆角 16dp，横向滚动）`;
+    case "datePicker":
+      return `${DATE_TEXT.zh[dateLayoutOf(it)]}形式的日期选择器（已选中 ${dayOf(it)} 日${dateLayoutOf(it) === "input" ? "" : "，含月份网格与取消／确定"}）`;
+    case "timePicker":
+      return `${TIME_TEXT.zh[timeLayoutOf(it)]}形式的时间选择器（${clockText(it)}，含 AM/PM 切换与取消／确定）`;
     case "iconButton":
       return `${it.icon ?? "空"} 图标的${v}图标按钮`;
     case "fab":
@@ -441,6 +491,9 @@ function itemKo(it: Item): string {
   const noun = KIND_TEXT.ko[it.kind]?.noun ?? it.kind;
   switch (it.kind) {
     case "button": return `${hasText(it.label) ? q(it.label) : "레이블 없는"} ${v} 버튼${it.icon ? `(${it.icon} 아이콘 포함)` : ""}${buttonSize(it, "ko")}`;
+    case "carousel": return `${CAROUSEL_TEXT.ko[carouselLayoutOf(it)]} 레이아웃 캐러셀(카드 ${carouselCountOf(it)}장, 높이 ${it.size2 ?? 180}dp, 모서리 16dp, 가로 스크롤)`;
+    case "datePicker": return `${DATE_TEXT.ko[dateLayoutOf(it)]} 형태의 날짜 선택기(${dayOf(it)}일 선택됨${dateLayoutOf(it) === "input" ? "" : ", 월 그리드와 취소 / 확인"})`;
+    case "timePicker": return `${TIME_TEXT.ko[timeLayoutOf(it)]} 형태의 시간 선택기(${clockText(it)}, AM/PM 전환과 취소 / 확인)`;
     case "iconButton": return `${it.icon ?? "빈"} 아이콘의 ${v} 아이콘 버튼`;
     case "fab": return `${it.icon ?? "빈"} 아이콘의 ${v} FAB${it.size && it.size >= 96 ? "(대형)" : it.size && it.size <= 40 ? "(소형)" : ""}`;
     case "extendedFab": return `${q(it.label)}${it.icon ? ` 및 ${it.icon} 아이콘` : ""} 확장 FAB(${v})`;

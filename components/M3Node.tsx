@@ -25,6 +25,7 @@ import {
   cardBodyColorOf,
   cardScrimOf,
   cardTextColorOf,
+  dateLayoutOf,
   onToken,
   scaleR,
   sizeOf,
@@ -43,6 +44,7 @@ import {
   SCROLL_TAB_W,
 } from "@/lib/tokens";
 import { CircularProgress, LinearProgress, LoadingIndicator } from "./Loading";
+import { CarouselBody, DatePickerBody, TimePickerBody } from "./Pickers";
 import { t, useLang } from "@/lib/i18n";
 import { useTheme } from "@/lib/theme";
 import { railSelectedLabelColor } from "@/lib/color";
@@ -102,6 +104,7 @@ const NO_BOX: Kind[] = [
   "splitButton",
   "fabMenu",
   "badge",
+  "carousel",
 ];
 
 /** Padding follows M3: icon+label is tighter than label alone. */
@@ -438,14 +441,13 @@ function Body({ item, p, tabScroll }: { item: Item; p: Palette; tabScroll?: numb
         </div>
       ) : null;
 
-    case "iconButton": {
-      const s = item.size ?? 48;
+    case "iconButton":
+      /* the icon is the one the M3 size the circle lands on asks for */
       return (
         <div style={{ display: "grid", placeItems: "center", height: "100%" }}>
-          {item.icon && <Icon name={item.icon} size={Math.round(s / 2)} fill={item.variant === "filled"} />}
+          {item.icon && <Icon name={item.icon} size={buttonMetrics(buttonHeightOf(item)).icon} fill={item.variant === "filled"} />}
         </div>
       );
-    }
 
     case "fab": {
       const s = item.size ?? 56;
@@ -916,6 +918,13 @@ function Body({ item, p, tabScroll }: { item: Item; p: Palette; tabScroll?: numb
         </div>
       );
 
+    case "carousel":
+      return <CarouselBody item={item} p={p} />;
+    case "datePicker":
+      return <DatePickerBody item={item} p={p} />;
+    case "timePicker":
+      return <TimePickerBody item={item} p={p} />;
+
     case "navRail": {
       const tabs = item.tabs ?? [];
       const wide = isWideRail(item);
@@ -1277,6 +1286,13 @@ function boxStyle(item: Item, p: Palette): React.CSSProperties {
       return { background: p.surfaceContainerHigh, border: "none", color: p.onSurface };
     case "dialog":
       return { background: p.surfaceContainerHigh, border: "none", color: p.onSurface };
+    case "datePicker":
+      /* typed in, a date is a field on the screen rather than a surface over it */
+      return dateLayoutOf(item) === "input"
+        ? { background: "transparent", border: "none", color: p.onSurface }
+        : { background: p.surfaceContainerHigh, border: "none", color: p.onSurface };
+    case "timePicker":
+      return { background: p.surfaceContainerHigh, border: "none", color: p.onSurface };
     case "snackbar":
       return { background: p.inverseSurface, border: "none", color: p.inverseOnSurface };
     case "image":
@@ -1308,6 +1324,10 @@ function shadowOf(item: Item): string {
       return item.variant === "elevated" ? "0 1px 3px rgba(0,0,0,0.20), 0 2px 6px rgba(0,0,0,0.10)" : "none";
     case "dialog":
       return "0 8px 24px rgba(0,0,0,0.18), 0 2px 6px rgba(0,0,0,0.10)";
+    case "timePicker":
+      return "0 8px 24px rgba(0,0,0,0.18), 0 2px 6px rgba(0,0,0,0.10)";
+    case "datePicker":
+      return dateLayoutOf(item) === "input" ? "none" : "0 8px 24px rgba(0,0,0,0.18), 0 2px 6px rgba(0,0,0,0.10)";
     case "snackbar":
       return "0 3px 8px rgba(0,0,0,0.18)";
     case "toolbar":

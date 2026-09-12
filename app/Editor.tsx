@@ -44,6 +44,8 @@ import {
   frameRect,
   frameSizeOf,
   carryItemSize,
+  matchRunSize,
+  runSizePatch,
   defaultPlatformOf,
   GAP,
   Group,
@@ -85,6 +87,7 @@ import {
   railExpansionSide,
 } from "@/lib/tokens";
 import { Icon, M3Node, M3Static, MeasuredContent } from "@/components/M3Node";
+import { CORNERS, HandleSide, SizeHandles } from "@/components/SizeHandles";
 import { LayersPanel } from "@/components/Layers";
 import { FrameInspector, FrameSizePicker, Inspector } from "@/components/Inspector";
 import { Preview } from "@/components/Preview";
@@ -128,6 +131,8 @@ const OPEN = {
   mass: 0.55,
 };
 const INSTANT = { duration: 0 };
+/** a hole opening or closing: the run's offset travels on the same curve the hole's own width does */
+const GAP_TWEEN = { duration: SETTLE_MS / 1000, ease: [0.2, 0, 0, 1] as const };
 
 /** the icon rail on the left edge of the parts / layers panel */
 const RAIL_W = 52;
@@ -154,6 +159,12 @@ const FRAME_MARGIN = PHONE_MARGIN;
 
 type DragState = {
   item: Item;
+  /** the part as it was picked up, before any run it hovered lent it its size */
+  base: Item;
+  /** where the part was held when it was picked up; the magnet is worked out from these, so a
+   *  run lending the part its size never moves the search out from under itself */
+  baseOffX: number;
+  baseOffY: number;
   guide: Guide | null;
   offX: number;
   offY: number;
@@ -1018,19 +1029,24 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
     (item: Item, left: number, top: number): Snap | null => {
       const spec = connectSpecOf(item);
       if (!spec) return null;
-      const sz = sizeRef(item);
       let best: Snap | null = null;
       let bestD = 1;
       for (const g of groupsRef.current) {
         /* a locked run is finished: nothing joins it, so it never moves to make room */
         if (g.free || g.locked || g.axis !== spec.axis || !g.items[0] || !canJoin(g.items[0], item))
           continue;
+        const sz = sizeRef(item);
+        /* across the run, the part and the band it would join are lined up by their middles:
+         * a small part carried onto a tall run should still find it, and it takes the run's
+         * size as it lands anyway */
+        const band = g.items.reduce((m, it) => Math.max(m, spec.axis === "x" ? sizeRef(it).h : sizeRef(it).w), 0);
         for (let k = 0; k <= g.items.length; k++) {
           const r = restPos(g, k, sz);
           const dx = left - r.left;
           const dy = top - r.top;
+          const mid = spec.axis === "x" ? top + sz.h / 2 - (g.y + band / 2) : left + sz.w / 2 - (g.x + band / 2);
           const nMain = (spec.axis === "x" ? dx : dy) / SNAP_MAIN;
-          const nCross = (spec.axis === "x" ? dy : dx) / SNAP_CROSS;
+          const nCross = mid / SNAP_CROSS;
           if (Math.abs(nMain) >= 1 || Math.abs(nCross) >= 1) continue;
           const d = Math.hypot(nMain, nCross);
           if (d < bestD) {
@@ -1180,6 +1196,9 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
     setPressedId(item.id);
     const d: DragState = {
       item,
+      base: item,
+      baseOffX: pt.x - left,
+      baseOffY: pt.y - top,
       offX: pt.x - left,
       offY: pt.y - top,
       startX: pt.x,
@@ -1213,6 +1232,9 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
     setRightTab("edit");
     const d: DragState = {
       item,
+      base: item,
+      baseOffX: offX,
+      baseOffY: offY,
       offX,
       offY,
       startX: pt.x,
@@ -1230,8 +1252,6 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
     setDrag({ ...d });
   };
 
-  /** which edge of a lone button an in-flight size drag holds */
-  type Side = "left" | "right" | "top" | "bottom";
   /** the in-flight size drag on a lone button's edge handle */
   const [widthDragId, setWidthDragId] = useState<string | null>(null);
   /** a size drag from the panel's slider is in flight: the part follows the slider with no easing */
@@ -1253,8 +1273,21 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
    *  edge stays put. It rides on the same commit as the new size, which keeps the two in step; the
    *  group's own position only moves once the drag ends. */
   const [widthShift, setWidthShift] = useState<{ gid: string; dx: number; dy: number } | null>(null);
-  const widthDragRef = useRef<{ id: string; gid: string; side: Side; vertical: boolean; start0: number; startV: number; v: number; min: number; max: number } | null>(null);
-  const onWidthHandleDown = (e: React.PointerEvent, g: Group, item: Item, side: Side) => {
+  const widthDragRef = useRef<{
+    id: string;
+    gid: string;
+    side: HandleSide;
+    vertical: boolean;
+    round: boolean;
+    startX: number;
+    startY: number;
+    start0: number;
+    startV: number;
+    v: number;
+    min: number;
+    max: number;
+  } | null>(null);
+  const onWidthHandleDown = (e: React.PointerEvent, g: Group, item: Item, side: HandleSide) => {
     if (e.button !== 0) return;
     e.preventDefault();
     e.stopPropagation();
@@ -1262,6 +1295,9 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
     const f = frameOfGroup(g, framesRef.current, widthsRef.current);
     snapshot();
     const vertical = side === "top" || side === "bottom";
+    /* a circle is pulled by a point on it: the drag reads along the diagonal and the one
+     * measure it has -- its diameter -- follows, so it stays round the whole way */
+    const round = CORNERS.includes(side);
     const box = sizeOf(item, widthsRef.current);
     const startV = vertical ? box.h : box.w;
     widthDragRef.current = {
@@ -1269,24 +1305,41 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
       gid: g.id,
       side,
       vertical,
+      round,
+      startX: e.clientX,
+      startY: e.clientY,
       start0: vertical ? e.clientY : e.clientX,
       startV,
       v: startV,
       /* a button is a circle at its narrowest, so its height says how narrow it may be drawn */
-      min: vertical ? BUTTON_H_MIN : buttonMinWidth(item),
-      max: vertical ? BUTTON_H_MAX : f ? frameSizeOf(f).w : PHONE_W,
+      min: vertical || round ? BUTTON_H_MIN : buttonMinWidth(item),
+      max: vertical || round ? BUTTON_H_MAX : f ? frameSizeOf(f).w : PHONE_W,
     };
     setWidthDragId(item.id);
     const move = (ev: PointerEvent) => {
       const d = widthDragRef.current;
       if (!d) return;
-      const delta = ((d.vertical ? ev.clientY : ev.clientX) - d.start0) / viewRef.current.z;
-      const raw = d.startV + (d.side === "right" || d.side === "bottom" ? delta : -delta);
+      const z = viewRef.current.z;
+      let raw: number;
+      if (d.round) {
+        /* how far the point travelled along its own diagonal, the two axes counting equally */
+        const dx = ((ev.clientX - d.startX) / z) * (d.side === "tl" || d.side === "bl" ? -1 : 1);
+        const dy = ((ev.clientY - d.startY) / z) * (d.side === "tl" || d.side === "tr" ? -1 : 1);
+        raw = d.startV + (dx + dy);
+      } else {
+        const delta = ((d.vertical ? ev.clientY : ev.clientX) - d.start0) / z;
+        raw = d.startV + (d.side === "right" || d.side === "bottom" ? delta : -delta);
+      }
       const v = clamp(Math.round(raw / 4) * 4, d.min, d.max);
       if (v === d.v) return;
       d.v = v;
-      if (d.side === "left") setWidthShift({ gid: d.gid, dx: d.startV - v, dy: 0 });
-      if (d.side === "top") setWidthShift({ gid: d.gid, dx: 0, dy: d.startV - v });
+      /* whichever point is held, the one across from it stays where it is */
+      const back = d.startV - v;
+      if (d.side === "left") setWidthShift({ gid: d.gid, dx: back, dy: 0 });
+      if (d.side === "top") setWidthShift({ gid: d.gid, dx: 0, dy: back });
+      if (d.round && d.side !== "br") {
+        setWidthShift({ gid: d.gid, dx: d.side === "tl" || d.side === "bl" ? back : 0, dy: d.side === "tl" || d.side === "tr" ? back : 0 });
+      }
       setGroups((prev) =>
         prev.map((gr) =>
           gr.id !== d.gid
@@ -1304,15 +1357,18 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
               },
         ),
       );
+
     };
     const up = () => {
       const d = widthDragRef.current;
       /* the drawn offset becomes the group's real position, in one step and with no easing */
-      if (d && (d.side === "left" || d.side === "top") && d.v !== d.startV) {
+      if (d && d.v !== d.startV && d.side !== "right" && d.side !== "bottom" && d.side !== "br") {
         const shift = d.startV - d.v;
+        const movesX = d.side === "left" || d.side === "tl" || d.side === "bl";
+        const movesY = d.side === "top" || d.side === "tl" || d.side === "tr";
         instantRef.current.add(d.gid);
         setGroups((prev) =>
-          prev.map((gr) => (gr.id !== d.gid ? gr : d.side === "top" ? { ...gr, y: gr.y + shift } : { ...gr, x: gr.x + shift })),
+          prev.map((gr) => (gr.id !== d.gid ? gr : { ...gr, x: gr.x + (movesX ? shift : 0), y: gr.y + (movesY ? shift : 0) })),
         );
       }
       setWidthShift(null);
@@ -1355,6 +1411,15 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
         d.active = true;
         d.snap = null;
         const id = d.item.id;
+        /* the run keeps the hole the part came out of: it closes only once the part is carried
+         * out of reach, rather than snapping shut the moment the drag begins */
+        const from = groupsRef.current.find((x) => !x.free && x.items.length > 1 && x.items.some((it) => it.id === id));
+        if (from) {
+          const index = from.items.findIndex((it) => it.id === id);
+          const sz = sizeRef(d.item);
+          d.snap = { groupId: from.id, index, pull: 1 };
+          holdGap(from.id, index, sz.w, sz.h, true);
+        }
         snapshot();
         setGroups((prev) => {
           const out: Group[] = [];
@@ -1390,7 +1455,18 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
       d.snap =
         d.overBin || ctrlHeld
           ? null
-          : findSnap(d.item, pt.x - d.offX, pt.y - d.offY);
+          : findSnap(d.base, pt.x - d.baseOffX, pt.y - d.baseOffY);
+      /* the run that is standing still sets the size: the part in flight takes it while it is
+       * held over the run, and has its own back the moment it is carried away again */
+      const host = d.snap ? groupsRef.current.find((g) => g.id === d.snap!.groupId)?.items[0] : undefined;
+      d.item = host ? matchRunSize(d.base, host) : d.base;
+      /* a part that grew or shrank keeps the same spot under the finger */
+      const was = sizeRef(d.base);
+      const now = sizeRef(d.item);
+      d.offX = was.w ? (d.baseOffX * now.w) / was.w : d.baseOffX;
+      d.offY = was.h ? (d.baseOffY * now.h) / was.h : d.baseOffY;
+      if (d.snap) holdGap(d.snap.groupId, d.snap.index, now.w, now.h);
+      else closeGap();
       d.guide =
         d.overBin || d.snap || ctrlHeld
           ? null
@@ -1423,6 +1499,11 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
         const t = d.snap;
         setDrag({ ...d, snap: { ...t, pull: 1 }, settling: true });
         const commit = () => {
+          /* the run's own position takes the new first part's width in one step: the hole it was
+           * holding open is handed straight to the part, with nothing sliding */
+          if (t.index === 0) instantRef.current.add(t.groupId);
+          if (gapTimer.current) clearTimeout(gapTimer.current);
+          setGap(null);
           setGroups((prev) => {
             if (prev.some((g) => g.items.some((it) => it.id === item.id)))
               return prev;
@@ -1849,7 +1930,8 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
           ...g,
           x: g.x + dx,
           y: g.y + dy,
-          items: g.items.map((it, i) => (i === idx ? next : it)),
+          /* the parts of one run share a height; each keeps its own width */
+          items: g.free ? g.items.map((it, i) => (i === idx ? next : it)) : runSizePatch(g.items, id, patch),
         };
       }),
     );
@@ -3055,6 +3137,41 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
 
   /* ---------- render ---------- */
   const dragSize = drag ? sizeOf(drag.item, widths) : { w: 0, h: 0 };
+  /* The hole a run holds for a part: where it is, how big, and whether it is still wanted. It
+   * outlives the drag by the moment it takes to close, and is the same element throughout, so
+   * the closing is a transition rather than a part vanishing. */
+  type Gap = { gid: string; index: number; w: number; h: number; open: boolean; /** the hole the part was pulled out of, which stays its full size while the part is in reach */ from: boolean };
+  const [gapOut, setGapOut] = useState<Gap | null>(null);
+  const gapRef = useRef<Gap | null>(null);
+  const gapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const setGap = useCallback((next: Gap | null) => {
+    const cur = gapRef.current;
+    if (cur === next) return;
+    if (cur && next && cur.gid === next.gid && cur.index === next.index && cur.w === next.w && cur.h === next.h && cur.open === next.open && cur.from === next.from) return;
+    gapRef.current = next;
+    setGapOut(next);
+  }, []);
+  /** the run keeps the hole open while the part is in reach, and closes it once it is not */
+  const holdGap = useCallback(
+    (gid: string, index: number, w: number, h: number, from = false) => {
+      if (gapTimer.current) {
+        clearTimeout(gapTimer.current);
+        gapTimer.current = null;
+      }
+      /* a part that came out of this run keeps its hole at full size for as long as it is in
+       * reach, however the magnet is pulling; a part arriving from elsewhere opens one as it
+       * comes, so the run can be seen making room */
+      setGap({ gid, index, w, h, open: true, from: from || (gapRef.current?.gid === gid && gapRef.current.index === index && gapRef.current.from) });
+    },
+    [setGap],
+  );
+  const closeGap = useCallback(() => {
+    const cur = gapRef.current;
+    if (!cur || !cur.open) return;
+    setGap({ ...cur, open: false });
+    if (gapTimer.current) clearTimeout(gapTimer.current);
+    gapTimer.current = setTimeout(() => setGap(null), SETTLE_MS + 40);
+  }, [setGap]);
   const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
   const doc: Doc = useMemo(
     () => ({ groups, frames, paletteKey, frame, title, brief, promptEdit, platform: platform ?? undefined, customPalette: customPalette ?? undefined, dynamicColor, theme }),
@@ -3301,15 +3418,25 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
       );
     }
     const snap = drag?.active && drag.snap?.groupId === g.id ? drag.snap : null;
+    const hole = gapOut?.gid === g.id ? gapOut : null;
     const pull = snap?.pull ?? 0;
-    const phMain = snap ? (g.axis === "x" ? dragSize.w : dragSize.h) * pull : 0;
-    const shift = snap && snap.index === 0 ? -(phMain + GAP) : 0;
+    /* while the part is in reach the hole follows the magnet with no easing of its own, so the
+     * run it sits in never wobbles; the closing is eased, and the run's own offset with it */
+    /* a hole is either wanted or not: it opens and closes on one curve rather than tracking the
+     * magnet, so a part arriving between two others is seen making room for itself. The run's own
+     * offset travels on the same curve, so the parts behind the hole never drift. */
+    const phMain = hole && hole.open ? (g.axis === "x" ? hole.w : hole.h) : 0;
+    const gapEase = !!hole;
+    /* a hole at the front is taken off the run's own position, so the parts behind it stay put.
+     * What it costs the run is its width plus the run's spacing, and a closed hole costs nothing:
+     * it has already taken that spacing off its own margin. */
+    const front = hole && hole.index === 0 ? -(phMain + (hole.open ? GAP : 0)) : 0;
     const conn = g.items[0] ? connectSpecOf(g.items[0]) : undefined;
 
     type Cell = { ph: true } | { ph: false; item: Item; index: number };
     const cells: Cell[] = [];
     for (let i = 0; i <= g.items.length; i++) {
-      if (snap && snap.index === i) cells.push({ ph: true });
+      if (hole && hole.index === i) cells.push({ ph: true });
       if (i < g.items.length)
         cells.push({ ph: false, item: g.items[i], index: i });
     }
@@ -3321,10 +3448,10 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
         key={g.id}
         initial={false}
         animate={{
-          x: g.x - ox + (g.axis === "x" ? shift : 0),
-          y: g.y - oy + (g.axis === "y" ? shift : 0),
+          x: g.x - ox + (g.axis === "x" ? front : 0),
+          y: g.y - oy + (g.axis === "y" ? front : 0),
         }}
-        transition={instant ? INSTANT : OPEN}
+        transition={instant ? INSTANT : hole ? (gapEase ? GAP_TWEEN : INSTANT) : OPEN}
         style={{
           zIndex: modalRail ? 2 : undefined,
           position: "absolute",
@@ -3342,19 +3469,30 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
       >
         {cells.map((c, r) => {
           if (c.ph) {
+            /* the hole is moved by the same clock the run's own offset is, and on the same
+             * curve: a frame where one has moved and the other has not is a frame where the
+             * parts behind the hole appear somewhere they never were */
             return (
               <motion.div
                 key="__gap"
-                initial={g.axis === "x" ? { width: 0 } : { height: 0 }}
-                animate={
-                  g.axis === "x" ? { width: phMain } : { height: phMain }
+                /* The hole a part came out of is already the part's size; one a part is arriving
+                 * into opens from nothing. The run's own spacing sits beside the hole whatever
+                 * its width, so the hole takes that much off its own margin as it closes: what
+                 * it costs the run then travels to nothing exactly as the run's offset does. */
+                initial={
+                  hole?.from
+                    ? false
+                    : g.axis === "x"
+                      ? { width: 0, height: hole?.h ?? 0, marginRight: -GAP }
+                      : { height: 0, width: hole?.w ?? 0, marginBottom: -GAP }
                 }
-                transition={OPEN}
-                style={{
-                  flex: "0 0 auto",
-                  height: g.axis === "x" ? dragSize.h : undefined,
-                  width: g.axis === "y" ? dragSize.w : undefined,
-                }}
+                animate={
+                  g.axis === "x"
+                    ? { width: phMain, height: hole?.h ?? 0, marginRight: hole?.open ? 0 : -GAP }
+                    : { height: phMain, width: hole?.w ?? 0, marginBottom: hole?.open ? 0 : -GAP }
+                }
+                transition={GAP_TWEEN}
+                style={{ flex: "0 0 auto" }}
               />
             );
           }
@@ -3852,52 +3990,26 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
                 .filter((g) => !frameOf.has(g.id))
                 .map((g) => renderGroup(g, 0, 0))}
 
-              {/* a lone button shows a handle on each of its four edges: dragging one changes its
-                  width or its height in place, and the opposite edge stays where it is */}
-              {!handMode && !drag && selectedIds.length === 1 && selected?.kind === "button" && (() => {
+              {/* a lone button shows a handle on each of its four edges, and a lone icon button
+                  four points around its circle: dragging one changes the part's size in place,
+                  and whatever sits opposite stays where it is */}
+              {!handMode && !drag && selectedIds.length === 1 && (selected?.kind === "button" || selected?.kind === "iconButton") && (() => {
                 const g = groups.find((x) => x.items.length === 1 && !x.free && !x.locked && x.items[0].id === selected.id);
                 if (!g) return null;
                 const b = groupBounds(g, widths);
-                /* the handle follows the button's height on screen, within bounds: it must
-                 * neither dwarf a button zoomed far out nor vanish on one zoomed far in */
-                const hh = clamp((b.b - b.t) * 0.55, 12 / view.z, 32 / view.z);
-                const hw = clamp(hh * 0.22, 3 / view.z, 7 / view.z);
-                /* the side handles keep the button's proportions; the top and bottom ones are the
-                 * same pill laid down, and never wider than the button they sit on */
-                const vw = Math.min(hh, (b.r - b.l) * 0.55);
-                const cx = (b.l + b.r) / 2;
-                const cy = (b.t + b.b) / 2;
                 /* the same offset the group is drawn with while its left or top edge is being dragged */
                 const sx = widthShift?.gid === g.id ? widthShift.dx : 0;
                 const sy = widthShift?.gid === g.id ? widthShift.dy : 0;
-                return (["left", "right", "top", "bottom"] as const).map((side) => {
-                  const vertical = side === "top" || side === "bottom";
-                  const w = vertical ? vw : hw;
-                  const h = vertical ? hw : hh;
-                  const x = vertical ? cx : side === "left" ? b.l : b.r;
-                  const y = vertical ? (side === "top" ? b.t : b.b) : cy;
-                  return (
-                    <div
-                      key={side}
-                      onPointerDown={(e) => onWidthHandleDown(e, g, selected, side)}
-                      title={t(vertical ? "resizeHeight" : "resizeWidth", lang)}
-                      style={{
-                        position: "absolute",
-                        left: x + sx - w / 2,
-                        top: y + sy - h / 2,
-                        width: w,
-                        height: h,
-                        borderRadius: Math.min(w, h),
-                        background: p.primary,
-                        border: `${1 / view.z}px solid ${p.surface}`,
-                        boxSizing: "border-box",
-                        cursor: vertical ? "ns-resize" : "ew-resize",
-                        zIndex: 55,
-                        touchAction: "none",
-                      }}
-                    />
-                  );
-                });
+                return (
+                  <SizeHandles
+                    round={selected.kind === "iconButton"}
+                    box={{ l: b.l + sx, t: b.t + sy, r: b.r + sx, b: b.b + sy }}
+                    z={view.z}
+                    instant={widthDragId === selected.id || sizeEditId === selected.id}
+                    p={p}
+                    onDown={(e, side) => onWidthHandleDown(e, g, selected, side)}
+                  />
+                );
               })()}
 
 

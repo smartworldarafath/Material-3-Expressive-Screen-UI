@@ -60,6 +60,7 @@ import {
 } from "@/lib/tokens";
 import { IconPicker } from "./IconPicker";
 import { ButtonInspector } from "./ButtonInspector";
+import { PartInspector } from "./PartInspector";
 import { Icon } from "./M3Node";
 import { ButtonRun, CardLayoutPicker, CornerIcon, Field, IconBtn, Section, Segmented, SizePresets, Slider, TextTokenChips, TidyButton, TidyState, Toggle, TokenChips } from "./ui";
 import { AiWriteBtn } from "./AiPanel";
@@ -751,7 +752,27 @@ export function Inspector({
     );
   }
 
-  if (item.kind === "button") {
+  /* the parts that are surfaces rather than controls share one panel, built from the button's own */
+  if (item.kind === "carousel" || item.kind === "datePicker" || item.kind === "timePicker") {
+    return (
+      <PartInspector
+        ai={ai}
+        item={item}
+        palette={p}
+        frame={frame ?? null}
+        onChange={onChange}
+        onDelete={onDelete}
+        onDuplicate={onDuplicate}
+        locked={locked}
+        onToggleLock={onToggleLock}
+        onPlace={onPlace}
+        selfRect={selfRect ?? null}
+        allFrames={allFrames ?? frames}
+      />
+    );
+  }
+
+  if (item.kind === "button" || item.kind === "iconButton") {
     return <ButtonInspector ai={ai} item={item} palette={p} frame={frame ?? null} onChange={onChange} onDelete={onDelete} onDuplicate={onDuplicate} locked={locked} onToggleLock={onToggleLock} onPlace={onPlace} measured={widths?.[item.id]} selfRect={selfRect ?? null} allFrames={allFrames ?? frames} onShowOn={onShowOn} />;
   }
 
@@ -1586,7 +1607,7 @@ export function Inspector({
           p={p}
           value={item.note ?? ""}
           onChange={(note) => onChange({ note })}
-          placeholder={item.kind === "fab" || item.kind === "iconButton" || item.kind === "extendedFab" ? t("whenPressed", lang) : t("whatItDoes", lang)}
+          placeholder={item.kind === "fab" || item.kind === "extendedFab" ? t("whenPressed", lang) : t("whatItDoes", lang)}
         />
       </Section>
       )}

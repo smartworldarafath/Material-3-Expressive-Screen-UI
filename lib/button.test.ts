@@ -22,6 +22,8 @@ import {
   linkHostOf,
   linkUrlOf,
   makeItem,
+  matchRunSize,
+  runSizePatch,
   sizeOf,
 } from "./tokens";
 
@@ -74,5 +76,53 @@ describe("a tap that opens a link", () => {
     expect(linkUrlOf(link("mailto:someone@example.com"))).toBeNull();
     expect(linkUrlOf(undefined)).toBeNull();
     expect(linkHostOf(link("not a url"))).toBeNull();
+  });
+});
+
+describe("an icon button is the button that is all icon", () => {
+  it("takes the same five sizes, measured across its circle", () => {
+    const it = makeItem("iconButton");
+    expect(it.size).toBe(H);
+    expect(buttonHeightOf(it)).toBe(H);
+    expect(buttonHeightOf({ ...it, size: 96 })).toBe(96);
+    expect(buttonHeightOf({ ...it, size: 999 })).toBe(BUTTON_H_MAX);
+    /* a circle: one measure both ways, and corners to match */
+    expect(sizeOf({ ...it, size: 96 }, {})).toEqual({ w: 96, h: 96 });
+    expect(baseRadii({ ...it, size: 96 })).toEqual({ tl: 48, tr: 48, bl: 48, br: 48 });
+  });
+
+  it("reads its icon off the same scale a button does", () => {
+    expect(buttonMetrics(buttonHeightOf(makeItem("iconButton"))).icon).toBe(24);
+    expect(buttonMetrics(buttonHeightOf({ ...makeItem("iconButton"), size: 136 })).icon).toBe(40);
+  });
+});
+
+describe("a run of buttons shares one measure", () => {
+  const button = (patch: Partial<Item> = {}): Item => ({ ...makeItem("button"), id: "b", ...patch });
+  const icon = (patch: Partial<Item> = {}): Item => ({ ...makeItem("iconButton"), id: "i", ...patch });
+
+  it("hands the joining part the size of the run that is standing still", () => {
+    /* a small icon button carried onto a tall button comes out as tall as the run */
+    expect(matchRunSize(icon({ size: 40 }), button({ size2: 96 })).size).toBe(96);
+    /* and a button joining a run of small icon buttons comes down to them */
+    expect(matchRunSize(button({ size: 200, size2: 96 }), icon({ size: 40 })).size2).toBe(40);
+    /* a button narrower than it is tall grows wide enough to stay a button */
+    expect(matchRunSize(button({ size: 60 }), button({ size2: 96 })).size).toBe(96);
+  });
+
+  it("leaves a part that already fits, and parts that never fuse", () => {
+    const b = button({ size2: 96 });
+    expect(matchRunSize(icon({ size: 96 }), b)).toEqual(icon({ size: 96 }));
+    expect(matchRunSize(makeItem("chip"), b).size2).toBeUndefined();
+  });
+
+  it("carries a height across the run, and leaves each width alone", () => {
+    const run = [button({ id: "a", size: 200 }), icon({ id: "c", size: 40 })];
+    const next = runSizePatch(run, "a", { size2: 96 });
+    expect(next[0].size2).toBe(96);
+    expect(next[0].size).toBe(200);
+    expect(next[1].size).toBe(96);
+    /* a width is the part's own business */
+    expect(runSizePatch(run, "a", { size: 240 })[1].size).toBe(40);
   });
 });
