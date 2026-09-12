@@ -1,7 +1,9 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { motion, useReducedMotion } from "motion/react";
 import {
+  FAB_MENU_CLOSE,
   FAB_MENU_GAP,
   FAB_MENU_ITEM_H,
   H,
@@ -14,6 +16,11 @@ import {
   STATUS_BAR_H,
   baseRadii,
   buttonHeightOf,
+  extendedFabHeight,
+  extendedFabMetrics,
+  fabOpen,
+  isMeasured,
+  menuOpen,
   buttonMetrics,
   CARD_MEDIA_GAP,
   CARD_PADDING,
@@ -145,20 +152,24 @@ function ExtendedFabContent({ item }: { item: Item }) {
   const w = useWeight();
   const hasIcon = !!item.icon;
   const hasLabel = item.label.trim().length > 0;
+  /* the padding, the icon and the label are the ones the height it was given asks for */
+  const m = extendedFabMetrics(extendedFabHeight(item));
   return (
     <span
+      className="m3-size-ease"
       style={{
         display: "inline-flex",
         alignItems: "center",
-        gap: hasIcon && hasLabel ? 12 : 0,
-        padding: "0 20px",
-        height: 56,
-        fontSize: 14,
+        gap: hasIcon && hasLabel ? m.gap : 0,
+        paddingLeft: m.padX,
+        paddingRight: m.padX,
+        height: m.h,
+        fontSize: m.font,
         fontWeight: w(500, 700),
         whiteSpace: "nowrap",
       }}
     >
-      {hasIcon && <Icon name={item.icon!} size={24} />}
+      {hasIcon && <Icon name={item.icon!} size={m.icon} />}
       {hasLabel && <span>{item.label}</span>}
     </span>
   );
@@ -393,6 +404,7 @@ function BadgeContent({ item, p }: { item: Item; p: Palette }) {
 
 /** Content for kinds that size to their text; rendered again offscreen to measure. */
 export function MeasuredContent({ item, p }: { item: Item; p: Palette }) {
+  if (menuOpen(item)) return <FabMenuContent item={item} p={p} />;
   switch (item.kind) {
     case "button":
       return <ButtonContent item={item} />;
@@ -412,17 +424,249 @@ export function MeasuredContent({ item, p }: { item: Item; p: Palette }) {
       return <RadioContent item={item} p={p} />;
     case "badge":
       return <BadgeContent item={item} p={p} />;
+    case "fabMenu":
+      return <FabMenuContent item={item} p={p} />;
     default:
       return null;
   }
 }
 
-function Body({ item, p, tabScroll }: { item: Item; p: Palette; tabScroll?: number }) {
+/** how long one entry takes to unroll, and how far apart the entries start */
+const MENU_ROLL = 0.28;
+const MENU_STAGGER = 0.045;
+/** how long the button takes to reach the M size. A FAB taller than that reaches up into the row
+ *  the nearest entry stands in, so the two are never on screen together: opening, the entries wait
+ *  for the button to come down to size; shutting, the button waits for the entries to go. */
+const MENU_BUTTON_ROLL = 0.16;
+/** shutting is not the unrolling backwards: the entries give way a little and fade, from the far
+ *  end down, so the menu is gone long before a full reverse run would have finished */
+const MENU_SHUT = 0.16;
+const MENU_SHUT_FADE = 0.1;
+const MENU_SHUT_STAGGER = 0.025;
+const MENU_SHUT_SCALE = 0.72;
+const MENU_BUTTON_SHUT = 0.16;
+const MENU_EASE = [0.2, 0, 0, 1] as const;
+
+/** how long the whole reverse run takes, in milliseconds */
+export const menuShutMs = (it: Item) => {
+  const entries = menuEntriesShut(it);
+  return Math.round(Math.max(entries, menuButtonWait(it) + MENU_BUTTON_SHUT) * 1000);
+};
+
+/** how long every entry takes to fade away */
+const menuEntriesShut = (it: Item) => MENU_SHUT_FADE + Math.max(0, (it.tabs?.length ?? 1) - 1) * MENU_SHUT_STAGGER;
+/** a FAB that reaches above the close button takes its turn; one that does not never waits */
+const overTall = (it: Item) => (it.size ?? FAB_MENU_CLOSE) > FAB_MENU_CLOSE;
+/** what the button waits for before growing back: every entry gone */
+const menuButtonWait = (it: Item) => (overTall(it) ? menuEntriesShut(it) : 0);
+/** what the entries wait for before unrolling: the button down to the close size */
+const menuEntriesWait = (it: Item) => (overTall(it) ? MENU_BUTTON_ROLL : 0);
+
+/** Whether the menu is drawn at all, and whether it is drawn open. The two part ways while the
+ *  menu shuts: the node keeps its open shape, transparent and as tall as the entries, until they
+ *  have rolled back into the button, and only then becomes the FAB again. */
+function useMenuPhase(item: Item) {
+  const open = menuOpen(item);
+  const [drawn, setDrawn] = useState(open);
+  /** the frame the drawing is swapped on: the box must not ease its height across the swap */
+  const [snap, setSnap] = useState(false);
+  const shutMs = menuShutMs(item);
+  useEffect(() => {
+    if (open) {
+      setDrawn(true);
+      return;
+    }
+    if (!drawn) return;
+    const id = setTimeout(() => {
+      setDrawn(false);
+      setSnap(true);
+    }, shutMs);
+    return () => clearTimeout(id);
+  }, [open, drawn, shutMs]);
+  useEffect(() => {
+    if (!snap) return;
+    const id = setTimeout(() => setSnap(false), 60);
+    return () => clearTimeout(id);
+  }, [snap]);
+  return { drawn, open, snap };
+}
+
+/** A FAB with its menu open: the entries it offers, and the button itself showing the close
+ *  icon under them. The button stays where the author put it and grows or shrinks into the M-size
+ *  close button; the entries unroll out of its right edge, the one nearest the button first.
+ *  Nothing here changes the drawing's size, so the editor can measure it while it moves, and the
+ *  menu is exactly as wide as its widest entry. */
+function FabMenuContent({ item, p, shown = true }: { item: Item; p: Palette; shown?: boolean }) {
+  const w = useWeight();
+  const reducedMotion = useReducedMotion();
+  const tabs = item.tabs ?? [];
+  const filled = item.variant === "filled";
+  const itemStyle = filled
+    ? { background: p.primaryContainer, color: p.onPrimaryContainer }
+    : { background: p.secondaryContainer, color: p.onSecondaryContainer };
+  const extended = item.kind === "extendedFab";
+  /* the close button is the M size: a small or a large FAB eases into it rather than jumping */
+  const grow = (item.size ?? FAB_MENU_CLOSE) / FAB_MENU_CLOSE;
+  /* opening, the entry nearest the button leads; shutting, the run plays back from the far end */
+  const wait = menuEntriesWait(item);
+  const after = (i: number) => wait + (tabs.length - 1 - i) * MENU_STAGGER;
+  const before = (i: number) => i * MENU_SHUT_STAGGER;
+  /* the preview draws its screens inside an AnimatePresence that blocks animations on mount, so
+     the menu is drawn shut for one frame and told to open on the next, where nothing blocks it.
+     A menu that has never been open starts rolled up; one on its way out only gives way a little,
+     because what carries it off is the fade. */
+  const [phase, setPhase] = useState<"shut" | "open" | "closing">("shut");
+  useEffect(() => {
+    if (!shown) {
+      setPhase((was) => (was === "shut" ? "shut" : "closing"));
+      return;
+    }
+    const id = requestAnimationFrame(() => setPhase("open"));
+    return () => cancelAnimationFrame(id);
+  }, [shown]);
+  const open = phase === "open";
+  const closing = phase === "closing";
+  const roll = (i: number) =>
+    reducedMotion
+      ? { duration: 0 }
+      : open
+        ? { duration: MENU_ROLL, ease: MENU_EASE, delay: after(i) }
+        : { duration: MENU_SHUT, ease: MENU_EASE, delay: before(i) };
+  const fade = (i: number) =>
+    reducedMotion
+      ? { duration: 0 }
+      : open
+        ? { duration: 0.12, delay: after(i) + MENU_ROLL * 0.55 }
+        : { duration: 0.06, delay: before(i) };
+  /* an entry is not there at all until its own roll begins, so a menu waiting its turn shows no
+     slivers stacked over the button; on the way out it is the fade that takes it */
+  const show = (i: number) =>
+    reducedMotion
+      ? { duration: 0 }
+      : open
+        ? { duration: 0, delay: after(i) }
+        : closing
+          ? { duration: MENU_SHUT_FADE, ease: MENU_EASE, delay: before(i) }
+          : { duration: 0 };
+  return (
+    /* the column hangs from the bottom: the button keeps its place while the box above it grows */
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", justifyContent: "flex-end", gap: FAB_MENU_GAP, height: "100%" }}>
+      {tabs.map((tab, i) => (
+        <motion.span
+          key={i}
+          /* the entry arrives with its roll and leaves by fading, part way through a roll it
+             never finishes */
+          initial={false}
+          animate={{ opacity: open ? 1 : 0 }}
+          transition={show(i)}
+          style={{
+            position: "relative",
+            color: itemStyle.color,
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 12,
+            height: FAB_MENU_ITEM_H,
+            padding: "0 24px 0 20px",
+            fontSize: 16,
+            fontWeight: w(500, 700),
+            whiteSpace: "nowrap",
+            maxWidth: "100%",
+            boxSizing: "border-box",
+            flex: "0 0 auto",
+          }}
+        >
+          {/* the pill itself unrolls from its right edge, so the entry opens towards the text */}
+          <motion.span
+            aria-hidden
+            initial={false}
+            animate={{ scaleX: open ? 1 : closing ? MENU_SHUT_SCALE : 0.06 }}
+            transition={roll(i)}
+            style={{
+              ...itemStyle,
+              position: "absolute",
+              inset: 0,
+              transformOrigin: "100% 50%",
+              borderRadius: scaleR(28),
+              boxShadow: "0 1px 3px rgba(0,0,0,0.16)",
+            }}
+          />
+          {/* the icon and the label arrive once there is a pill wide enough to hold them */}
+          <motion.span
+            initial={false}
+            animate={{ opacity: open ? 1 : 0 }}
+            transition={fade(i)}
+            style={{ position: "relative", display: "inline-flex", alignItems: "center", gap: 12, minWidth: 0 }}
+          >
+            {tab.icon && <Icon name={tab.icon} size={22} />}
+            <span style={ellipsis}>{tab.label}</span>
+          </motion.span>
+        </motion.span>
+      ))}
+      <motion.span
+        /* scaled rather than resized: the button, its icon and its corners all land on the M size
+           together, and the drawing the editor measures never changes width */
+        initial={false}
+        animate={extended ? undefined : { scale: open ? 1 : grow }}
+        transition={
+          reducedMotion
+            ? { duration: 0 }
+            : open
+              ? { duration: MENU_BUTTON_ROLL, ease: MENU_EASE }
+              : { duration: MENU_BUTTON_SHUT, ease: MENU_EASE, delay: menuButtonWait(item) }
+        }
+        style={{
+          /* the button the menu hangs off is the FAB itself, wearing the icon that shuts it */
+          ...variantStyle(item.variant, p),
+          transformOrigin: "100% 100%",
+          width: extended ? undefined : FAB_MENU_CLOSE,
+          height: extended ? extendedFabHeight(item) : FAB_MENU_CLOSE,
+          padding: extended ? "0 20px" : undefined,
+          gap: 12,
+          fontSize: 16,
+          fontWeight: w(500, 700),
+          whiteSpace: "nowrap",
+          borderRadius: scaleR(extended ? extendedFabMetrics(extendedFabHeight(item)).radius : Math.round(FAB_MENU_CLOSE * 0.28)),
+          display: "grid",
+          placeItems: "center",
+          boxShadow: "0 3px 8px rgba(0,0,0,0.18), 0 1px 3px rgba(0,0,0,0.12)",
+          flex: "0 0 auto",
+        }}
+      >
+        {/* the cross and the button's own icon trade places, so the swap at either end is
+            between two drawings that already match */}
+        <span style={{ display: "grid", placeItems: "center", gridArea: "1 / 1" }}>
+          <motion.span
+            initial={false}
+            animate={{ opacity: open ? 1 : 0 }}
+            transition={reducedMotion ? { duration: 0 } : { duration: 0.1, delay: open ? 0.04 : 0 }}
+            style={{ gridArea: "1 / 1", display: "grid", placeItems: "center" }}
+          >
+            <Icon name="close" size={24} />
+          </motion.span>
+          {item.icon && (
+            <motion.span
+              initial={false}
+              animate={{ opacity: open ? 0 : 1 }}
+              transition={reducedMotion ? { duration: 0 } : { duration: 0.1, delay: open ? 0 : menuButtonWait(item) + 0.04 }}
+              style={{ gridArea: "1 / 1", display: "grid", placeItems: "center" }}
+            >
+              <Icon name={item.icon} size={24} />
+            </motion.span>
+          )}
+        </span>
+        {extended && item.label.trim() && <span style={{ gridArea: "1 / 2" }}>{item.label}</span>}
+      </motion.span>
+    </div>
+  );
+}
+
+function Body({ item, p, tabScroll, menuShown }: { item: Item; p: Palette; tabScroll?: number; menuShown?: boolean }) {
   const lang = useLang();
   const w = useWeight();
   const hasLabel = item.label.trim().length > 0;
   const hasSupporting = !!item.supporting?.trim();
 
+  if (menuOpen(item)) return <FabMenuContent item={item} p={p} shown={menuShown} />;
   if (MEASURED.includes(item.kind)) return <MeasuredContent item={item} p={p} />;
 
   switch (item.kind) {
@@ -450,6 +694,7 @@ function Body({ item, p, tabScroll }: { item: Item; p: Palette; tabScroll?: numb
       );
 
     case "fab": {
+      if (menuOpen(item)) return <FabMenuContent item={item} p={p} shown={menuShown} />;
       const s = item.size ?? 56;
       return (
         <div style={{ display: "grid", placeItems: "center", height: "100%" }}>
@@ -1099,55 +1344,8 @@ function Body({ item, p, tabScroll }: { item: Item; p: Palette; tabScroll?: numb
         </div>
       );
 
-    case "fabMenu": {
-      const tabs = item.tabs ?? [];
-      const filled = item.variant === "filled";
-      const fabStyle = variantStyle(item.variant, p);
-      const itemStyle = filled
-        ? { background: p.primaryContainer, color: p.onPrimaryContainer }
-        : { background: p.secondaryContainer, color: p.onSecondaryContainer };
-      return (
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: FAB_MENU_GAP, height: "100%" }}>
-          {tabs.map((tab, i) => (
-            <span
-              key={i}
-              style={{
-                ...itemStyle,
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 12,
-                height: FAB_MENU_ITEM_H,
-                padding: "0 24px 0 20px",
-                borderRadius: scaleR(28),
-                fontSize: 16,
-                fontWeight: w(500, 700),
-                whiteSpace: "nowrap",
-                maxWidth: "100%",
-                boxSizing: "border-box",
-                boxShadow: "0 1px 3px rgba(0,0,0,0.16)",
-              }}
-            >
-              {tab.icon && <Icon name={tab.icon} size={22} />}
-              <span style={ellipsis}>{tab.label}</span>
-            </span>
-          ))}
-          <span
-            style={{
-              ...fabStyle,
-              width: 56,
-              height: 56,
-              borderRadius: scaleR(16),
-              display: "grid",
-              placeItems: "center",
-              boxShadow: "0 3px 8px rgba(0,0,0,0.18), 0 1px 3px rgba(0,0,0,0.12)",
-              flex: "0 0 auto",
-            }}
-          >
-            {item.icon && <Icon name={item.icon} size={24} />}
-          </span>
-        </div>
-      );
-    }
+    case "fabMenu":
+      return <FabMenuContent item={item} p={p} />;
 
     case "toolbar": {
       const tabs = item.tabs ?? [];
@@ -1249,7 +1447,7 @@ function Body({ item, p, tabScroll }: { item: Item; p: Palette; tabScroll?: numb
 }
 
 function boxStyle(item: Item, p: Palette): React.CSSProperties {
-  if (NO_BOX.includes(item.kind)) return { background: "transparent", border: "none" };
+  if (NO_BOX.includes(item.kind) || menuOpen(item)) return { background: "transparent", border: "none" };
   switch (item.kind) {
     case "box": {
       const t = item.fill ?? "surfaceContainerLow";
@@ -1310,7 +1508,7 @@ function boxStyle(item: Item, p: Palette): React.CSSProperties {
 }
 
 function shadowOf(item: Item): string {
-  if (NO_BOX.includes(item.kind)) return "none";
+  if (NO_BOX.includes(item.kind) || menuOpen(item)) return "none";
   switch (item.kind) {
     case "navRail":
       return item.railModal && item.railExpanded ? "0 2px 6px rgba(0,0,0,0.16), 0 1px 2px rgba(0,0,0,0.10)" : "none";
@@ -1375,10 +1573,13 @@ export function M3Node({
   const reducedMotion = useReducedMotion();
   const instantRail = reducedMotion && item.kind === "navRail" && isWideRail(item);
   const radiusTransition = instantRail ? { duration: 0 } : RADIUS_TWEEN;
+  /* a menu on its way out is still drawn open, so the part is measured and boxed as it looks */
+  const menu = useMenuPhase(item);
+  const drawn = menu.drawn && !menuOpen(item) ? ({ ...item, [fabOpen]: true } as Item) : item;
   const r = radii ?? baseRadii(item);
-  const size = sizeOf(item, widths);
-  const measured = MEASURED.includes(item.kind) && !((item.kind === "switch" || item.kind === "button") && item.size);
-  const clips = !NO_BOX.includes(item.kind) && item.kind !== "textField" && item.kind !== "select";
+  const size = sizeOf(drawn, widths);
+  const measured = isMeasured(drawn);
+  const clips = !NO_BOX.includes(item.kind) && !menuOpen(drawn) && item.kind !== "textField" && item.kind !== "select";
 
   return (
     <motion.div
@@ -1402,7 +1603,7 @@ export function M3Node({
         scale: instantRail ? { duration: 0 } : { type: "spring", stiffness: 700, damping: 30, mass: 0.5 },
       }}
       style={{
-        ...boxStyle(item, palette),
+        ...boxStyle(drawn, palette),
         width: measured ? undefined : size.w,
         height: size.h,
         display: measured ? "inline-flex" : "block",
@@ -1418,18 +1619,19 @@ export function M3Node({
         userSelect: "none",
         touchAction: "none",
         boxSizing: "border-box",
-        boxShadow: shadowOf(item),
+        boxShadow: shadowOf(drawn),
         outline: selected ? `2px solid ${palette.primary}` : "2px solid transparent",
         outlineOffset: 3,
         /* a part that changes size with its screen, or with the size the author picked,
            eases the way the screen does; a measured part has no width of its own to ease */
-        transition: instant
-          ? "outline-color 120ms"
-          : `outline-color 120ms, height ${SETTLE_MS}ms cubic-bezier(0.2, 0, 0, 1)${measured ? "" : `, width ${SETTLE_MS}ms cubic-bezier(0.2, 0, 0, 1)`}`,
+        transition:
+          instant || menu.snap
+            ? "outline-color 120ms"
+            : `outline-color 120ms, height ${SETTLE_MS}ms cubic-bezier(0.2, 0, 0, 1)${measured ? "" : `, width ${SETTLE_MS}ms cubic-bezier(0.2, 0, 0, 1)`}`,
         flex: "0 0 auto",
       }}
     >
-      <Body item={item} p={palette} tabScroll={tabScroll} />
+      <Body item={drawn} p={palette} tabScroll={tabScroll} menuShown={menu.open} />
     </motion.div>
   );
 }
@@ -1448,8 +1650,8 @@ export function M3Static({
 }) {
   const r = radii ?? baseRadii(item);
   const size = sizeOf(item, {});
-  const measured = MEASURED.includes(item.kind) && !((item.kind === "switch" || item.kind === "button") && item.size);
-  const clips = !NO_BOX.includes(item.kind) && item.kind !== "textField" && item.kind !== "select";
+  const measured = isMeasured(item);
+  const clips = !NO_BOX.includes(item.kind) && !menuOpen(item) && item.kind !== "textField" && item.kind !== "select";
   return (
     <div
       style={{

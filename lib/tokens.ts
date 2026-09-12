@@ -39,6 +39,15 @@ export function buttonMetrics(height: number): ButtonMetrics {
   return { h, padX: mix(lo.padX, hi.padX), gap: mix(lo.gap, hi.gap), icon: mix(lo.icon, hi.icon), font: mix(lo.font, hi.font) };
 }
 
+/** M3's three FAB sizes; an extended FAB is the same three, given room for its label */
+export const FAB_SIZES = [
+  { key: "s", d: 40, h: 56 },
+  { key: "m", d: 56, h: 80 },
+  { key: "l", d: 96, h: 96 },
+] as const;
+export const FAB_H_MIN = 40;
+export const FAB_H_MAX = 96;
+
 /** the named size a height lands exactly on, if it lands on one */
 export const buttonSizeKeyOf = (height: number): ButtonSizeKey | null => BUTTON_SIZES.find((s) => s.h === height)?.key ?? null;
 export const GAP = 3; // connected group spacing
@@ -679,7 +688,7 @@ export const KIND_SPEC: Record<Kind, KindSpec> = {
     hasLabel: false,
     hasSupporting: false,
     hasIcon: true,
-    size: { min: 40, max: 128, step: 4, icon: "open_in_full", presets: [40, 56, 96] },
+    size: { min: FAB_H_MIN, max: FAB_H_MAX, step: 4, icon: "open_in_full", presets: FAB_SIZES.map((f) => f.d) },
     defLabel: "",
     defIcon: "edit",
     defSize: 56,
@@ -697,6 +706,7 @@ export const KIND_SPEC: Record<Kind, KindSpec> = {
     hasLabel: true,
     hasSupporting: false,
     hasIcon: true,
+    size2: { min: 56, max: 96, step: 4, icon: "height", presets: [56, 80, 96] },
     defLabel: "作成",
     defIcon: "edit",
     defVariant: "tonal",
@@ -1365,6 +1375,8 @@ export type Item = {
   /** the time a clock is set to */
   hour?: number;
   minute?: number;
+  /** runtime-only: the editor is showing this FAB's menu open. Never written to JSON. */
+  [fabOpen]?: boolean;
 };
 
 export type ToggleLook = { icon?: string | null; variant?: Variant; label?: string };
@@ -1429,6 +1441,61 @@ export const buttonHeightOf = (it: Item) =>
 /** a button is at its narrowest a circle, so how short it is sets how narrow it can be */
 export const buttonMinWidth = (it: Item) => buttonHeightOf(it);
 
+/** The two shapes a FAB takes: the circle and the one that carries a label. Opening a menu is
+ *  something either of them can be asked to do, so it is a tap action rather than a shape. */
+export const FAB_KINDS = ["fab", "extendedFab"] as const;
+export type FabKind = (typeof FAB_KINDS)[number];
+export const isFab = (k: Kind): k is FabKind => (FAB_KINDS as readonly string[]).includes(k);
+/** parts the palette does not list on their own: a FAB's other two shapes are reached from its
+ *  own panel, where the three sit side by side. A saved sketch may still hold any of them. */
+export const PALETTE_HIDDEN: Kind[] = ["extendedFab", "fabMenu"];
+/** how tall an extended FAB is drawn, and what it is made of at that height */
+export const extendedFabHeight = (it: Item) => clamp(Math.round(it.size2 ?? 56), 56, FAB_H_MAX);
+export function extendedFabMetrics(h: number) {
+  /* the label and the icon grow with the container, the way the three named sizes do */
+  const k = (h - 56) / (FAB_H_MAX - 56);
+  return {
+    h,
+    padX: Math.round(lerp(20, 28, k)),
+    gap: Math.round(lerp(12, 16, k)),
+    icon: Math.round(lerp(24, 32, k)),
+    font: Math.round(lerp(14, 20, k)),
+    radius: Math.round(lerp(16, 28, k)),
+  };
+}
+
+/** the patch that turns one shape of FAB into the other, carrying what the two have in common */
+export function fabTypePatch(it: Item, to: FabKind): Partial<Item> {
+  if (it.kind === to) return {};
+  const base: Partial<Item> = { kind: to };
+  if (to === "fab") return { ...base, size: it.size2 ?? 56, size2: undefined };
+  return { ...base, size: undefined, size2: Math.max(56, it.size ?? 56), label: it.label || KIND_SPEC.extendedFab.defLabel };
+}
+
+/** target id for the menu a FAB opens: the entries rise out of the button itself */
+export const MENU_TARGET = "menu";
+/** the FAB has a menu to open */
+export const hasMenu = (it: Item) => isFab(it.kind) && it.action?.to === MENU_TARGET;
+/** runtime-only: the editor is showing that menu open. Never part of a saved sketch. */
+export const fabOpen = Symbol("fabOpen");
+/** the menu is drawn open: in the editor while it is being set up, in the preview once tapped */
+export const menuOpen = (it: Item) => hasMenu(it) && it[fabOpen] === true;
+/** the patch that gives a FAB a menu, or takes it away again; its entries are kept either way */
+export function menuPatch(it: Item, on: boolean): Partial<Item> {
+  if (!on) return { action: undefined, [fabOpen]: undefined };
+  return { action: { to: MENU_TARGET, transition: "none" }, tabs: it.tabs ?? defaultTabsFor("fabMenu") };
+}
+/** how tall a FAB stands with its menu open: the entries, then the button that closes them */
+export const menuHeight = (it: Item, fabH: number) => fabH + (it.tabs?.length ?? 0) * (FAB_MENU_ITEM_H + FAB_MENU_GAP);
+
+/** a sketch saved when a menu was a part of its own: the FAB keeps its entries and is asked to
+ *  open them instead */
+export function migrateFabMenu(it: Item): Item {
+  if (it.kind !== "fabMenu") return it;
+  const { size: _drop, ...rest } = it;
+  return { ...rest, kind: "fab", size: 56, icon: KIND_SPEC.fab.defIcon, action: { to: MENU_TARGET, transition: "none" } };
+}
+
 /** the one measure a run of buttons shares: the part that is standing still sets it, and
  *  whatever joins the run takes it, so the run reads as one band rather than a staircase.
  *  A button keeps the width it was given unless it is now narrower than it is tall. */
@@ -1465,7 +1532,8 @@ export const TRANSITIONS: { key: Transition; label: string; icon: string }[] = [
 /** slots on a bar that can each carry their own tap action */
 export function actionSlotsOf(it: Item): IconSlot[] {
   if (it.kind === "topAppBar" || it.kind === "bottomNav" || it.kind === "navRail" || it.kind === "toolbar") return iconSlotsOf(it).filter((s) => !!s.value);
-  if (it.kind === "fabMenu") return (it.tabs ?? []).map((t, i) => ({ key: `tab:${i}`, label: t.label || `${i + 1}`, value: t.icon || null }));
+  /* the entries of a menu, whichever FAB opens it */
+  if (it.kind === "fabMenu" || hasMenu(it)) return (it.tabs ?? []).map((t, i) => ({ key: `tab:${i}`, label: t.label || `${i + 1}`, value: t.icon || null }));
   if (it.kind === "tabs") return (it.tabs ?? []).map((t, i) => ({ key: `tab:${i}`, label: t.label || `${i + 1}`, value: null }));
   return [];
 }
@@ -1935,7 +2003,9 @@ export function makeItem(kind: Kind): Item {
 }
 
 /** Content-sized kinds are measured in the DOM; the rest derive from spec + size. */
-export const MEASURED: Kind[] = ["button", "extendedFab", "chip", "switch", "checkbox", "text", "splitButton", "radio", "badge"];
+export const MEASURED: Kind[] = ["button", "extendedFab", "chip", "switch", "checkbox", "text", "splitButton", "radio", "badge", "fabMenu"];
+/** the part is as wide as its own content makes it, whatever kind it is */
+export const isMeasured = (it: Item) => (MEASURED.includes(it.kind) && !((it.kind === "switch" || it.kind === "button") && it.size)) || menuOpen(it);
 
 /** Progress track thickness range in dp; Material's standard bar is 4 and its thick bar 8. */
 export const TRACK_MIN = 2;
@@ -1959,6 +2029,9 @@ export function sizeOf(it: Item, widths: Record<string, number>) {
     case "button":
       return { w: it.size ?? widths[it.id] ?? s.w, h: buttonHeightOf(it) };
     case "extendedFab":
+      return menuOpen(it)
+        ? { w: widths[it.id] ?? 220, h: menuHeight(it, extendedFabHeight(it)) }
+        : { w: widths[it.id] ?? 128, h: extendedFabHeight(it) };
     case "chip":
     case "checkbox":
     case "splitButton":
@@ -1967,15 +2040,17 @@ export function sizeOf(it: Item, widths: Record<string, number>) {
     case "badge":
       return { w: widths[it.id] ?? 16, h: it.label.trim() ? s.h : 6 };
     case "fabMenu":
-      return { w: n, h: 56 + (it.tabs?.length ?? 0) * (FAB_MENU_ITEM_H + FAB_MENU_GAP) };
+      /* the menu is as wide as its widest entry: nothing to set, so nothing to get wrong */
+      return { w: widths[it.id] ?? n, h: 56 + (it.tabs?.length ?? 0) * (FAB_MENU_ITEM_H + FAB_MENU_GAP) };
     case "toolbar":
       return { w: toolbarWidth(it), h: s.h };
     case "tabs":
       return { w: n, h: s.h };
     case "text":
       return { w: widths[it.id] ?? 120, h: Math.round(n * 1.3) };
-    case "iconButton":
     case "fab":
+      return menuOpen(it) ? { w: widths[it.id] ?? 220, h: menuHeight(it, FAB_MENU_CLOSE) } : { w: n, h: n };
+    case "iconButton":
     case "circularProgress":
     case "loadingIndicator":
     case "image":
@@ -2049,6 +2124,8 @@ export function baseRadii(it: Item): Radii {
     }
     case "fab":
       return uniformRadii(scaleR(Math.round((it.size ?? 56) * 0.28)));
+    case "extendedFab":
+      return uniformRadii(scaleR(extendedFabMetrics(extendedFabHeight(it)).radius));
     case "fabMenu":
       return uniformRadii(0);
     case "iconButton":
@@ -2075,6 +2152,8 @@ export function baseRadii(it: Item): Radii {
 }
 
 export const FAB_MENU_ITEM_H = 56;
+/** the button an open menu hangs off: the M size, whatever size the FAB itself is drawn at */
+export const FAB_MENU_CLOSE = 56;
 
 /** a tab row fits up to this many fixed tabs; more become M3 scrollable tabs */
 export const FIXED_TABS_MAX = 5;
@@ -2101,6 +2180,19 @@ function remapTabActions(actions: Item["actions"], to: (j: number) => number | u
     if (j !== undefined) next[`tab:${j}`] = a;
   }
   return Object.keys(next).length ? next : undefined;
+}
+
+/** the patch that puts the entries in a new order, carrying each one's tap target with it.
+ *  `order` holds the old index of every entry, in the order they are to be read. */
+export function reorderTabsPatch(it: Item, order: number[]): Pick<Item, "tabs" | "selected" | "actions"> {
+  const cur = it.tabs ?? [];
+  const tabs = order.map((j) => ({ ...cur[j] }));
+  const to = new Map(order.map((from, at) => [from, at]));
+  return {
+    tabs,
+    selected: it.selected === undefined ? undefined : to.get(it.selected) ?? it.selected,
+    actions: remapTabActions(it.actions, (j) => to.get(j)),
+  };
 }
 
 /** the patch that drops entry i: later entries, the selected index and the tap targets move up one; a

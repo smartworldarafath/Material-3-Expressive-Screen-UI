@@ -1,14 +1,54 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { BACK_TARGET, BUTTON_H_MAX, BUTTON_H_MIN, BUTTON_SIZES, Frame, Item, KIND_SPEC, LINK_TARGET, PHONE_W, Palette, R_INNER, Variant, buttonHeightOf, buttonMinWidth, contentWidth, frameSizeOf, halfWidth, isPhoneFrame, toggleIcon, variantStyle } from "@/lib/tokens";
+import { Reorder, useDragControls } from "motion/react";
+import {
+  BACK_TARGET,
+  BUTTON_H_MAX,
+  BUTTON_H_MIN,
+  BUTTON_SIZES,
+  FAB_H_MAX,
+  FAB_H_MIN,
+  FAB_KINDS,
+  FAB_SIZES,
+  FabKind,
+  Frame,
+  Item,
+  KIND_SPEC,
+  LINK_TARGET,
+  MENU_TARGET,
+  fabOpen,
+  hasMenu,
+  menuOpen,
+  menuPatch,
+  NavTab,
+  PHONE_W,
+  Palette,
+  R_INNER,
+  Variant,
+  actionSlotsOf,
+  buttonHeightOf,
+  buttonMinWidth,
+  contentWidth,
+  defaultTabsFor,
+  extendedFabHeight,
+  fabTypePatch,
+  frameSizeOf,
+  halfWidth,
+  isFab,
+  isPhoneFrame,
+  removeTabPatch,
+  reorderTabsPatch,
+  toggleIcon,
+  variantStyle,
+} from "@/lib/tokens";
 import { IconPicker } from "./IconPicker";
 import { Icon, M3Static } from "./M3Node";
-import { Field, Section, Select, SelectOption, Slider } from "./ui";
+import { Field, IconBtn, Section, Segmented, Select, SelectOption, Slider } from "./ui";
 import { AiHooks, variantsOf } from "./Inspector";
 import { LinkStage, TapStage } from "./TapStage";
 import { AiIconBtn, AlignBox, PartHeader, PartTabs, PlaceFn, Tab, actionOptionsOf } from "./PartPanel";
-import { t, useLang } from "@/lib/i18n";
+import { KIND_TEXT, t, useLang } from "@/lib/i18n";
 
 export type { PlaceFn };
 
@@ -122,16 +162,17 @@ function WidthRow({ value, onChange, frameW, p }: { value: number | undefined; o
   );
 }
 
-/** the five heights M3 names, as one connected run. Each cell carries its own name, because
- *  XS to XL is what the size is called everywhere else in Material. */
-function HeightRow({ value, onChange, p }: { value: number; onChange: (h: number) => void; p: Palette }) {
+/** the heights M3 names, as one connected run. Each cell carries its own name, because XS to XL
+ *  (and S to L for a FAB) is what the size is called everywhere else in Material. */
+function HeightRow({ value, onChange, steps, p }: { value: number; onChange: (h: number) => void; steps?: { key: string; h: number }[]; p: Palette }) {
   const h = 40;
+  const cells = steps ?? BUTTON_SIZES.map((b) => ({ key: b.key, h: b.h }));
   return (
     <div role="radiogroup" style={{ display: "flex", gap: 3 }}>
-      {BUTTON_SIZES.map((c, i) => {
+      {cells.map((c, i) => {
         const on = value === c.h;
         const first = i === 0;
-        const last = i === BUTTON_SIZES.length - 1;
+        const last = i === cells.length - 1;
         const label = c.key.toUpperCase();
         const title = `${label} · ${c.h}dp`;
         return (
@@ -168,6 +209,181 @@ function HeightRow({ value, onChange, p }: { value: number; onChange: (h: number
         );
       })}
     </div>
+  );
+}
+
+/** the three shapes a FAB takes, as one connected run: the circle, the one with a label, and
+ *  the one that opens a menu. Picking one turns the part into it, keeping what they share. */
+function FabTypeRow({ value, onChange, p }: { value: FabKind; onChange: (k: FabKind) => void; p: Palette }) {
+  const lang = useLang();
+  const words: Record<FabKind, string> = { fab: t("fabPlain", lang), extendedFab: t("fabExtended", lang) };
+  return (
+    <Segmented<FabKind>
+      options={FAB_KINDS.map((k) => ({ key: k, label: words[k], title: KIND_TEXT[lang][k]?.noun ?? KIND_SPEC[k].label }))}
+      value={value}
+      onChange={onChange}
+      p={p}
+    />
+  );
+}
+
+/** What a FAB menu opens: one row per entry, dragged by the handle at the start of its words.
+ *  Carrying a row down onto the button that adds entries turns that button into the one that
+ *  takes this one out, so there is nothing to delete with until something is being dragged. */
+function MenuItems({ item, onChange, p }: { item: Item; onChange: (patch: Partial<Item>) => void; p: Palette }) {
+  const lang = useLang();
+  const [pick, setPick] = useState<number | null>(null);
+  const [dragging, setDragging] = useState<number | null>(null);
+  const [overBin, setOverBin] = useState(false);
+  const bin = useRef<HTMLButtonElement | null>(null);
+  const tabs: NavTab[] = item.tabs ?? [];
+  /* a name per row that survives a reorder, so the list knows which row moved where */
+  const keys = useRef<string[]>([]);
+  if (keys.current.length !== tabs.length) {
+    keys.current = tabs.map((_, i) => keys.current[i] ?? `e${i}-${Math.random().toString(36).slice(2, 7)}`);
+  }
+  const set = (i: number, patch: Partial<NavTab>) => onChange({ tabs: tabs.map((t, j) => (j === i ? { ...t, ...patch } : t)) });
+  const onBin = (e: { clientX: number; clientY: number }) => {
+    const r = bin.current?.getBoundingClientRect();
+    return !!r && e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top - 8 && e.clientY <= r.bottom + 8;
+  };
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+      <Reorder.Group
+        axis="y"
+        values={keys.current}
+        onReorder={(next: string[]) => {
+          const order = next.map((k) => keys.current.indexOf(k));
+          keys.current = next;
+          onChange(reorderTabsPatch(item, order));
+        }}
+        style={{ display: "flex", flexDirection: "column", gap: 6, padding: 0, margin: 0 }}
+      >
+        {tabs.map((tab, i) => (
+          <MenuRow
+            key={keys.current[i]}
+            id={keys.current[i]}
+            tab={tab}
+            open={pick === i}
+            onPick={() => setPick(pick === i ? null : i)}
+            onLabel={(label) => set(i, { label })}
+            onDragStart={() => setDragging(i)}
+            onDrag={(e) => setOverBin(onBin(e))}
+            onDragEnd={(e) => {
+              const drop = onBin(e);
+              setDragging(null);
+              setOverBin(false);
+              if (drop && tabs.length > 1) onChange(removeTabPatch(item, i));
+            }}
+            p={p}
+          />
+        ))}
+      </Reorder.Group>
+      {pick !== null && tabs[pick] && (
+        <IconPicker value={tabs[pick].icon} onChange={(icon) => set(pick, { icon: icon ?? "" })} onClose={() => setPick(null)} palette={p} />
+      )}
+      <button
+        ref={bin}
+        onClick={() => {
+          const spare = defaultTabsFor("fabMenu");
+          onChange({ tabs: [...tabs, { ...spare[tabs.length % spare.length] }] });
+        }}
+        className="m3-press"
+        style={{
+          height: 44,
+          borderRadius: 22,
+          border: `1px ${dragging !== null ? "dashed" : "solid"} ${overBin ? p.error : dragging !== null ? p.error : p.outline}`,
+          background: overBin ? p.errorContainer : "transparent",
+          color: dragging !== null ? p.error : p.primary,
+          fontSize: 13,
+          fontWeight: 600,
+          cursor: dragging !== null ? "copy" : "pointer",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 6,
+          transition: "background 120ms, color 120ms, border-color 120ms",
+        }}
+      >
+        <Icon name={dragging !== null ? "delete" : "add"} size={18} />
+        {t(dragging !== null ? "dropToRemove" : "addTab", lang)}
+      </button>
+      {/* how an entry is moved and how it is taken out, in the one line it takes to say */}
+      <div style={{ fontSize: 11, lineHeight: 1.4, color: p.onSurfaceVariant, padding: "0 6px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        {t("menuItemsHint", lang)}
+      </div>
+    </div>
+  );
+}
+
+/** one entry: the handle at the start of its words, the words, and the icon beside them */
+function MenuRow({
+  id,
+  tab,
+  open,
+  onPick,
+  onLabel,
+  onDragStart,
+  onDrag,
+  onDragEnd,
+  p,
+}: {
+  id: string;
+  tab: NavTab;
+  open: boolean;
+  onPick: () => void;
+  onLabel: (v: string) => void;
+  onDragStart: () => void;
+  onDrag: (e: { clientX: number; clientY: number }) => void;
+  onDragEnd: (e: { clientX: number; clientY: number }) => void;
+  p: Palette;
+}) {
+  const lang = useLang();
+  const controls = useDragControls();
+  return (
+    <Reorder.Item
+      value={id}
+      dragListener={false}
+      dragControls={controls}
+      onDragStart={onDragStart}
+      onDrag={(e) => onDrag(e as PointerEvent)}
+      onDragEnd={(e) => onDragEnd(e as PointerEvent)}
+      style={{ listStyle: "none", display: "flex", gap: 6, alignItems: "center", position: "relative" }}
+    >
+      <div style={{ position: "relative", flex: 1, minWidth: 0 }}>
+        <Field value={tab.label} onChange={onLabel} placeholder={t("label", lang)} p={p} icon="drag_indicator" height={44} />
+        {/* the handle sits where the field draws its mark, and is the only thing that drags */}
+        <span
+          onPointerDown={(e) => {
+            e.preventDefault();
+            controls.start(e);
+          }}
+          title={t("reorder", lang)}
+          style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 38, cursor: "grab", touchAction: "none" }}
+        />
+      </div>
+      <button
+        onClick={onPick}
+        title={t("changeIcon", lang)}
+        aria-label={t("changeIcon", lang)}
+        aria-expanded={open}
+        className="m3-press"
+        style={{
+          width: 44,
+          height: 44,
+          flex: "0 0 auto",
+          borderRadius: 22,
+          border: tab.icon || open ? "none" : `1.5px dashed ${p.outline}`,
+          background: open ? p.primary : tab.icon ? p.surfaceContainerHigh : "transparent",
+          color: open ? p.onPrimary : tab.icon ? p.onSurface : p.outline,
+          cursor: "pointer",
+          display: "grid",
+          placeItems: "center",
+        }}
+      >
+        {tab.icon ? <Icon name={tab.icon} size={22} /> : <Icon name="add" size={20} />}
+      </button>
+    </Reorder.Item>
   );
 }
 
@@ -256,6 +472,7 @@ export function ButtonInspector({
   selfRect,
   allFrames,
   onShowOn,
+  onShowMenu,
 }: {
   ai: AiHooks;
   item: Item;
@@ -276,10 +493,14 @@ export function ButtonInspector({
   allFrames: Frame[];
   /** asks the canvas to draw this button in its "on" look (or the normal one again) */
   onShowOn?: (on: boolean) => void;
+  /** asks the canvas to show this FAB's menu open while it is being set up */
+  onShowMenu?: (open: boolean) => void;
 }) {
   const lang = useLang();
   const spec = KIND_SPEC[item.kind];
   const [tab, setTab] = useState<Tab>("design");
+  /** which entry of a FAB menu the trigger tab is setting */
+  const [slot, setSlot] = useState("tab:0");
   /** which icon slot the picker edits: the normal look or the "on" look */
   const [picker, setPicker] = useState<"none" | "icon" | "toggle">("none");
   /** the canvas shows the "on" look while the on-row is being edited */
@@ -292,8 +513,20 @@ export function ButtonInspector({
     setPicker("none");
     setShownOnState(false);
   }, [item.id]);
+  /* the canvas shows the menu while this tab is open, and the button again when it is not */
+  const menuShown = tab === "behavior" && hasMenu(item);
+  useEffect(() => {
+    onShowMenu?.(menuShown);
+    return () => onShowMenu?.(false);
+  }, [menuShown, onShowMenu]);
 
   const isIcon = item.kind === "iconButton";
+  const fab = isFab(item.kind);
+  /* a FAB may be asked to open a menu: the entries are its, and each has its own destination */
+  const isMenu = hasMenu(item);
+  const isExtended = item.kind === "extendedFab";
+  /* the parts with no words of their own: their text section is the icon alone */
+  const iconOnly = isIcon || item.kind === "fab";
   const isToggle = !!item.toggle;
   const isLink = item.action?.to === LINK_TARGET;
   const setToggle = (patch: Partial<NonNullable<Item["toggle"]>>) => onChange({ toggle: { ...(item.toggle ?? {}), ...patch } });
@@ -302,6 +535,11 @@ export function ButtonInspector({
   const actionValue = isToggle ? "toggle" : (item.action?.to ?? "none");
   const actionOptions: SelectOption[] = actionOptionsOf(item, frame, allFrames, lang);
   const pickAction = (k: string) => {
+    if (k === MENU_TARGET) {
+      onChange({ toggle: undefined, ...menuPatch(item, true) });
+      return;
+    }
+    if (isMenu) onChange(menuPatch(item, false));
     if (k === "toggle") {
       /* the on look starts out filled, the usual M3 pair; a filled button turns tonal instead.
        * A toggle button stays on its screen, so a destination it had is dropped with it. */
@@ -320,15 +558,17 @@ export function ButtonInspector({
   };
 
   const frameW = frame ? frameSizeOf(frame).w : PHONE_W;
-  const size = spec.size!;
+  const size = spec.size ?? spec.size2 ?? { min: 40, max: PHONE_W, step: 4, icon: "width" };
   /* what the slider shows is the width on the canvas, even while the text sets it */
   const width = item.size ?? measured ?? spec.w;
-  const height = buttonHeightOf(item);
+  /* the one measure each shape is given: a circle's diameter, a label's height, a button's height */
+  const height = isExtended ? extendedFabHeight(item) : item.kind === "fab" ? (item.size ?? 56) : buttonHeightOf(item);
   /* a button is a circle at its narrowest, so how short it is says how narrow it can be */
   const minW = Math.min(buttonMinWidth(item), width);
   /* a circle's one measure is its width; a button's is its height, and a width the author set
    * that is now narrower than the button is tall grows with it */
-  const setHeight = (v: number) => onChange(isIcon ? { size: v } : item.size && item.size < v ? { size2: v, size: v } : { size2: v });
+  const setHeight = (v: number) =>
+    onChange(isIcon || item.kind === "fab" ? { size: v } : isExtended ? { size2: v } : item.size && item.size < v ? { size2: v, size: v } : { size2: v });
 
   const iconBtn = (icon: string | null, faint: boolean, open: boolean, title: string, onClick: () => void) => (
     <button
@@ -365,11 +605,16 @@ export function ButtonInspector({
 
       {tab === "design" && (
         <>
-          <Section id="btn-text" icon={isIcon ? "insert_emoticon" : "short_text"} title={t(isIcon ? "icon" : "text", lang)} p={p} onToggle={(open) => { if (!open) setPicker("none"); }}>
+          {fab && (
+            <Section id="fab-type" icon="add_circle" title={t("fabType", lang)} p={p}>
+              <FabTypeRow value={item.kind as FabKind} onChange={(k) => onChange(fabTypePatch(item, k))} p={p} />
+            </Section>
+          )}
+          <Section id="btn-text" icon={iconOnly ? "insert_emoticon" : "short_text"} title={t(iconOnly ? "icon" : "text", lang)} p={p} onToggle={(open) => { if (!open) setPicker("none"); }}>
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                 {isToggle && <StateMark on={false} p={p} title={t("normalState", lang)} />}
-                {!isIcon && (
+                {!iconOnly && (
                   <div style={{ flex: 1, minWidth: 0 }} onFocusCapture={() => setShownOn(false)}>
                     <Field value={item.label} onChange={(label) => onChange({ label })} placeholder={t("label", lang)} p={p} />
                   </div>
@@ -378,14 +623,14 @@ export function ButtonInspector({
                   setShownOn(false);
                   setPicker(picker === "icon" ? "none" : "icon");
                 })}
-                {isIcon && <span style={{ flex: 1 }} />}
+                {iconOnly && <span style={{ flex: 1 }} />}
               </div>
               {picker === "icon" && <IconPicker value={item.icon} onChange={(icon) => onChange({ icon })} onClose={() => setPicker("none")} palette={p} />}
               {isToggle && (
                 /* the on look: an empty box keeps the normal text, shown faintly as the placeholder */
                 <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                   <StateMark on p={p} title={t("onState", lang)} />
-                  {!isIcon && (
+                  {!iconOnly && (
                     <div style={{ flex: 1, minWidth: 0 }} onFocusCapture={() => setShownOn(true)}>
                       <Field value={item.toggle?.label ?? ""} onChange={(label) => setToggle({ label: label || undefined })} placeholder={item.label || t("label", lang)} p={p} />
                     </div>
@@ -394,7 +639,7 @@ export function ButtonInspector({
                     setShownOn(true);
                     setPicker(picker === "toggle" ? "none" : "toggle");
                   })}
-                  {isIcon && <span style={{ flex: 1 }} />}
+                  {iconOnly && <span style={{ flex: 1 }} />}
                 </div>
               )}
               {picker === "toggle" && <IconPicker value={onIcon} onChange={(icon) => setToggle({ icon })} onClose={() => setPicker("none")} palette={p} />}
@@ -439,16 +684,33 @@ export function ButtonInspector({
                 eye can tell which row belongs to which measure. An icon button is a circle: it
                 has one measure, and the row of M3 sizes is all it needs. */}
             <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-              {!isIcon && (
+              {!isIcon && !fab && (
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                   <Slider icon="width" title={t("width", lang)} value={width} min={minW} max={frameW} step={size.step} onChange={(v) => onChange({ size: v })} p={p} />
                   <WidthRow value={item.size} onChange={(size) => onChange({ size })} frameW={frameW} p={p} />
                 </div>
               )}
-              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                <Slider icon={isIcon ? "open_in_full" : "height"} title={t(isIcon ? "size" : "height", lang)} value={height} min={BUTTON_H_MIN} max={BUTTON_H_MAX} step={size.step} onChange={setHeight} p={p} />
-                <HeightRow value={height} onChange={setHeight} p={p} />
-              </div>
+              {true && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  <Slider
+                    /* a part with one measure is sized corner to corner, and says so */
+                    icon={isIcon || fab ? "open_in_full" : "height"}
+                    title={t(isIcon || fab ? "size" : "height", lang)}
+                    value={height}
+                    min={fab ? (isExtended ? 56 : FAB_H_MIN) : BUTTON_H_MIN}
+                    max={fab ? FAB_H_MAX : BUTTON_H_MAX}
+                    step={size.step}
+                    onChange={setHeight}
+                    p={p}
+                  />
+                  <HeightRow
+                    value={height}
+                    onChange={setHeight}
+                    steps={fab ? FAB_SIZES.map((f) => ({ key: f.key, h: isExtended ? f.h : f.d })) : undefined}
+                    p={p}
+                  />
+                </div>
+              )}
             </div>
           </Section>
           {onPlace && (
@@ -462,8 +724,53 @@ export function ButtonInspector({
       {tab === "behavior" && (
         <Section id="btn-action" icon="ads_click" title={t("tapTo", lang)} p={p}>
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            <Select options={actionOptions} value={actionValue} onChange={pickAction} p={p} label={t("tapTo", lang)} />
-            {isToggle ? (
+            <Select
+              options={actionOptionsOf(item, frame, allFrames, lang)}
+              value={isMenu ? MENU_TARGET : actionValue}
+              onChange={pickAction}
+              p={p}
+              label={t("tapTo", lang)}
+            />
+            {isMenu && (
+              <>
+                <MenuItems item={item} onChange={onChange} p={p} />
+                {/* the entry being sent somewhere, then where it goes */}
+                <Segmented<string>
+                  options={actionSlotsOf(item).map((sl) => ({ key: sl.key, icon: sl.value ?? undefined, label: sl.value ? undefined : sl.label, title: sl.label, dot: !!item.actions?.[sl.key] }))}
+                  value={slot}
+                  onChange={setSlot}
+                  p={p}
+                  height={40}
+                />
+                <Select
+                  options={actionOptionsOf(item, frame, allFrames, lang).filter((o) => o.key !== "toggle")}
+                  value={item.actions?.[slot]?.to ?? "none"}
+                  onChange={(k) => {
+                    const actions = { ...(item.actions ?? {}) };
+                    if (k === "none") delete actions[slot];
+                    else actions[slot] = { to: k, transition: k === LINK_TARGET ? "none" : (actions[slot]?.transition ?? "slide"), url: actions[slot]?.url };
+                    onChange({ actions: Object.keys(actions).length ? actions : undefined });
+                  }}
+                  p={p}
+                  label={t("tapTo", lang)}
+                />
+              </>
+            )}
+            {isMenu ? (
+              <TapStage
+                frames={allFrames}
+                self={frame}
+                selfRect={selfRect}
+                action={item.actions?.[slot]}
+                onChange={(a) => {
+                  const actions = { ...(item.actions ?? {}) };
+                  if (a) actions[slot] = a;
+                  else delete actions[slot];
+                  onChange({ actions: Object.keys(actions).length ? actions : undefined });
+                }}
+                p={p}
+              />
+            ) : isToggle ? (
               <>
                 <ToggleStage item={item} shownOn={shownOn} onPick={setShownOn} p={p} />
                 <div style={{ fontSize: 12, lineHeight: 1.5, color: p.onSurfaceVariant, padding: "0 4px" }}>{t("toggleLookHint", lang)}</div>
@@ -477,7 +784,7 @@ export function ButtonInspector({
         </Section>
       )}
       {tab === "behavior" && (
-        <Section id="btn-note" icon="short_text" title={t("noteDialog", lang)} p={p}>
+        <Section id="btn-note" icon="short_text" title={t(item.kind === "button" ? "noteDialog" : "partSpec", lang)} p={p}>
           <Field
             value={item.note ?? ""}
             onChange={(note) => onChange({ note })}

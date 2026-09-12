@@ -24,6 +24,7 @@ import {
   VARIANTS,
   Variant,
   actionSlotsOf,
+  isFab,
   TRACK_DEFAULT,
   TRACK_MAX,
   TRACK_MIN,
@@ -632,6 +633,7 @@ export function Inspector({
   selfRect,
   allFrames,
   onShowOn,
+  onShowMenu,
 }: {
   /** the AI button beside the behavior field */
   ai: AiHooks;
@@ -665,6 +667,8 @@ export function Inspector({
   allFrames?: Frame[];
   /** the canvas should draw the selected toggle button in its "on" look */
   onShowOn?: (on: boolean) => void;
+  /** asks the canvas to show a FAB's menu open while it is being set up */
+  onShowMenu?: (open: boolean) => void;
 }) {
   const lang = useLang();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -772,8 +776,8 @@ export function Inspector({
     );
   }
 
-  if (item.kind === "button" || item.kind === "iconButton") {
-    return <ButtonInspector ai={ai} item={item} palette={p} frame={frame ?? null} onChange={onChange} onDelete={onDelete} onDuplicate={onDuplicate} locked={locked} onToggleLock={onToggleLock} onPlace={onPlace} measured={widths?.[item.id]} selfRect={selfRect ?? null} allFrames={allFrames ?? frames} onShowOn={onShowOn} />;
+  if (item.kind === "button" || item.kind === "iconButton" || isFab(item.kind)) {
+    return <ButtonInspector ai={ai} item={item} palette={p} frame={frame ?? null} onChange={onChange} onDelete={onDelete} onDuplicate={onDuplicate} locked={locked} onToggleLock={onToggleLock} onPlace={onPlace} measured={widths?.[item.id]} selfRect={selfRect ?? null} allFrames={allFrames ?? frames} onShowOn={onShowOn} onShowMenu={onShowMenu} />;
   }
 
   const spec = KIND_SPEC[item.kind];
@@ -1607,7 +1611,7 @@ export function Inspector({
           p={p}
           value={item.note ?? ""}
           onChange={(note) => onChange({ note })}
-          placeholder={item.kind === "fab" || item.kind === "extendedFab" ? t("whenPressed", lang) : t("whatItDoes", lang)}
+          placeholder={t("whatItDoes", lang)}
         />
       </Section>
       )}

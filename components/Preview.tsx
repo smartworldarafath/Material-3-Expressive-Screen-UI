@@ -8,6 +8,10 @@ import {
   Action,
   BACK_TARGET,
   LINK_TARGET,
+  MENU_TARGET,
+  fabOpen,
+  hasMenu,
+  menuOpen as fabMenuOpen,
   linkUrlOf,
   BEZEL,
   Doc,
@@ -44,7 +48,7 @@ import {
   tabScrollOffset,
   SCROLL_TAB_W,
 } from "@/lib/tokens";
-import { Icon, M3Node } from "./M3Node";
+import { Icon, M3Node, menuShutMs } from "./M3Node";
 import { IconBtn } from "./ui";
 import { t, useLang } from "@/lib/i18n";
 import { constrainModalRails, modalRailOf, updateRail } from "@/lib/rail";
@@ -125,10 +129,14 @@ const screenVariants: Variants = {
 
 /** kinds whose on/off state flips when tapped in the preview */
 const TOGGLES = ["switch", "checkbox", "chip"] as const;
-const flips = (it: Item) => (TOGGLES as readonly string[]).includes(it.kind) || !!it.toggle;
+/** parts that change under a tap rather than going anywhere: a switch, a toggle button, and a
+ *  FAB with a menu, which opens where it stands */
+const flips = (it: Item) => (TOGGLES as readonly string[]).includes(it.kind) || !!it.toggle || hasMenu(it);
 
 /** the look of a part after the visitor tapped it */
 function flippedLook(it: Item): Item {
+  /* a FAB opens its menu in place: the entries rise out of the button */
+  if (hasMenu(it)) return { ...it, [fabOpen]: true };
   if ((TOGGLES as readonly string[]).includes(it.kind)) return { ...it, checked: !it.checked };
   if (it.toggle) {
     return {
@@ -221,6 +229,24 @@ function Tappable({
     window.addEventListener("pointercancel", end);
   };
   const live = !!onTap || !!onPick || (TAPPABLE.includes(item.kind) && item.kind !== "text");
+  /* an open menu has no box of its own: a state layer over it would grey the whole corner of the
+     screen the entries stand in, so the pills and the button are left to speak for themselves.
+     The menu keeps that corner while it rolls back in, so the layer stays away until it is gone. */
+  const openMenu = fabMenuOpen(item);
+  const shutMs = menuShutMs(item);
+  const [menuCorner, setMenuCorner] = useState(openMenu);
+  useEffect(() => {
+    if (openMenu) {
+      setMenuCorner(true);
+      return;
+    }
+    if (!menuCorner) return;
+    const id = setTimeout(() => setMenuCorner(false), shutMs);
+    return () => clearTimeout(id);
+  }, [openMenu, menuCorner, shutMs]);
+  /* the live reading leads the held one: the box widens to the menu on the very frame the tap
+     lands, and a layer still cut to the old one would flash across the whole width of it */
+  const boxless = openMenu || menuCorner || item.kind === "fabMenu";
   const ref = useRef<HTMLDivElement>(null);
 
   /* the open menu closes on a tap anywhere else or on Escape */
@@ -303,8 +329,8 @@ function Tappable({
       onClick={onPick ? () => onMenu?.(!menu) : onTap}
       style={{ cursor: live || onValue ? "pointer" : "default", display: "flex", position: "relative", touchAction: scrollTabs ? "pan-x" : "none" }}
     >
-      <M3Node item={item} palette={p} widths={widths} radii={radii} interactive={false} pressed={pressed && !onValue} tabScroll={scrollTabs ? tabScroll : undefined} />
-      {live && (
+      <M3Node item={item} palette={p} widths={widths} radii={radii} interactive={false} pressed={pressed && !onValue && !boxless} tabScroll={scrollTabs ? tabScroll : undefined} />
+      {live && !boxless && (
         <motion.div
           aria-hidden
           initial={false}
@@ -581,7 +607,11 @@ function Screen({
           style={{ position: "absolute", inset: 0, border: 0, padding: 0, background: "rgba(0,0,0,0.32)", zIndex: 3 }}
         />}
       </AnimatePresence>
-      {shownGroups.map((g) => (
+      {shownGroups.map((g) => {
+        /* a FAB opens its menu out of itself: the run hangs from the button's own bottom right,
+         * so the entries rise above it and the button stays where the author put it */
+        const fabCorner = g.items.length === 1 && hasMenu(g.items[0]) ? sizeOf({ ...g.items[0], [fabOpen]: undefined }, widths) : null;
+        return (
         <div
           key={g.id}
           className="m3-preview-group"
@@ -594,9 +624,10 @@ function Screen({
               ? { position: "absolute", left: g.x - frame.x, top: g.y - frame.y, zIndex: g.items.some((it) => modalIds.has(it.id)) ? 4 : g.items.some((it) => it.id === menuId) ? 2 : undefined }
               : {
                   position: "absolute",
-                  left: g.x - frame.x,
-                  top: g.y - frame.y,
-                  zIndex: g.items.some((it) => modalIds.has(it.id)) ? 4 : g.items.some((it) => it.id === menuId) ? 2 : undefined,
+                  left: g.x - frame.x + (fabCorner?.w ?? 0),
+                  top: g.y - frame.y + (fabCorner?.h ?? 0),
+                  translate: fabCorner ? "-100% -100%" : undefined,
+                  zIndex: g.items.some((it) => modalIds.has(it.id)) ? 4 : fabCorner ? 3 : g.items.some((it) => it.id === menuId) ? 2 : undefined,
                   display: "flex",
                   flexDirection: g.axis === "x" ? "row" : "column",
                   alignItems: g.axis === "x" ? "center" : "stretch",
@@ -685,7 +716,8 @@ function Screen({
             );
           }))(g.free ? freeRadii(g, widths) : null)}
         </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -824,6 +856,7 @@ export function Preview({
         return;
       }
       /* a link leaves the sketch: the page opens in a tab of its own, and the preview stays put */
+      if (a.to === MENU_TARGET) return;
       if (a.to === LINK_TARGET) {
         const href = linkUrlOf(a);
         if (href) window.open(href, "_blank", "noopener,noreferrer");

@@ -517,6 +517,8 @@ export function Field({
             color: p.onSurfaceVariant,
             pointerEvents: "none",
             lineHeight: 1,
+            /* the field itself is positioned, so the mark it carries sits above it */
+            zIndex: 1,
           }}
         >
           <Icon name={icon} size={20} />

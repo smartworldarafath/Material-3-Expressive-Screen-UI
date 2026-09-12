@@ -7,6 +7,7 @@ import {
   Action,
   BACK_TARGET,
   H,
+  hasMenu,
   carouselCountOf,
   carouselLayoutOf,
   dateLayoutOf,
@@ -15,6 +16,7 @@ import {
   minuteOf,
   timeLayoutOf,
   LINK_TARGET,
+  MENU_TARGET,
   buttonHeightOf,
   buttonSizeKeyOf,
   linkUrlOf,
@@ -194,6 +196,18 @@ function clockText(it: Item): string {
   return `${String(h % 12 || 12).padStart(2, "0")}:${String(minuteOf(it)).padStart(2, "0")} ${h >= 12 ? "PM" : "AM"}`;
 }
 
+/** the menu a FAB opens, if it has one: the entries it offers, in the order they rise */
+function fabMenuText(it: Item, lang: Lang): string {
+  if (!hasMenu(it)) return "";
+  const q = quote(lang);
+  const items = (it.tabs ?? []).map((t) => `${q(t.label || "-")}(${t.icon || "-"})`).join(lang === "en" ? ", " : "、");
+  const n = it.tabs?.length ?? 0;
+  if (lang === "ja") return `。タップすると ${n} 項目のメニュー（${items}）がボタンの上にせり上がり、アイコンは close に変わる（M3 Expressive の FloatingActionButtonMenu）`;
+  if (lang === "zh") return `。点击后在按钮上方展开 ${n} 个菜单项（${items}），图标变为 close（M3 Expressive 的 FloatingActionButtonMenu）`;
+  if (lang === "ko") return `. 탭하면 버튼 위로 ${n}개 항목 메뉴(${items})가 올라오고 아이콘은 close로 바뀐다(M3 Expressive FloatingActionButtonMenu)`;
+  return `; tapping it raises a menu of ${n} items (${items}) above the button and turns its icon into close (the M3 Expressive FloatingActionButtonMenu)`;
+}
+
 function itemJa(it: Item): string {
   const q = qj;
   const v = VARIANT_TEXT.ja[it.variant];
@@ -210,9 +224,9 @@ function itemJa(it: Item): string {
     case "iconButton":
       return `${it.icon ?? "空"} アイコンの${v}アイコンボタン`;
     case "fab":
-      return `${it.icon ?? "空"} アイコンの${v} FAB${it.size && it.size >= 96 ? "（大サイズ）" : it.size && it.size <= 40 ? "（小サイズ）" : ""}`;
+      return `${it.icon ?? "空"} アイコンの${v} FAB${it.size && it.size >= 96 ? "（大サイズ）" : it.size && it.size <= 40 ? "（小サイズ）" : ""}${fabMenuText(it, "ja")}`;
     case "extendedFab":
-      return `${q(it.label)}${it.icon ? `と ${it.icon} アイコン` : ""}の拡張 FAB（${v}）`;
+      return `${q(it.label)}${it.icon ? `と ${it.icon} アイコン` : ""}の拡張 FAB（${v}${it.size2 && it.size2 !== 56 ? `、高さ ${it.size2}dp` : ""}）${fabMenuText(it, "ja")}`;
     case "chip":
       return `${q(it.label)}のチップ${it.checked ? "（選択状態）" : ""}${it.icon && !it.checked ? `（${it.icon} アイコン付き）` : ""}`;
     case "topAppBar":
@@ -307,9 +321,9 @@ function itemEn(it: Item): string {
     case "iconButton":
       return `a ${v} icon button with the ${it.icon ?? "empty"} icon`;
     case "fab":
-      return `a ${it.size && it.size >= 96 ? "large " : it.size && it.size <= 40 ? "small " : ""}${v} FAB with the ${it.icon ?? "empty"} icon`;
+      return `a ${it.size && it.size >= 96 ? "large " : it.size && it.size <= 40 ? "small " : ""}${v} FAB with the ${it.icon ?? "empty"} icon${fabMenuText(it, "en")}`;
     case "extendedFab":
-      return `a ${v} extended FAB ${q(it.label)}${it.icon ? ` with a ${it.icon} icon` : ""}`;
+      return `a ${v} extended FAB ${q(it.label)}${it.icon ? ` with a ${it.icon} icon` : ""}${it.size2 && it.size2 !== 56 ? ` (${it.size2}dp tall)` : ""}${fabMenuText(it, "en")}`;
     case "chip":
       return `a chip ${q(it.label)}${it.checked ? " (selected)" : ""}${it.icon && !it.checked ? ` with a ${it.icon} icon` : ""}`;
     case "topAppBar":
@@ -404,9 +418,9 @@ function itemZh(it: Item): string {
     case "iconButton":
       return `${it.icon ?? "空"} 图标的${v}图标按钮`;
     case "fab":
-      return `${it.icon ?? "空"} 图标的${v} FAB${it.size && it.size >= 96 ? "（大尺寸）" : it.size && it.size <= 40 ? "（小尺寸）" : ""}`;
+      return `${it.icon ?? "空"} 图标的${v} FAB${it.size && it.size >= 96 ? "（大尺寸）" : it.size && it.size <= 40 ? "（小尺寸）" : ""}${fabMenuText(it, "zh")}`;
     case "extendedFab":
-      return `${q(it.label)}${it.icon ? `和 ${it.icon} 图标` : ""}的扩展 FAB（${v}）`;
+      return `${q(it.label)}${it.icon ? `和 ${it.icon} 图标` : ""}的扩展 FAB（${v}${it.size2 && it.size2 !== 56 ? `，高 ${it.size2}dp` : ""}）${fabMenuText(it, "zh")}`;
     case "chip":
       return `${q(it.label)}标签片${it.checked ? "（选中状态）" : ""}${it.icon && !it.checked ? `（带 ${it.icon} 图标）` : ""}`;
     case "topAppBar":
@@ -495,8 +509,8 @@ function itemKo(it: Item): string {
     case "datePicker": return `${DATE_TEXT.ko[dateLayoutOf(it)]} 형태의 날짜 선택기(${dayOf(it)}일 선택됨${dateLayoutOf(it) === "input" ? "" : ", 월 그리드와 취소 / 확인"})`;
     case "timePicker": return `${TIME_TEXT.ko[timeLayoutOf(it)]} 형태의 시간 선택기(${clockText(it)}, AM/PM 전환과 취소 / 확인)`;
     case "iconButton": return `${it.icon ?? "빈"} 아이콘의 ${v} 아이콘 버튼`;
-    case "fab": return `${it.icon ?? "빈"} 아이콘의 ${v} FAB${it.size && it.size >= 96 ? "(대형)" : it.size && it.size <= 40 ? "(소형)" : ""}`;
-    case "extendedFab": return `${q(it.label)}${it.icon ? ` 및 ${it.icon} 아이콘` : ""} 확장 FAB(${v})`;
+    case "fab": return `${it.icon ?? "빈"} 아이콘의 ${v} FAB${it.size && it.size >= 96 ? "(대형)" : it.size && it.size <= 40 ? "(소형)" : ""}${fabMenuText(it, "ko")}`;
+    case "extendedFab": return `${q(it.label)}${it.icon ? ` 및 ${it.icon} 아이콘` : ""} 확장 FAB(${v}${it.size2 && it.size2 !== 56 ? `, 높이 ${it.size2}dp` : ""})${fabMenuText(it, "ko")}`;
     case "chip": return `${q(it.label)} 칩${it.checked ? "(선택됨)" : ""}${it.icon && !it.checked ? `(${it.icon} 아이콘 포함)` : ""}`;
     case "topAppBar": return `제목이 ${q(it.label)}인 상단 앱 바${it.icon ? `, 왼쪽 ${it.icon}` : ""}${it.icon2 ? `, 오른쪽 ${it.icon2}` : ""}${it.icon || it.icon2 ? " 아이콘 버튼" : ""}`;
     case "bottomNav": {
@@ -637,6 +651,8 @@ function groupName(g: Group, lang: Lang): string {
 
 function actionText(a: Action, frames: Frame[], lang: Lang): string | null {
   const q = quote(lang);
+  /* the menu a FAB opens is described with the FAB itself */
+  if (a.to === MENU_TARGET) return null;
   if (a.to === LINK_TARGET) {
     const href = linkUrlOf(a);
     if (!href) return null;
@@ -983,7 +999,7 @@ const STYLE_NOTES: Record<Lang, Partial<Record<Kind | "boxSheet", string>>> = {
     iconButton:
       "アイコンボタン: 48dp の円形。塗りつぶし・トーナル・アウトライン・スタンダードを指定通りに使い分ける。連結したアイコンボタン群は Connected button group として実装する。",
     fab: "FAB: 通常は 56dp・角丸 16dp、大サイズは 96dp・角丸 28dp、小サイズは 40dp・角丸 12dp。トーナルは primaryContainer、塗りつぶしは primary。画面端から 16dp 離して浮かせ、影は Level 3。",
-    extendedFab: "拡張 FAB: 高さ 56dp、角丸 16dp、左にアイコン・右にラベル。",
+    extendedFab: "拡張 FAB: 高さ 56dp（M3 の 3 サイズは 56 / 80 / 96dp、角丸と文字もそれに合わせる）、角丸 16dp、左にアイコン・右にラベル。",
     chip: "チップ: 高さ 32dp、角丸 8dp。選択状態は secondaryContainer で塗り、先頭にチェックアイコンを出す。横並びのチップグループは 8dp 間隔で、はみ出す場合は横スクロール。",
     topAppBar:
       "トップアプリバー: 高さ 64dp、背景は surface。背景はステータスバーの後ろまで伸ばし、その分（システムインセット）だけ上に余白を取る。タイトルは titleLarge、左右のアイコンボタンは 48dp。スクロール時に surfaceContainer へ色が変わる標準の挙動でよい。",
@@ -1032,7 +1048,7 @@ const STYLE_NOTES: Record<Lang, Partial<Record<Kind | "boxSheet", string>>> = {
     iconButton:
       "Icon buttons: 48dp circles in the filled / tonal / outlined / standard style as specified. A connected run of icon buttons is a connected button group.",
     fab: "FAB: 56dp with 16dp corners; large is 96dp with 28dp corners; small is 40dp with 12dp corners. Tonal uses primaryContainer, filled uses primary. Float it 16dp from the screen edge with a level 3 shadow.",
-    extendedFab: "Extended FAB: 56dp tall, 16dp corners, icon on the left and label on the right.",
+    extendedFab: "Extended FAB: 56dp tall (M3's three sizes are 56 / 80 / 96dp, with the corners and the label growing to match), 16dp corners, icon on the left and label on the right.",
     chip: "Chips: 32dp tall, 8dp corners. The selected state fills with secondaryContainer and shows a leading check icon. A chip group is a row with 8dp gaps that scrolls horizontally when it overflows.",
     topAppBar:
       "Top app bar: 64dp tall on surface, with its background extended behind the status bar (pad the top by the system inset). Title in titleLarge, 48dp icon buttons on each side. The standard tint to surfaceContainer on scroll is fine.",
@@ -1080,7 +1096,7 @@ const STYLE_NOTES: Record<Lang, Partial<Record<Kind | "boxSheet", string>>> = {
       "按钮：中号，高 56dp，完全圆角（胶囊形）。填充用 primary，色调用 secondaryContainer，描边用 1dp 的 outline 边框。横向相连的按钮组以 3dp 间距排列，只把相邻的内侧圆角缩小到 8dp，外侧保持圆角（M3 Expressive 的 Connected button group）。指定了高度的按钮遵循 M3 尺寸（XS 32dp / S 40dp / M 56dp / L 96dp / XL 136dp）：左右内边距、文字和图标取该尺寸的值，圆角为高度的一半。",
     iconButton: "图标按钮：48dp 圆形。按指定使用填充／色调／描边／标准样式。相连的图标按钮组实现为 Connected button group。",
     fab: "FAB：常规 56dp、圆角 16dp；大尺寸 96dp、圆角 28dp；小尺寸 40dp、圆角 12dp。色调用 primaryContainer，填充用 primary。距屏幕边缘 16dp 悬浮，阴影为 Level 3。",
-    extendedFab: "扩展 FAB：高 56dp，圆角 16dp，左侧图标、右侧标签。",
+    extendedFab: "扩展 FAB：高 56dp（M3 的三种尺寸为 56 / 80 / 96dp，圆角与文字随之变化），圆角 16dp，左侧图标、右侧标签。",
     chip: "标签片：高 32dp，圆角 8dp。选中状态用 secondaryContainer 填充并在前面显示勾选图标。横向标签片组间距 8dp，溢出时横向滚动。",
     topAppBar:
       "顶部应用栏：高 64dp，背景为 surface。背景延伸到状态栏后面，并按系统内边距在顶部留出空间。标题用 titleLarge，左右图标按钮 48dp。滚动时变为 surfaceContainer 的标准行为即可。",
@@ -1126,7 +1142,7 @@ const STYLE_NOTES: Record<Lang, Partial<Record<Kind | "boxSheet", string>>> = {
     navRail: "내비게이션 레일: 너비 80dp, 배경 surfaceContainer, 왼쪽 가장자리의 전체 높이를 채운다. 항목은 위에서부터 세로로 배치한다. 선택 항목은 secondaryContainer 알약 표시기(56×32dp), 채운 아이콘과 아래쪽 labelMedium 레이블로 표시한다. 콘텐츠는 레일 오른쪽에 배치한다.",
     iconButton: "아이콘 버튼: 48dp 원형. 지정된 채움, 토널, 윤곽선, 표준 스타일을 사용하며 연결된 아이콘 버튼은 Connected button group으로 구현한다.",
     fab: "FAB: 기본 56dp/모서리 16dp, 대형 96dp/28dp, 소형 40dp/12dp. 토널은 primaryContainer, 채움은 primary를 사용하고 화면 가장자리에서 16dp 띄워 Level 3 그림자를 적용한다.",
-    extendedFab: "확장 FAB: 높이 56dp, 모서리 16dp, 왼쪽에 아이콘, 오른쪽에 레이블을 둔다.",
+    extendedFab: "확장 FAB: 높이 56dp(M3의 세 크기는 56 / 80 / 96dp이며 모서리와 글자도 이에 맞춘다), 모서리 16dp, 왼쪽에 아이콘, 오른쪽에 레이블을 둔다.",
     chip: "칩: 높이 32dp, 모서리 8dp. 선택 상태는 secondaryContainer로 채우고 앞쪽에 체크 아이콘을 표시한다. 칩 그룹은 간격 8dp로 가로 배치하고 넘치면 가로 스크롤한다.",
     topAppBar: "상단 앱 바: 높이 64dp, 배경 surface. 상태 표시줄 뒤까지 배경을 늘리고 시스템 인셋만큼 위쪽 여백을 둔다. 제목은 titleLarge, 양쪽 아이콘 버튼은 48dp를 사용한다.",
     bottomNav: "내비게이션 바: 높이 80dp, 배경 surfaceContainer. 제스처 내비게이션 영역까지 배경을 늘리고 시스템 인셋만큼 아래쪽 여백을 둔다. 선택 항목은 64×32dp secondaryContainer 알약 표시기, 채운 아이콘, labelMedium 레이블로 표시한다.",

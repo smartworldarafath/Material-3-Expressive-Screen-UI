@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { CATEGORIES, KIND_ORDER, KIND_SPEC, Category, Kind, Palette } from "@/lib/tokens";
+import { CATEGORIES, KIND_ORDER, KIND_SPEC, PALETTE_HIDDEN, Category, Kind, Palette } from "@/lib/tokens";
 import { Icon } from "./M3Node";
 import { KIND_TEXT, t, useLang } from "@/lib/i18n";
 import { Field, Section, Tile } from "./ui";
@@ -29,8 +29,10 @@ export function PartsPalette({
 
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase();
-    if (!s) return KIND_ORDER;
-    return KIND_ORDER.filter((k) => {
+    /* the shapes a part switches into in its own panel are not tiles of their own */
+    const listed = KIND_ORDER.filter((k) => !PALETTE_HIDDEN.includes(k));
+    if (!s) return listed;
+    return listed.filter((k) => {
       const sp = KIND_SPEC[k];
       return labelOf(k).toLowerCase().includes(s) || sp.label.toLowerCase().includes(s) || sp.noun.includes(s) || k.toLowerCase().includes(s);
     });
@@ -81,7 +83,7 @@ export function PartsPalette({
         ) : (
           CATEGORIES.map((c) => (
             <Section key={c.key} id={`cat:${c.key}`} icon={c.icon} title={lang === "en" ? c.label : CATEGORY_TEXT[lang][c.key]} p={p}>
-              <div style={grid}>{KIND_ORDER.filter((k) => KIND_SPEC[k].category === c.key).map(tile)}</div>
+              <div style={grid}>{KIND_ORDER.filter((k) => KIND_SPEC[k].category === c.key && !PALETTE_HIDDEN.includes(k)).map(tile)}</div>
             </Section>
           ))
         )}

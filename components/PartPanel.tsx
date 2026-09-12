@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { BACK_TARGET, Frame, Item, KIND_SPEC, LINK_TARGET, Palette, TAPPABLE, TOGGLEABLE, isPhoneFrame } from "@/lib/tokens";
+import { BACK_TARGET, Frame, Item, KIND_SPEC, LINK_TARGET, MENU_TARGET, Palette, TAPPABLE, TOGGLEABLE, isFab, isPhoneFrame } from "@/lib/tokens";
 import { Icon } from "./M3Node";
 import { Field, IconBtn, Section, Select, SelectOption } from "./ui";
 import { AiHooks } from "./Inspector";
@@ -290,7 +290,9 @@ export function PartHeader({
 export function actionOptionsOf(item: Item, frame: Frame | null, frames: Frame[], lang: Parameters<typeof t>[1]): SelectOption[] {
   return [
     { key: "none", label: t("none", lang), icon: "block" },
-    ...(TOGGLEABLE.includes(item.kind) ? [{ key: "toggle", label: t("toggleTitle", lang), icon: "swap_horiz" }] : []),
+    /* a FAB opens a menu where another part would flip its own look */
+    ...(isFab(item.kind) ? [{ key: MENU_TARGET, label: t("fabMenuAction", lang), icon: "menu_open" }] : []),
+    ...(TOGGLEABLE.includes(item.kind) && !isFab(item.kind) ? [{ key: "toggle", label: t("toggleTitle", lang), icon: "swap_horiz" }] : []),
     { key: BACK_TARGET, label: t("back", lang), icon: "arrow_back" },
     { key: LINK_TARGET, label: t("openLink", lang), icon: "open_in_new" },
     ...[...frames]

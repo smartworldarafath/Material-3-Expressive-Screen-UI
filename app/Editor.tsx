@@ -20,6 +20,14 @@ import {
   draftGradient,
   BUTTON_H_MAX,
   BUTTON_H_MIN,
+  FAB_H_MAX,
+  FAB_H_MIN,
+  isFab,
+  isMeasured,
+  fabOpen,
+  hasMenu,
+  menuOpen,
+  migrateFabMenu,
   buttonMinWidth,
   explodeGroup,
   freeRadii,
@@ -230,6 +238,8 @@ const SEED_FRAMES: Frame[] = [{ id: "seedF1", name: "Home", x: 0, y: 0 }];
  *  bar flush with the old 80dp bottom; keep it on the bottom edge. */
 function migrateGroups(groups: Group[], frames: Frame[]): Group[] {
   const oldNavH = KIND_SPEC.bottomNav.h - NAV_BAR_H;
+  /* a menu used to be a part of its own; now it is something a FAB is asked to open */
+  groups = groups.map((g) => (g.items.some((it) => it.kind === "fabMenu") ? { ...g, items: g.items.map(migrateFabMenu) } : g));
   return groups.map((g) => {
     if (g.items.length !== 1 || g.items[0].kind !== "bottomNav") return g;
     const f = frames.find((fr) => {
@@ -818,6 +828,10 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
     return [...map.values()];
   }, [groups, drag]);
 
+  /** a FAB whose size the author just changed, and the corner it is to keep. A part as wide as
+   *  its own label is only measured after it is drawn, so the corner is put right once the
+   *  measuring pass knows how wide it came out. */
+  const fabAnchor = useRef<{ id: string; right: number; bottom: number } | null>(null);
   useLayoutEffect(() => {
     const next: Record<string, number> = {};
     measureEls.current.forEach((el, id) => {
@@ -828,6 +842,21 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
       keys.length !== Object.keys(widthsRef.current).length ||
       keys.some((k) => widthsRef.current[k] !== next[k]);
     if (changed) setWidths(next);
+    const anchor = fabAnchor.current;
+    if (!anchor) return;
+    const g = groupsRef.current.find((x) => x.items.some((it) => it.id === anchor.id));
+    const item = g?.items.find((it) => it.id === anchor.id);
+    if (!g || !item) {
+      fabAnchor.current = null;
+      return;
+    }
+    const sz = sizeOf(item, next);
+    const dx = anchor.right - (g.x + sz.w);
+    const dy = anchor.bottom - (g.y + sz.h);
+    fabAnchor.current = null;
+    if (!dx && !dy) return;
+    instantRef.current.add(g.id);
+    setGroups((prev) => prev.map((x) => (x.id === g.id ? { ...x, x: x.x + dx, y: x.y + dy } : x)));
   });
 
   useEffect(() => {
@@ -1279,6 +1308,7 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
     side: HandleSide;
     vertical: boolean;
     round: boolean;
+    tall: boolean;
     startX: number;
     startY: number;
     start0: number;
@@ -1298,22 +1328,25 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
     /* a circle is pulled by a point on it: the drag reads along the diagonal and the one
      * measure it has -- its diameter -- follows, so it stays round the whole way */
     const round = CORNERS.includes(side);
+    /* an extended FAB is as wide as its label makes it: the one measure it has is its height */
+    const tall = item.kind === "extendedFab";
     const box = sizeOf(item, widthsRef.current);
-    const startV = vertical ? box.h : box.w;
+    const startV = vertical || tall ? box.h : box.w;
     widthDragRef.current = {
       id: item.id,
       gid: g.id,
       side,
       vertical,
       round,
+      tall,
       startX: e.clientX,
       startY: e.clientY,
       start0: vertical ? e.clientY : e.clientX,
       startV,
       v: startV,
       /* a button is a circle at its narrowest, so its height says how narrow it may be drawn */
-      min: vertical || round ? BUTTON_H_MIN : buttonMinWidth(item),
-      max: vertical || round ? BUTTON_H_MAX : f ? frameSizeOf(f).w : PHONE_W,
+      min: isFab(item.kind) ? (tall ? 56 : FAB_H_MIN) : vertical || round ? BUTTON_H_MIN : buttonMinWidth(item),
+      max: isFab(item.kind) ? FAB_H_MAX : vertical || round ? BUTTON_H_MAX : f ? frameSizeOf(f).w : PHONE_W,
     };
     setWidthDragId(item.id);
     const move = (ev: PointerEvent) => {
@@ -1349,9 +1382,9 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
                 items: gr.items.map((it) =>
                   it.id !== d.id
                     ? it
-                    : d.vertical
+                    : d.vertical || d.tall
                       ? /* a width the author set that is now narrower than the button is tall grows with it */
-                        { ...it, size2: v, ...(it.size && it.size < v ? { size: v } : {}) }
+                        { ...it, size2: v, ...(!d.tall && it.size && it.size < v ? { size: v } : {}) }
                       : { ...it, size: v },
                 ),
               },
@@ -1887,7 +1920,18 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
    *  Otherwise the near (left / top) edge stays put, as the sliders always did. */
   const resizeShift = (g: Group, before: Item, after: Item) => {
     const none = { dx: 0, dy: 0 };
-    if (g.items.length !== 1 || frameRef.current !== "phone") return none;
+    if (g.items.length !== 1) return none;
+    /* a FAB is the part in the corner of a screen: it grows and shrinks out of that corner,
+     * whatever the corner happens to be, rather than out of its top left */
+    if (isFab(before.kind) || isFab(after.kind)) {
+      const a = sizeOf(before, widthsRef.current);
+      const b = sizeOf(after, widthsRef.current);
+      /* the corner to keep, put right again once a part as wide as its label has been measured */
+      fabAnchor.current = { id: before.id, right: g.x + a.w, bottom: g.y + a.h };
+      const measured = MEASURED.includes(after.kind);
+      return { dx: measured ? 0 : a.w - b.w, dy: a.h - b.h };
+    }
+    if (frameRef.current !== "phone") return none;
     const f = frameOfGroup(g, framesRef.current, widthsRef.current);
     if (!f) return none;
     const { w: frameW, h: frameH } = frameSizeOf(f);
@@ -2492,9 +2536,14 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
   );
   /** the selected toggle button is drawn in its "on" look while the panel edits that look */
   const [showOnId, setShowOnId] = useState<string | null>(null);
+  /** the FAB whose menu the panel is showing open: it is open while its trigger tab is */
+  const [menuId, setMenuId] = useState<string | null>(null);
   useEffect(() => setShowOnId(null), [primaryId]);
-  const onLook = (it: Item): Item =>
-    it.id === showOnId && it.toggle ? { ...it, label: it.toggle.label ?? it.label, icon: toggleIcon(it), variant: it.toggle.variant ?? it.variant } : it;
+  const onLook = (it: Item): Item => {
+    /* a FAB shows its menu while the panel is on the tab that sets it up */
+    if (it.id === menuId && hasMenu(it)) return { ...it, [fabOpen]: true };
+    return it.id === showOnId && it.toggle ? { ...it, label: it.toggle.label ?? it.label, icon: toggleIcon(it), variant: it.toggle.variant ?? it.variant } : it;
+  };
   const selectedRect = useMemo(() => {
     if (!primaryId) return null;
     const g = groups.find((g) => g.items.some((it) => it.id === primaryId));
@@ -3442,14 +3491,20 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
     }
     const m = cells.length;
     const instant = instantRef.current.has(g.id);
+    /* A FAB sits in the corner of a screen, and that is the corner it grows out of: the run is
+     * drawn hanging from its own bottom right, so a box changing size moves its top and its left
+     * and nothing else. Nothing has to be kept in step, because nothing else moves. */
+    /* the corner is the button's own, menu or no menu: the entries rise out of it and the
+     * button itself never moves */
+    const corner = g.items.length === 1 && isFab(g.items[0].kind) ? sizeOf(g.items[0], widths) : null;
 
     return (
       <motion.div
         key={g.id}
         initial={false}
         animate={{
-          x: g.x - ox + (g.axis === "x" ? front : 0),
-          y: g.y - oy + (g.axis === "y" ? front : 0),
+          x: g.x - ox + (g.axis === "x" ? front : 0) + (corner?.w ?? 0),
+          y: g.y - oy + (g.axis === "y" ? front : 0) + (corner?.h ?? 0),
         }}
         transition={instant ? INSTANT : hole ? (gapEase ? GAP_TWEEN : INSTANT) : OPEN}
         style={{
@@ -3459,6 +3514,8 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
           top: 0,
           marginLeft: widthShift?.gid === g.id ? widthShift.dx : undefined,
           marginTop: widthShift?.gid === g.id ? widthShift.dy : undefined,
+          /* hung from its own corner, a FAB changes size without moving that corner */
+          translate: corner ? "-100% -100%" : undefined,
           display: "flex",
           flexDirection: g.axis === "x" ? "row" : "column",
           alignItems: g.axis === "x" ? "center" : "stretch",
@@ -3588,7 +3645,8 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
           }}
         >
           {allItems
-            .filter((it) => MEASURED.includes(it.kind))
+            .map(onLook)
+            .filter((it) => isMeasured(it))
             .map((it) => (
               <div
                 key={it.id}
@@ -3993,7 +4051,8 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
               {/* a lone button shows a handle on each of its four edges, and a lone icon button
                   four points around its circle: dragging one changes the part's size in place,
                   and whatever sits opposite stays where it is */}
-              {!handMode && !drag && selectedIds.length === 1 && (selected?.kind === "button" || selected?.kind === "iconButton") && (() => {
+              {/* a FAB showing its menu is being edited as a menu, not sized as a button */}
+              {!handMode && !drag && selectedIds.length === 1 && selected?.id !== menuId && (selected?.kind === "button" || selected?.kind === "iconButton" || selected?.kind === "fab" || selected?.kind === "extendedFab") && (() => {
                 const g = groups.find((x) => x.items.length === 1 && !x.free && !x.locked && x.items[0].id === selected.id);
                 if (!g) return null;
                 const b = groupBounds(g, widths);
@@ -4002,7 +4061,9 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
                 const sy = widthShift?.gid === g.id ? widthShift.dy : 0;
                 return (
                   <SizeHandles
-                    round={selected.kind === "iconButton"}
+                    /* one measure, so the part is held by the points around it rather than by
+                     * its edges: a circle's diameter, a label's height */
+                    round={selected.kind !== "button"}
                     box={{ l: b.l + sx, t: b.t + sy, r: b.r + sx, b: b.b + sy }}
                     z={view.z}
                     instant={widthDragId === selected.id || sizeEditId === selected.id}
@@ -4456,6 +4517,7 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
                   selfRect={selectedRect}
                   allFrames={frames}
                   onShowOn={(on) => setShowOnId(on && selected ? selected.id : null)}
+                  onShowMenu={(on) => setMenuId(on && selected ? selected.id : null)}
                   multi={selectedIds.length}
                   grouped={!!selectedGroup}
                   onGroup={groupSelected}

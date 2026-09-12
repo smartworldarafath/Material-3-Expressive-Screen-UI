@@ -10,6 +10,18 @@ import { describe, expect, it } from "vitest";
 import { buildPrompt } from "./prompt";
 import {
   DEFAULT_THEME,
+  KIND_ORDER,
+  PALETTE_HIDDEN,
+  extendedFabHeight,
+  extendedFabMetrics,
+  fabTypePatch,
+  FAB_MENU_CLOSE,
+  fabOpen,
+  hasMenu,
+  menuHeight,
+  menuOpen,
+  menuPatch,
+  migrateFabMenu,
   Doc,
   Item,
   carouselCountOf,
@@ -94,5 +106,73 @@ describe("time picker", () => {
     const out = buildPrompt(docWith({ ...makeItem("timePicker"), hour: 15, minute: 5 }), {}, undefined, "en");
     expect(out).toContain("03:05 PM");
     expect(out).toContain("dial");
+  });
+});
+
+describe("the FAB's three shapes", () => {
+  it("switches between them in place, keeping what they share", () => {
+    const fab = { ...makeItem("fab"), icon: "edit", size: 96 };
+    const ext = { ...fab, ...fabTypePatch(fab, "extendedFab") };
+    expect(ext.kind).toBe("extendedFab");
+    /* the circle's diameter becomes the height the label sits in */
+    expect(ext.size2).toBe(96);
+    expect(ext.icon).toBe("edit");
+    expect({ ...ext, ...fabTypePatch(ext, "fab") }.size).toBe(96);
+  });
+
+  it("opens a menu as a tap action, and keeps the entries when it is taken off again", () => {
+    const fab = makeItem("fab");
+    const withMenu = { ...fab, ...menuPatch(fab, true) };
+    expect(hasMenu(withMenu)).toBe(true);
+    expect(withMenu.tabs?.length).toBeGreaterThan(1);
+    /* shut, it is a circle; open, it is as tall as its entries make it */
+    expect(sizeOf(withMenu, {})).toEqual({ w: 56, h: 56 });
+    const shown = { ...withMenu, [fabOpen]: true };
+    expect(menuOpen(shown)).toBe(true);
+    expect(sizeOf(shown, { [fab.id]: 200 })).toEqual({ w: 200, h: menuHeight(shown, 56) });
+    /* the button that shuts the menu is the M one whatever size the FAB itself is */
+    const large = { ...withMenu, size: 96, [fabOpen]: true };
+    expect(sizeOf(large, { [fab.id]: 200 })).toEqual({ w: 200, h: menuHeight(large, FAB_MENU_CLOSE) });
+    expect(sizeOf(large, { [fab.id]: 200 }).h).toBe(sizeOf(shown, { [fab.id]: 200 }).h);
+    const off = { ...shown, ...menuPatch(shown, false) };
+    expect(hasMenu(off)).toBe(false);
+    expect(off.tabs?.length).toBeGreaterThan(1);
+  });
+
+  it("reads a sketch saved when a menu was a part of its own", () => {
+    const old = { ...makeItem("fab"), kind: "fabMenu" as const, size: 220, tabs: [{ icon: "edit", label: "Note" }] };
+    const now = migrateFabMenu(old);
+    expect(now.kind).toBe("fab");
+    expect(hasMenu(now)).toBe(true);
+    expect(now.tabs).toEqual(old.tabs);
+    expect(sizeOf(now, {})).toEqual({ w: 56, h: 56 });
+  });
+
+  it("gives an extended FAB the three heights M3 names", () => {
+    const ext = makeItem("extendedFab");
+    expect(extendedFabHeight(ext)).toBe(56);
+    expect(extendedFabHeight({ ...ext, size2: 80 })).toBe(80);
+    expect(extendedFabHeight({ ...ext, size2: 400 })).toBe(96);
+    /* the label and the icon grow with the container */
+    expect(extendedFabMetrics(56).icon).toBe(24);
+    expect(extendedFabMetrics(96).icon).toBe(32);
+    expect(sizeOf({ ...ext, size2: 96 }, { [ext.id]: 140 })).toEqual({ w: 140, h: 96 });
+  });
+
+  it("keeps the two other shapes out of the palette but still openable", () => {
+    expect(PALETTE_HIDDEN).toEqual(["extendedFab", "fabMenu"]);
+    /* a sketch saved with either of them still names a kind the editor knows */
+    expect(KIND_ORDER).toContain("extendedFab");
+    expect(KIND_ORDER).toContain("fabMenu");
+  });
+});
+
+describe("a FAB that opens a menu", () => {
+  it("says so in the prompt, with the entries it raises", () => {
+    const fab = { ...makeItem("fab"), id: "fb", icon: "edit" };
+    const doc = docWith({ ...fab, ...menuPatch(fab, true), tabs: [{ icon: "edit", label: "Note" }, { icon: "mic", label: "Voice" }] });
+    const out = buildPrompt(doc, {}, undefined, "en");
+    expect(out).toContain("raises a menu of 2 items");
+    expect(out).toContain('"Note"(edit)');
   });
 });
