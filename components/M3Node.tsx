@@ -1324,6 +1324,7 @@ export function M3Node({
   pressed,
   dragging,
   selected,
+  inRun = false,
   interactive = true,
   onPointerDown,
   tabScroll,
@@ -1335,6 +1336,8 @@ export function M3Node({
   pressed?: boolean;
   dragging?: boolean;
   selected?: boolean;
+  /** the part sits in a connected run (non-free group, or a hidden run inside a free group) */
+  inRun?: boolean;
   interactive?: boolean;
   onPointerDown?: (e: React.PointerEvent) => void;
   /** how far a scrollable tab row is scrolled in the preview; the canvas uses the resting position */
@@ -1376,6 +1379,12 @@ export function M3Node({
         display: measured ? "inline-flex" : "block",
         alignItems: "center",
         overflow: clips ? "hidden" : "visible",
+        /* the selection ring sticks out 5px (3px offset + 2px ring); in a run the next
+           sibling sits 3px away and would overpaint that edge — lift the selected part.
+           Runs never overlap, so the lift only beats the sibling that hides the ring.
+           Lone parts in free groups may overlap by design: keep their layer order. */
+        position: selected && inRun ? "relative" : undefined,
+        zIndex: selected && inRun ? 1 : undefined,
         cursor: !interactive ? "default" : dragging ? "grabbing" : "grab",
         userSelect: "none",
         touchAction: "none",

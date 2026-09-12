@@ -19,6 +19,7 @@ import {
   baseRadii,
   explodeGroup,
   freeRadii,
+  radiiOfRuns,
   BEZEL,
   canJoin,
   clamp,
@@ -3072,14 +3073,23 @@ export default function Page() {
     if (g.free) {
       const instantG = instantRef.current.has(g.id);
       const allOn = g.items.every((it) => selectedSet.has(it.id));
-      const corners = freeRadii(g, widths);
+      /* explode once: the runs feed both the corner radii and the lift gate below */
+      const runs = explodeGroup(g, widths);
+      const corners = radiiOfRuns(runs);
+      /* hidden runs are connected too: only their members may lift above siblings when selected */
+      const runIds = new Set(
+        runs
+          .filter((r) => r.items.length > 1)
+          .flatMap((r) => r.items.map((it) => it.id)),
+      );
       return (
         <motion.div
           key={g.id}
           initial={false}
           animate={{ x: g.x - ox, y: g.y - oy }}
           transition={instantG ? INSTANT : OPEN}
-          style={{ position: "absolute", left: 0, top: 0, zIndex: modalRail ? 2 : undefined }}
+          /* keep any selection lift inside the group, so canvas-wide layer order is preserved */
+          style={{ position: "absolute", left: 0, top: 0, zIndex: modalRail ? 2 : undefined, isolation: "isolate" }}
         >
           {layoutOf(g, widths).map((pl) => (
             <div key={pl.item.id} style={{ position: "absolute", left: pl.x - g.x, top: pl.y - g.y }}>
@@ -3090,6 +3100,7 @@ export default function Page() {
                 radii={corners.get(pl.item.id)}
                 pressed={false}
                 selected={selectedSet.has(pl.item.id)}
+                inRun={runIds.has(pl.item.id)}
                 interactive={!handMode}
                 onPointerDown={(e) => onItemPointerDown(e, g, pl.index, pl.item)}
               />
@@ -3147,6 +3158,8 @@ export default function Page() {
           flexDirection: g.axis === "x" ? "row" : "column",
           alignItems: g.axis === "x" ? "center" : "stretch",
           gap: GAP,
+          /* keep any selection lift inside the run, so canvas-wide layer order is preserved */
+          isolation: "isolate",
         }}
       >
         {cells.map((c, r) => {
@@ -3190,6 +3203,7 @@ export default function Page() {
               radii={radii}
               pressed={pressedId === c.item.id}
               selected={selectedSet.has(c.item.id)}
+              inRun={g.items.length > 1}
               interactive={!handMode}
               onPointerDown={(e) => onItemPointerDown(e, g, c.index, c.item)}
             />
