@@ -19,6 +19,8 @@ import {
   MENU_TARGET,
   buttonHeightOf,
   buttonSizeKeyOf,
+  CHIP_H_MIN,
+  chipHeightOf,
   linkUrlOf,
   Doc,
   FONTS,
@@ -196,6 +198,16 @@ function clockText(it: Item): string {
   return `${String(h % 12 || 12).padStart(2, "0")}:${String(minuteOf(it)).padStart(2, "0")} ${h >= 12 ? "PM" : "AM"}`;
 }
 
+/** a chip drawn at anything but the 32dp M3 asks for says so */
+function chipHeightText(it: Item, lang: Lang): string {
+  const h = chipHeightOf(it);
+  if (h === CHIP_H_MIN) return "";
+  if (lang === "ja") return `（高さ ${h}dp）`;
+  if (lang === "zh") return `（高 ${h}dp）`;
+  if (lang === "ko") return `(높이 ${h}dp)`;
+  return ` (${h}dp tall)`;
+}
+
 /** the menu a FAB opens, if it has one: the entries it offers, in the order they rise */
 function fabMenuText(it: Item, lang: Lang): string {
   if (!hasMenu(it)) return "";
@@ -228,7 +240,7 @@ function itemJa(it: Item): string {
     case "extendedFab":
       return `${q(it.label)}${it.icon ? `と ${it.icon} アイコン` : ""}の拡張 FAB（${v}${it.size2 && it.size2 !== 56 ? `、高さ ${it.size2}dp` : ""}）${fabMenuText(it, "ja")}`;
     case "chip":
-      return `${q(it.label)}のチップ${it.checked ? "（選択状態）" : ""}${it.icon && !it.checked ? `（${it.icon} アイコン付き）` : ""}`;
+      return `${q(it.label)}のチップ${it.checked ? "（選択状態）" : ""}${it.icon && !it.checked ? `（${it.icon} アイコン付き）` : ""}${chipHeightText(it, "ja")}`;
     case "topAppBar":
       return `タイトル${q(it.label)}のトップアプリバー${it.icon ? `。左に ${it.icon}` : ""}${it.icon2 ? `、右に ${it.icon2}` : ""}${it.icon || it.icon2 ? " のアイコンボタン" : ""}`;
     case "bottomNav": {
@@ -325,7 +337,7 @@ function itemEn(it: Item): string {
     case "extendedFab":
       return `a ${v} extended FAB ${q(it.label)}${it.icon ? ` with a ${it.icon} icon` : ""}${it.size2 && it.size2 !== 56 ? ` (${it.size2}dp tall)` : ""}${fabMenuText(it, "en")}`;
     case "chip":
-      return `a chip ${q(it.label)}${it.checked ? " (selected)" : ""}${it.icon && !it.checked ? ` with a ${it.icon} icon` : ""}`;
+      return `a chip ${q(it.label)}${it.checked ? " (selected)" : ""}${it.icon && !it.checked ? ` with a ${it.icon} icon` : ""}${chipHeightText(it, "en")}`;
     case "topAppBar":
       return `a top app bar titled ${q(it.label)}${it.icon ? ` with a ${it.icon} icon button on the left` : ""}${it.icon2 ? `${it.icon ? " and" : " with"} ${it.icon2} on the right` : ""}`;
     case "bottomNav": {
@@ -422,7 +434,7 @@ function itemZh(it: Item): string {
     case "extendedFab":
       return `${q(it.label)}${it.icon ? `和 ${it.icon} 图标` : ""}的扩展 FAB（${v}${it.size2 && it.size2 !== 56 ? `，高 ${it.size2}dp` : ""}）${fabMenuText(it, "zh")}`;
     case "chip":
-      return `${q(it.label)}标签片${it.checked ? "（选中状态）" : ""}${it.icon && !it.checked ? `（带 ${it.icon} 图标）` : ""}`;
+      return `${q(it.label)}标签片${it.checked ? "（选中状态）" : ""}${it.icon && !it.checked ? `（带 ${it.icon} 图标）` : ""}${chipHeightText(it, "zh")}`;
     case "topAppBar":
       return `标题为${q(it.label)}的顶部应用栏${it.icon ? `，左侧是 ${it.icon}` : ""}${it.icon2 ? `，右侧是 ${it.icon2}` : ""}${it.icon || it.icon2 ? " 图标按钮" : ""}`;
     case "bottomNav": {
@@ -511,7 +523,7 @@ function itemKo(it: Item): string {
     case "iconButton": return `${it.icon ?? "빈"} 아이콘의 ${v} 아이콘 버튼`;
     case "fab": return `${it.icon ?? "빈"} 아이콘의 ${v} FAB${it.size && it.size >= 96 ? "(대형)" : it.size && it.size <= 40 ? "(소형)" : ""}${fabMenuText(it, "ko")}`;
     case "extendedFab": return `${q(it.label)}${it.icon ? ` 및 ${it.icon} 아이콘` : ""} 확장 FAB(${v}${it.size2 && it.size2 !== 56 ? `, 높이 ${it.size2}dp` : ""})${fabMenuText(it, "ko")}`;
-    case "chip": return `${q(it.label)} 칩${it.checked ? "(선택됨)" : ""}${it.icon && !it.checked ? `(${it.icon} 아이콘 포함)` : ""}`;
+    case "chip": return `${q(it.label)} 칩${it.checked ? "(선택됨)" : ""}${it.icon && !it.checked ? `(${it.icon} 아이콘 포함)` : ""}${chipHeightText(it, "ko")}`;
     case "topAppBar": return `제목이 ${q(it.label)}인 상단 앱 바${it.icon ? `, 왼쪽 ${it.icon}` : ""}${it.icon2 ? `, 오른쪽 ${it.icon2}` : ""}${it.icon || it.icon2 ? " 아이콘 버튼" : ""}`;
     case "bottomNav": {
       const tabs = (it.tabs ?? []).map((t) => `${q(t.label || "레이블 없음")}(${t.icon || "아이콘 없음"})`);
@@ -602,7 +614,7 @@ function groupText(g: Group, lang: Lang): string {
   const same = g.items.every((it) => it.variant === g.items[0].variant);
   if (lang === "ja") {
     if (kind === "listItem") return `${g.items.length}項目のリスト。上から ${g.items.map(itemJa).join("、")}`;
-    if (kind === "chip") return `${g.items.map((it) => q(it.label) + (it.checked ? "(選択中)" : "")).join("")}のチップが横に並ぶチップグループ`;
+    if (kind === "chip") return `${g.items.map((it) => q(it.label) + (it.checked ? "(選択中)" : "")).join("")}のチップが横に並ぶチップグループ${chipHeightText(g.items[0], "ja")}`;
     if (kind === "iconButton") return `${g.items.map((it) => it.icon ?? "空").join("・")} のアイコンボタンが連結したボタングループ`;
     const names = same
       ? g.items.map((it) => q(it.label || "ラベルなし")).join("")
@@ -611,7 +623,7 @@ function groupText(g: Group, lang: Lang): string {
   }
   if (lang === "zh") {
     if (kind === "listItem") return `${g.items.length}项的列表，从上到下依次为 ${g.items.map(itemZh).join("、")}`;
-    if (kind === "chip") return `由${g.items.map((it) => q(it.label) + (it.checked ? "(选中)" : "")).join("")}横向排列组成的标签片组`;
+    if (kind === "chip") return `由${g.items.map((it) => q(it.label) + (it.checked ? "(选中)" : "")).join("")}横向排列组成的标签片组${chipHeightText(g.items[0], "zh")}`;
     if (kind === "iconButton") return `由 ${g.items.map((it) => it.icon ?? "空").join("、")} 图标按钮相连组成的按钮组`;
     const names = same
       ? g.items.map((it) => q(it.label || "无标签")).join("")
@@ -620,7 +632,7 @@ function groupText(g: Group, lang: Lang): string {
   }
   if (lang === "ko") {
     if (kind === "listItem") return `${g.items.length}개 항목의 목록. 위에서부터 ${g.items.map(itemKo).join(", ")}`;
-    if (kind === "chip") return `${g.items.map((it) => q(it.label) + (it.checked ? "(선택됨)" : "")).join(", ")} 칩을 가로로 배치한 칩 그룹`;
+    if (kind === "chip") return `${g.items.map((it) => q(it.label) + (it.checked ? "(선택됨)" : "")).join(", ")} 칩을 가로로 배치한 칩 그룹${chipHeightText(g.items[0], "ko")}`;
     if (kind === "iconButton") return `${g.items.map((it) => it.icon ?? "빈 아이콘").join(", ")} 아이콘 버튼을 연결한 버튼 그룹`;
     const names = same
       ? g.items.map((it) => q(it.label || "레이블 없음")).join(", ")
@@ -628,7 +640,7 @@ function groupText(g: Group, lang: Lang): string {
     return `${names} 버튼 ${g.items.length}개를 가로로 연결한 버튼 그룹${same ? `(${vt[g.items[0].variant]})` : ""}`;
   }
   if (kind === "listItem") return `a list of ${g.items.length} items, top to bottom: ${g.items.map(itemEn).join("; ")}`;
-  if (kind === "chip") return `a chip group: ${g.items.map((it) => q(it.label) + (it.checked ? " (selected)" : "")).join(", ")}`;
+  if (kind === "chip") return `a chip group: ${g.items.map((it) => q(it.label) + (it.checked ? " (selected)" : "")).join(", ")}${chipHeightText(g.items[0], "en")}`;
   if (kind === "iconButton") return `a connected group of icon buttons: ${g.items.map((it) => it.icon ?? "empty").join(", ")}`;
   const names = same
     ? g.items.map((it) => q(it.label || "unlabeled")).join(", ")
@@ -1000,7 +1012,8 @@ const STYLE_NOTES: Record<Lang, Partial<Record<Kind | "boxSheet", string>>> = {
       "アイコンボタン: 48dp の円形。塗りつぶし・トーナル・アウトライン・スタンダードを指定通りに使い分ける。連結したアイコンボタン群は Connected button group として実装する。",
     fab: "FAB: 通常は 56dp・角丸 16dp、大サイズは 96dp・角丸 28dp、小サイズは 40dp・角丸 12dp。トーナルは primaryContainer、塗りつぶしは primary。画面端から 16dp 離して浮かせ、影は Level 3。",
     extendedFab: "拡張 FAB: 高さ 56dp（M3 の 3 サイズは 56 / 80 / 96dp、角丸と文字もそれに合わせる）、角丸 16dp、左にアイコン・右にラベル。",
-    chip: "チップ: 高さ 32dp、角丸 8dp。選択状態は secondaryContainer で塗り、先頭にチェックアイコンを出す。横並びのチップグループは 8dp 間隔で、はみ出す場合は横スクロール。",
+    chip:
+      "チップ: 既定は高さ 32dp で、角は高さの半分（完全な丸）。高さを指定されたチップは M3 のサイズ（XS 32dp / S 40dp / M 56dp）に従い、左右の余白・文字・アイコンをそのサイズのものにする。選択状態は secondaryContainer で塗り、先頭にチェックアイコンを出す。横に連結したチップグループは 3dp の隙間で並べ、隣り合う内側の角だけ 4dp に小さくし、外側の角は丸のままにして、1 つの高さを共有する。はみ出す場合は横スクロール。",
     topAppBar:
       "トップアプリバー: 高さ 64dp、背景は surface。背景はステータスバーの後ろまで伸ばし、その分（システムインセット）だけ上に余白を取る。タイトルは titleLarge、左右のアイコンボタンは 48dp。スクロール時に surfaceContainer へ色が変わる標準の挙動でよい。",
     bottomNav:
@@ -1049,7 +1062,8 @@ const STYLE_NOTES: Record<Lang, Partial<Record<Kind | "boxSheet", string>>> = {
       "Icon buttons: 48dp circles in the filled / tonal / outlined / standard style as specified. A connected run of icon buttons is a connected button group.",
     fab: "FAB: 56dp with 16dp corners; large is 96dp with 28dp corners; small is 40dp with 12dp corners. Tonal uses primaryContainer, filled uses primary. Float it 16dp from the screen edge with a level 3 shadow.",
     extendedFab: "Extended FAB: 56dp tall (M3's three sizes are 56 / 80 / 96dp, with the corners and the label growing to match), 16dp corners, icon on the left and label on the right.",
-    chip: "Chips: 32dp tall, 8dp corners. The selected state fills with secondaryContainer and shows a leading check icon. A chip group is a row with 8dp gaps that scrolls horizontally when it overflows.",
+    chip:
+      "Chips: 32dp tall by default, with the corner radius at half the height (fully round). A chip given a height follows the M3 size scale (XS 32dp, S 40dp, M 56dp): take the side padding, the label size and the icon size of that size. The selected state fills with secondaryContainer and shows a leading check icon. A connected chip group is a row with 3dp gaps where only the inner adjoining corners shrink to 4dp, the outer corners stay round, and every chip shares one height; it scrolls horizontally when it overflows.",
     topAppBar:
       "Top app bar: 64dp tall on surface, with its background extended behind the status bar (pad the top by the system inset). Title in titleLarge, 48dp icon buttons on each side. The standard tint to surfaceContainer on scroll is fine.",
     bottomNav:
@@ -1097,7 +1111,8 @@ const STYLE_NOTES: Record<Lang, Partial<Record<Kind | "boxSheet", string>>> = {
     iconButton: "图标按钮：48dp 圆形。按指定使用填充／色调／描边／标准样式。相连的图标按钮组实现为 Connected button group。",
     fab: "FAB：常规 56dp、圆角 16dp；大尺寸 96dp、圆角 28dp；小尺寸 40dp、圆角 12dp。色调用 primaryContainer，填充用 primary。距屏幕边缘 16dp 悬浮，阴影为 Level 3。",
     extendedFab: "扩展 FAB：高 56dp（M3 的三种尺寸为 56 / 80 / 96dp，圆角与文字随之变化），圆角 16dp，左侧图标、右侧标签。",
-    chip: "标签片：高 32dp，圆角 8dp。选中状态用 secondaryContainer 填充并在前面显示勾选图标。横向标签片组间距 8dp，溢出时横向滚动。",
+    chip:
+      "标签片：默认高 32dp，圆角为高度的一半（完全圆角）。指定了高度的标签片遵循 M3 尺寸（XS 32dp / S 40dp / M 56dp）：左右内边距、文字和图标取该尺寸的值。选中状态用 secondaryContainer 填充并在前面显示勾选图标。横向相连的标签片组以 3dp 间距排列，只把相邻的内侧圆角缩小到 4dp，外侧保持圆角，并共享同一高度；溢出时横向滚动。",
     topAppBar:
       "顶部应用栏：高 64dp，背景为 surface。背景延伸到状态栏后面，并按系统内边距在顶部留出空间。标题用 titleLarge，左右图标按钮 48dp。滚动时变为 surfaceContainer 的标准行为即可。",
     bottomNav:
@@ -1143,7 +1158,8 @@ const STYLE_NOTES: Record<Lang, Partial<Record<Kind | "boxSheet", string>>> = {
     iconButton: "아이콘 버튼: 48dp 원형. 지정된 채움, 토널, 윤곽선, 표준 스타일을 사용하며 연결된 아이콘 버튼은 Connected button group으로 구현한다.",
     fab: "FAB: 기본 56dp/모서리 16dp, 대형 96dp/28dp, 소형 40dp/12dp. 토널은 primaryContainer, 채움은 primary를 사용하고 화면 가장자리에서 16dp 띄워 Level 3 그림자를 적용한다.",
     extendedFab: "확장 FAB: 높이 56dp(M3의 세 크기는 56 / 80 / 96dp이며 모서리와 글자도 이에 맞춘다), 모서리 16dp, 왼쪽에 아이콘, 오른쪽에 레이블을 둔다.",
-    chip: "칩: 높이 32dp, 모서리 8dp. 선택 상태는 secondaryContainer로 채우고 앞쪽에 체크 아이콘을 표시한다. 칩 그룹은 간격 8dp로 가로 배치하고 넘치면 가로 스크롤한다.",
+    chip:
+      "칩: 기본 높이 32dp, 모서리는 높이의 절반(완전 둥근 모양). 높이가 지정된 칩은 M3 크기(XS 32dp / S 40dp / M 56dp)를 따라 좌우 여백, 글자 크기, 아이콘 크기를 그 크기의 값으로 한다. 선택 상태는 secondaryContainer로 채우고 앞쪽에 체크 아이콘을 표시한다. 연결 칩 그룹은 간격 3dp, 맞닿는 안쪽 모서리 4dp, 바깥쪽 모서리는 둥글게 유지하며 하나의 높이를 공유하고, 넘치면 가로 스크롤한다.",
     topAppBar: "상단 앱 바: 높이 64dp, 배경 surface. 상태 표시줄 뒤까지 배경을 늘리고 시스템 인셋만큼 위쪽 여백을 둔다. 제목은 titleLarge, 양쪽 아이콘 버튼은 48dp를 사용한다.",
     bottomNav: "내비게이션 바: 높이 80dp, 배경 surfaceContainer. 제스처 내비게이션 영역까지 배경을 늘리고 시스템 인셋만큼 아래쪽 여백을 둔다. 선택 항목은 64×32dp secondaryContainer 알약 표시기, 채운 아이콘, labelMedium 레이블로 표시한다.",
     searchBar: "검색창: 높이 56dp, 완전 둥근 모서리, 배경 surfaceContainerHigh. 앞쪽 검색 아이콘과 지정된 뒤쪽 아이콘을 둔다.",

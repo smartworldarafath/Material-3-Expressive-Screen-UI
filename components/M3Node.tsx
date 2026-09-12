@@ -16,6 +16,8 @@ import {
   STATUS_BAR_H,
   baseRadii,
   buttonHeightOf,
+  chipHeightOf,
+  chipMetrics,
   extendedFabHeight,
   extendedFabMetrics,
   fabOpen,
@@ -178,22 +180,25 @@ function ExtendedFabContent({ item }: { item: Item }) {
 function ChipContent({ item, p }: { item: Item; p: Palette }) {
   const on = !!item.checked;
   const lead = on ? "check" : item.icon;
+  /* the padding, the icon and the label are the ones the height it was given asks for */
+  const m = chipMetrics(chipHeightOf(item));
   return (
     <span
+      className="m3-size-ease"
       style={{
         display: "inline-flex",
         alignItems: "center",
-        gap: 8,
-        paddingLeft: lead ? 8 : 16,
-        paddingRight: 16,
-        height: 32,
-        fontSize: 14,
+        gap: m.gap,
+        paddingLeft: lead ? m.lead : m.padX,
+        paddingRight: m.padX,
+        height: m.h,
+        fontSize: m.font,
         fontWeight: 500,
         whiteSpace: "nowrap",
         color: on ? p.onSecondaryContainer : undefined,
       }}
     >
-      {lead && <Icon name={lead} size={18} />}
+      {lead && <Icon name={lead} size={m.icon} />}
       <span>{item.label}</span>
     </span>
   );

@@ -21,22 +21,46 @@ export const BUTTON_H_MIN = BUTTON_SIZES[0].h;
 export const BUTTON_H_MAX = BUTTON_SIZES[BUTTON_SIZES.length - 1].h;
 export type ButtonMetrics = { h: number; padX: number; gap: number; icon: number; font: number };
 
-/** what a button of this height is made of; between two named sizes the parts are mixed in proportion */
-export function buttonMetrics(height: number): ButtonMetrics {
-  const h = clamp(Math.round(height), BUTTON_H_MIN, BUTTON_H_MAX);
-  type Step = (typeof BUTTON_SIZES)[number];
-  let lo: Step = BUTTON_SIZES[0];
-  let hi: Step = BUTTON_SIZES[BUTTON_SIZES.length - 1];
-  for (let i = 0; i < BUTTON_SIZES.length - 1; i++) {
-    if (h >= BUTTON_SIZES[i].h && h <= BUTTON_SIZES[i + 1].h) {
-      lo = BUTTON_SIZES[i];
-      hi = BUTTON_SIZES[i + 1];
+/** the two named sizes a height falls between, and a way to read any measure off them mixed in
+ *  proportion, so a scale stays M3-shaped the whole way rather than only on its own stops */
+function onScale<T extends { h: number }>(steps: readonly T[], height: number) {
+  const h = clamp(Math.round(height), steps[0].h, steps[steps.length - 1].h);
+  let lo: T = steps[0];
+  let hi: T = steps[steps.length - 1];
+  for (let i = 0; i < steps.length - 1; i++) {
+    if (h >= steps[i].h && h <= steps[i + 1].h) {
+      lo = steps[i];
+      hi = steps[i + 1];
       break;
     }
   }
   const f = hi.h === lo.h ? 0 : (h - lo.h) / (hi.h - lo.h);
-  const mix = (a: number, b: number) => Math.round(lerp(a, b, f));
-  return { h, padX: mix(lo.padX, hi.padX), gap: mix(lo.gap, hi.gap), icon: mix(lo.icon, hi.icon), font: mix(lo.font, hi.font) };
+  return { h, of: (read: (s: T) => number) => Math.round(lerp(read(lo), read(hi), f)) };
+}
+
+/** what a button of this height is made of; between two named sizes the parts are mixed in proportion */
+export function buttonMetrics(height: number): ButtonMetrics {
+  const s = onScale(BUTTON_SIZES, height);
+  return { h: s.h, padX: s.of((b) => b.padX), gap: s.of((b) => b.gap), icon: s.of((b) => b.icon), font: s.of((b) => b.font) };
+}
+
+/** M3's chip sizes: the 32dp one it has always had, and the two roomier ones Expressive adds.
+ *  A chip is as wide as its label makes it, so its height is the one measure it has.
+ *  `lead` is the tighter padding on the side an icon sits on. */
+export const CHIP_SIZES = [
+  { key: "xs", h: 32, padX: 16, lead: 8, gap: 8, icon: 18, font: 14 },
+  { key: "s", h: 40, padX: 20, lead: 12, gap: 8, icon: 20, font: 14 },
+  { key: "m", h: 56, padX: 24, lead: 16, gap: 8, icon: 24, font: 16 },
+] as const;
+export type ChipSizeKey = (typeof CHIP_SIZES)[number]["key"];
+export const CHIP_H_MIN = CHIP_SIZES[0].h;
+export const CHIP_H_MAX = CHIP_SIZES[CHIP_SIZES.length - 1].h;
+export type ChipMetrics = { h: number; padX: number; lead: number; gap: number; icon: number; font: number };
+
+/** what a chip of this height is made of, read off the same kind of scale a button has */
+export function chipMetrics(height: number): ChipMetrics {
+  const s = onScale(CHIP_SIZES, height);
+  return { h: s.h, padX: s.of((c) => c.padX), lead: s.of((c) => c.lead), gap: s.of((c) => c.gap), icon: s.of((c) => c.icon), font: s.of((c) => c.font) };
 }
 
 /** M3's three FAB sizes; an extended FAB is the same three, given room for its label */
@@ -724,7 +748,9 @@ export const KIND_SPEC: Record<Kind, KindSpec> = {
     hasSupporting: false,
     hasIcon: true,
     hasChecked: true,
-    connect: { axis: "x", outer: 16, inner: 4, family: "chip" },
+    connect: { axis: "x", outer: CHIP_H_MIN / 2, inner: 4, family: "chip" },
+    /* as wide as its label makes it: the height is the one measure the author sets */
+    size2: { min: CHIP_H_MIN, max: CHIP_H_MAX, step: 4, icon: "height", presets: CHIP_SIZES.map((c) => c.h) },
     defLabel: "チップ",
     defIcon: null,
     defVariant: "outlined",
@@ -1441,6 +1467,9 @@ export const buttonHeightOf = (it: Item) =>
 /** a button is at its narrowest a circle, so how short it is sets how narrow it can be */
 export const buttonMinWidth = (it: Item) => buttonHeightOf(it);
 
+/** the height a chip is drawn at: the M3 32dp one unless the author set another */
+export const chipHeightOf = (it: Item) => clamp(Math.round(it.size2 ?? CHIP_H_MIN), CHIP_H_MIN, CHIP_H_MAX);
+
 /** The two shapes a FAB takes: the circle and the one that carries a label. Opening a menu is
  *  something either of them can be asked to do, so it is a tap action rather than a shape. */
 export const FAB_KINDS = ["fab", "extendedFab"] as const;
@@ -1501,7 +1530,12 @@ export function migrateFabMenu(it: Item): Item {
  *  A button keeps the width it was given unless it is now narrower than it is tall. */
 export function matchRunSize(item: Item, host: Item): Item {
   const family = KIND_SPEC[item.kind].connect?.family;
-  if (!family || family !== "button" || family !== KIND_SPEC[host.kind].connect?.family) return item;
+  if (!family || family !== KIND_SPEC[host.kind].connect?.family) return item;
+  if (family === "chip") {
+    const h = chipHeightOf(host);
+    return chipHeightOf(item) === h ? item : { ...item, size2: h };
+  }
+  if (family !== "button") return item;
   const h = buttonHeightOf(host);
   if (buttonHeightOf(item) === h) return item;
   if (item.kind === "iconButton") return { ...item, size: h };
@@ -2033,6 +2067,7 @@ export function sizeOf(it: Item, widths: Record<string, number>) {
         ? { w: widths[it.id] ?? 220, h: menuHeight(it, extendedFabHeight(it)) }
         : { w: widths[it.id] ?? 128, h: extendedFabHeight(it) };
     case "chip":
+      return { w: widths[it.id] ?? 128, h: chipHeightOf(it) };
     case "checkbox":
     case "splitButton":
     case "radio":
@@ -2237,7 +2272,12 @@ export const toolbarWidth = (it: Item) => {
 export const connectSpecOf = (it: Item): ConnectSpec | undefined => {
   const c = KIND_SPEC[it.kind].connect;
   /* the ends of a run are as round as the part is tall, so a taller button keeps its full corners */
-  const outer = it.kind === "button" || it.kind === "iconButton" ? buttonHeightOf(it) / 2 : c?.outer ?? 0;
+  const outer =
+    it.kind === "button" || it.kind === "iconButton"
+      ? buttonHeightOf(it) / 2
+      : it.kind === "chip"
+        ? chipHeightOf(it) / 2
+        : c?.outer ?? 0;
   return c && { ...c, outer: scaleR(outer), inner: scaleR(c.inner) };
 };
 export const connectable = (it: Item) => !!KIND_SPEC[it.kind].connect;

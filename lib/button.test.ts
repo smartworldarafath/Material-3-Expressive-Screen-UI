@@ -4,6 +4,7 @@
  * Locks in:
  *  - buttonMetrics returns Material's own values on each named size, and mixes them in between
  *  - a height the author set reaches sizeOf, baseRadii and the narrowest width a button may take
+ *  - a chip is measured on a scale of its own, and a run of chips shares one height
  *  - linkUrlOf only hands back addresses a browser may follow, and completes a bare host
  */
 import { describe, expect, it } from "vitest";
@@ -11,6 +12,12 @@ import {
   BUTTON_H_MAX,
   BUTTON_H_MIN,
   BUTTON_SIZES,
+  CHIP_H_MAX,
+  CHIP_H_MIN,
+  CHIP_SIZES,
+  chipHeightOf,
+  chipMetrics,
+  connectSpecOf,
   H,
   Item,
   LINK_TARGET,
@@ -124,5 +131,60 @@ describe("a run of buttons shares one measure", () => {
     expect(next[1].size).toBe(96);
     /* a width is the part's own business */
     expect(runSizePatch(run, "a", { size: 240 })[1].size).toBe(40);
+  });
+});
+
+describe("the chip's own size scale", () => {
+  const chip = (patch: Partial<Item> = {}): Item => ({ ...makeItem("chip"), ...patch });
+
+  it("keeps the 32dp chip M3 asks for, and the two roomier ones beside it", () => {
+    expect(CHIP_SIZES.map((c) => c.h)).toEqual([32, 40, 56]);
+    expect(chipMetrics(32)).toEqual({ h: 32, padX: 16, lead: 8, gap: 8, icon: 18, font: 14 });
+    expect(chipMetrics(56)).toEqual({ h: 56, padX: 24, lead: 16, gap: 8, icon: 24, font: 16 });
+    /* halfway from S (40) to M (56) */
+    expect(chipMetrics(48)).toEqual({ h: 48, padX: 22, lead: 14, gap: 8, icon: 22, font: 15 });
+  });
+
+  it("stays inside the scale whatever height it is handed", () => {
+    expect(chipHeightOf(chip())).toBe(CHIP_H_MIN);
+    expect(chipHeightOf(chip({ size2: 1000 }))).toBe(CHIP_H_MAX);
+    expect(chipHeightOf(chip({ size2: 4 }))).toBe(CHIP_H_MIN);
+  });
+
+  it("carries the height into the drawn box, keeping the width its label sets", () => {
+    expect(sizeOf(chip({ size2: 56 }), { [chip().id]: 120 }).h).toBe(56);
+    expect(sizeOf(chip(), {}).h).toBe(CHIP_H_MIN);
+    /* a chip is as wide as its label makes it, so a measured width comes through untouched */
+    expect(sizeOf({ ...chip(), id: "c" }, { c: 140 }).w).toBe(140);
+  });
+
+  it("ends a run as round as the chips in it are tall", () => {
+    expect(connectSpecOf(chip())?.outer).toBe(16);
+    expect(connectSpecOf(chip({ size2: 56 }))?.outer).toBe(28);
+    /* the corner a lone chip keeps is the 8dp one M3 gives it, whatever its height */
+    expect(baseRadii(chip({ size2: 56 })).tl).toBe(8);
+  });
+});
+
+describe("a run of chips shares one measure", () => {
+  const chip = (patch: Partial<Item> = {}): Item => ({ ...makeItem("chip"), id: "c", ...patch });
+
+  it("hands the joining chip the height of the run that is standing still", () => {
+    expect(matchRunSize(chip({ id: "a" }), chip({ size2: 56 })).size2).toBe(56);
+    expect(matchRunSize(chip({ id: "a", size2: 56 }), chip()).size2).toBe(CHIP_H_MIN);
+    /* one that already fits is left exactly as it was */
+    const fits = chip({ id: "a", size2: 40 });
+    expect(matchRunSize(fits, chip({ size2: 40 }))).toEqual(fits);
+  });
+
+  it("never mixes with the buttons, which are a run of their own", () => {
+    expect(matchRunSize(chip(), { ...makeItem("button"), size2: 96 }).size2).toBeUndefined();
+    expect(matchRunSize({ ...makeItem("button") }, chip({ size2: 56 })).size2).toBeUndefined();
+  });
+
+  it("carries a height across the run", () => {
+    const run = [chip({ id: "a" }), chip({ id: "b" })];
+    const next = runSizePatch(run, "a", { size2: 56 });
+    expect(next.map((it) => it.size2)).toEqual([56, 56]);
   });
 });

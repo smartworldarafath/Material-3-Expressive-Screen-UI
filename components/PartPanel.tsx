@@ -32,6 +32,9 @@ function AlignGlyph({ c, r, color }: { c: Col; r: Row3; color: string }) {
 }
 
 /** two M3 primary tabs with the underline indicator */
+/** how tall the row of tabs is; the panel keeps that much room for it above what scrolls */
+export const TABS_H = 48;
+
 export function PartTabs({ value, onChange, p }: { value: Tab; onChange: (t: Tab) => void; p: Palette }) {
   const lang = useLang();
   const tabs: { key: Tab; icon: string; label: string }[] = [
@@ -39,7 +42,9 @@ export function PartTabs({ value, onChange, p }: { value: Tab; onChange: (t: Tab
     { key: "behavior", icon: "bolt", label: t("trigger", lang) },
   ];
   return (
-    <div role="tablist" style={{ display: "flex", borderBottom: `1px solid ${p.outlineVariant}`, margin: "0 -12px 16px" }}>
+    /* no rule under the row: the panel's own fade is what the two are told apart by, and the
+       chosen tab keeps the line under its own label */
+    <div role="tablist" style={{ display: "flex", height: TABS_H }}>
       {tabs.map((tab) => {
         const on = tab.key === value;
         return (
@@ -51,7 +56,7 @@ export function PartTabs({ value, onChange, p }: { value: Tab; onChange: (t: Tab
             className="m3-press"
             style={{
               flex: 1,
-              height: 48,
+              height: TABS_H,
               border: "none",
               background: "transparent",
               color: on ? p.primary : p.onSurfaceVariant,

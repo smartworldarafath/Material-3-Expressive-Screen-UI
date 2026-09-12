@@ -63,7 +63,7 @@ import { IconPicker } from "./IconPicker";
 import { ButtonInspector } from "./ButtonInspector";
 import { PartInspector } from "./PartInspector";
 import { Icon } from "./M3Node";
-import { ButtonRun, CardLayoutPicker, CornerIcon, Field, IconBtn, Section, Segmented, SizePresets, Slider, TextTokenChips, TidyButton, TidyState, Toggle, TokenChips } from "./ui";
+import { ButtonRun, CardLayoutPicker, CornerIcon, Field, IconBtn, PanelShell, Section, Segmented, SizePresets, Slider, TextTokenChips, TidyButton, TidyState, Toggle, TokenChips } from "./ui";
 import { AiWriteBtn } from "./AiPanel";
 import { popHistory } from "@/lib/ai";
 import { KIND_TEXT, SWIPE_TEXT, TRANSITION_TEXT, UIKey, t, useLang } from "@/lib/i18n";
@@ -776,7 +776,8 @@ export function Inspector({
     );
   }
 
-  if (item.kind === "button" || item.kind === "iconButton" || isFab(item.kind)) {
+  /* the parts a tap sends somewhere and that fuse into a run are edited in the button's panel */
+  if (item.kind === "button" || item.kind === "iconButton" || item.kind === "chip" || isFab(item.kind)) {
     return <ButtonInspector ai={ai} item={item} palette={p} frame={frame ?? null} onChange={onChange} onDelete={onDelete} onDuplicate={onDuplicate} locked={locked} onToggleLock={onToggleLock} onPlace={onPlace} measured={widths?.[item.id]} selfRect={selfRect ?? null} allFrames={allFrames ?? frames} onShowOn={onShowOn} onShowMenu={onShowMenu} />;
   }
 
@@ -874,25 +875,30 @@ export function Inspector({
     item.kind === "box";
 
   return (
-    <div className="no-scrollbar" style={{ padding: "12px 12px 20px", overflowY: "auto", height: "100%" }}>
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 8,
-          marginBottom: 10,
-          padding: "6px 6px 6px 14px",
-          borderRadius: 20,
-          background: p.secondaryContainer,
-          color: p.onSecondaryContainer,
-        }}
-      >
-        <Icon name={spec.paletteIcon} size={20} />
-        <span style={{ fontSize: 14, fontWeight: 600, flex: 1, minWidth: 0 }}>{KIND_TEXT[lang][item.kind]?.noun ?? spec.label}</span>
-        <IconBtn icon="content_copy" p={p} onClick={onDuplicate} title={t("duplicateKey", lang)} size={32} />
-        <IconBtn icon="delete" p={p} danger onClick={onDelete} title={t("deleteKey", lang)} size={32} />
-      </div>
-
+    <PanelShell
+      p={p}
+      locked={!!locked}
+      onUnlock={onToggleLock}
+      head={
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            marginBottom: 10,
+            padding: "6px 6px 6px 14px",
+            borderRadius: 20,
+            background: p.secondaryContainer,
+            color: p.onSecondaryContainer,
+          }}
+        >
+          <Icon name={spec.paletteIcon} size={20} />
+          <span style={{ fontSize: 14, fontWeight: 600, flex: 1, minWidth: 0 }}>{KIND_TEXT[lang][item.kind]?.noun ?? spec.label}</span>
+          <IconBtn icon="content_copy" p={p} onClick={onDuplicate} title={t("duplicateKey", lang)} size={32} />
+          <IconBtn icon="delete" p={p} danger onClick={onDelete} title={t("deleteKey", lang)} size={32} />
+        </div>
+      }
+    >
       {TOGGLEABLE.includes(item.kind) && (
         <div style={{ display: "flex", flexDirection: "column", gap: 10, padding: "10px 4px 12px", marginBottom: 12 }}>
           <Toggle
@@ -1253,8 +1259,8 @@ export function Inspector({
                 on={!!item.checked}
                 onChange={(checked) => onChange({ checked })}
                 p={p}
-                icon={item.kind === "chip" ? "check_circle" : item.kind === "box" ? "drag_handle" : "toggle_on"}
-                label={item.kind === "chip" ? t("selected", lang) : item.kind === "box" ? t("handle", lang) : t("on", lang)}
+                icon={item.kind === "box" ? "drag_handle" : "toggle_on"}
+                label={item.kind === "box" ? t("handle", lang) : t("on", lang)}
                 grow
               />
             )}
@@ -1615,6 +1621,6 @@ export function Inspector({
         />
       </Section>
       )}
-    </div>
+    </PanelShell>
   );
 }

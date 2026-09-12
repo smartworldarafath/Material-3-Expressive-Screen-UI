@@ -20,6 +20,8 @@ import {
   draftGradient,
   BUTTON_H_MAX,
   BUTTON_H_MIN,
+  CHIP_H_MAX,
+  CHIP_H_MIN,
   FAB_H_MAX,
   FAB_H_MIN,
   isFab,
@@ -95,7 +97,7 @@ import {
   railExpansionSide,
 } from "@/lib/tokens";
 import { Icon, M3Node, M3Static, MeasuredContent } from "@/components/M3Node";
-import { CORNERS, HandleSide, SizeHandles } from "@/components/SizeHandles";
+import { CORNER_GAIN, CORNERS, HandleSide, SizeHandles } from "@/components/SizeHandles";
 import { LayersPanel } from "@/components/Layers";
 import { FrameInspector, FrameSizePicker, Inspector } from "@/components/Inspector";
 import { Preview } from "@/components/Preview";
@@ -1328,8 +1330,8 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
     /* a circle is pulled by a point on it: the drag reads along the diagonal and the one
      * measure it has -- its diameter -- follows, so it stays round the whole way */
     const round = CORNERS.includes(side);
-    /* an extended FAB is as wide as its label makes it: the one measure it has is its height */
-    const tall = item.kind === "extendedFab";
+    /* an extended FAB and a chip are as wide as their label makes them: their one measure is height */
+    const tall = item.kind === "extendedFab" || item.kind === "chip";
     const box = sizeOf(item, widthsRef.current);
     const startV = vertical || tall ? box.h : box.w;
     widthDragRef.current = {
@@ -1345,8 +1347,8 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
       startV,
       v: startV,
       /* a button is a circle at its narrowest, so its height says how narrow it may be drawn */
-      min: isFab(item.kind) ? (tall ? 56 : FAB_H_MIN) : vertical || round ? BUTTON_H_MIN : buttonMinWidth(item),
-      max: isFab(item.kind) ? FAB_H_MAX : vertical || round ? BUTTON_H_MAX : f ? frameSizeOf(f).w : PHONE_W,
+      min: isFab(item.kind) ? (tall ? 56 : FAB_H_MIN) : item.kind === "chip" ? CHIP_H_MIN : vertical || round ? BUTTON_H_MIN : buttonMinWidth(item),
+      max: isFab(item.kind) ? FAB_H_MAX : item.kind === "chip" ? CHIP_H_MAX : vertical || round ? BUTTON_H_MAX : f ? frameSizeOf(f).w : PHONE_W,
     };
     setWidthDragId(item.id);
     const move = (ev: PointerEvent) => {
@@ -1355,10 +1357,11 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
       const z = viewRef.current.z;
       let raw: number;
       if (d.round) {
-        /* how far the point travelled along its own diagonal, the two axes counting equally */
+        /* how far the point travelled along its own diagonal, the two axes counting equally, read
+           back as size through the gain the point itself is drawn with: it stays under the pointer */
         const dx = ((ev.clientX - d.startX) / z) * (d.side === "tl" || d.side === "bl" ? -1 : 1);
         const dy = ((ev.clientY - d.startY) / z) * (d.side === "tl" || d.side === "tr" ? -1 : 1);
-        raw = d.startV + (dx + dy);
+        raw = d.startV + (dx + dy) / CORNER_GAIN;
       } else {
         const delta = ((d.vertical ? ev.clientY : ev.clientX) - d.start0) / z;
         raw = d.startV + (d.side === "right" || d.side === "bottom" ? delta : -delta);
@@ -1366,6 +1369,9 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
       const v = clamp(Math.round(raw / 4) * 4, d.min, d.max);
       if (v === d.v) return;
       d.v = v;
+      /* a FAB hangs off its own corner, so its run is drawn at an offset that changes with the
+         size: it has to land with the pointer rather than ease after it */
+      instantRef.current.add(d.gid);
       /* whichever point is held, the one across from it stays where it is */
       const back = d.startV - v;
       if (d.side === "left") setWidthShift({ gid: d.gid, dx: back, dy: 0 });
@@ -1954,13 +1960,14 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
   const patchSelected = (patch: Partial<Item>) => {
     if (!primaryId) return;
     const id = primaryId;
-    /* a rail state change resizes it too, so it counts as a resize for the lock */
-    const resizes = "size" in patch || "size2" in patch || "railExpanded" in patch || "railModal" in patch;
-    /* a resize would reflow and move the locked group; other edits leave its layout alone */
-    if (resizes && groupsRef.current.some((g) => g.locked && g.items.some((it) => it.id === id))) {
+    /* a locked part is not to be changed at all: its panel is behind a blur, and anything that
+     * asks for a change anyway -- a shortcut, the phone's panel -- is turned away here */
+    if (groupsRef.current.some((g) => g.locked && g.items.some((it) => it.id === id))) {
       showToast(lockedGroupMsg());
       return;
     }
+    /* a rail state change resizes it too, so it counts as a resize for the reflow below */
+    const resizes = "size" in patch || "size2" in patch || "railExpanded" in patch || "railModal" in patch;
     snapshotFor(id + ":" + Object.keys(patch).join(","));
     if ("size" in patch || "size2" in patch) markSizeEdit(id);
     setGroups((prev) =>
@@ -3497,14 +3504,19 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
     /* the corner is the button's own, menu or no menu: the entries rise out of it and the
      * button itself never moves */
     const corner = g.items.length === 1 && isFab(g.items[0].kind) ? sizeOf(g.items[0], widths) : null;
+    /* The corner is held by the run's own translate rather than by the offset it is animated to.
+     * Both halves of it -- the size in pixels and the box's own 100% -- are then settled by the
+     * browser in the frame React hands them over in, so a size being dragged cannot leave the
+     * drawn box a step behind the offset and make it shiver. */
+    const hang = corner ? `calc(${corner.w}px - 100%) calc(${corner.h}px - 100%)` : undefined;
 
     return (
       <motion.div
         key={g.id}
         initial={false}
         animate={{
-          x: g.x - ox + (g.axis === "x" ? front : 0) + (corner?.w ?? 0),
-          y: g.y - oy + (g.axis === "y" ? front : 0) + (corner?.h ?? 0),
+          x: g.x - ox + (g.axis === "x" ? front : 0),
+          y: g.y - oy + (g.axis === "y" ? front : 0),
         }}
         transition={instant ? INSTANT : hole ? (gapEase ? GAP_TWEEN : INSTANT) : OPEN}
         style={{
@@ -3515,7 +3527,7 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
           marginLeft: widthShift?.gid === g.id ? widthShift.dx : undefined,
           marginTop: widthShift?.gid === g.id ? widthShift.dy : undefined,
           /* hung from its own corner, a FAB changes size without moving that corner */
-          translate: corner ? "-100% -100%" : undefined,
+          translate: hang,
           display: "flex",
           flexDirection: g.axis === "x" ? "row" : "column",
           alignItems: g.axis === "x" ? "center" : "stretch",
@@ -4052,7 +4064,7 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
                   four points around its circle: dragging one changes the part's size in place,
                   and whatever sits opposite stays where it is */}
               {/* a FAB showing its menu is being edited as a menu, not sized as a button */}
-              {!handMode && !drag && selectedIds.length === 1 && selected?.id !== menuId && (selected?.kind === "button" || selected?.kind === "iconButton" || selected?.kind === "fab" || selected?.kind === "extendedFab") && (() => {
+              {!handMode && !drag && selectedIds.length === 1 && selected?.id !== menuId && (selected?.kind === "button" || selected?.kind === "iconButton" || selected?.kind === "chip" || selected?.kind === "fab" || selected?.kind === "extendedFab") && (() => {
                 const g = groups.find((x) => x.items.length === 1 && !x.free && !x.locked && x.items[0].id === selected.id);
                 if (!g) return null;
                 const b = groupBounds(g, widths);

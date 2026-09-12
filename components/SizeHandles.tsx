@@ -11,6 +11,11 @@ export const CORNERS: HandleSide[] = ["tl", "tr", "bl", "br"];
 
 export type Box = { l: number; t: number; r: number; b: number };
 
+/** A corner point sits at the 45 degree mark of its corner, so it travels 1/sqrt(2) of the way
+ *  out along each axis as well as half of the growth itself: moving it by one pixel on both axes
+ *  is this many pixels of size. The drag divides by it, and the point stays under the pointer. */
+export const CORNER_GAIN = 1 + Math.SQRT1_2;
+
 const same = (a: Box, c: Box) => a.l === c.l && a.t === c.t && a.r === c.r && a.b === c.b;
 const mix = (a: Box, c: Box, k: number): Box => ({ l: lerp(a.l, c.l, k), t: lerp(a.t, c.t, k), r: lerp(a.r, c.r, k), b: lerp(a.b, c.b, k) });
 
@@ -105,17 +110,21 @@ export function SizeHandles({
   );
 
   if (round) {
-    /* each point sits where its diagonal crosses the circle */
-    const rr = w / 2;
+    /* each point sits where its diagonal crosses the corner it is nearest. On a circle that is
+     * the circle itself; on a part longer than it is tall -- an extended FAB, a chip -- it is the
+     * rounded end, which is the same arc, so the four points land on the outline either way. */
+    const rr = Math.min(w, h) / 2;
     const dot = clamp(rr * 0.34, 5 / z, 11 / z);
-    const off = rr / Math.SQRT2;
+    const inset = rr - rr / Math.SQRT2;
+    const offX = w / 2 - inset;
+    const offY = h / 2 - inset;
     return (
       <>
         {CORNERS.map((side) =>
           handle(
             side,
-            cx + (side === "tl" || side === "bl" ? -off : off),
-            cy + (side === "tl" || side === "tr" ? -off : off),
+            cx + (side === "tl" || side === "bl" ? -offX : offX),
+            cy + (side === "tl" || side === "tr" ? -offY : offY),
             dot,
             dot,
             side === "tl" || side === "br" ? "nwse-resize" : "nesw-resize",

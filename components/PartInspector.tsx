@@ -23,7 +23,7 @@ import {
   sizeOf,
   timeLayoutOf,
 } from "@/lib/tokens";
-import { Field, Section, Segmented, Slider } from "./ui";
+import { Field, PanelShell, Section, Segmented, Slider } from "./ui";
 import { AiHooks } from "./Inspector";
 import { AlignBox, NoteSection, PartHeader, PartTabs, PlaceFn, Tab, TriggerSection, hasTrigger } from "./PartPanel";
 import { t, useLang } from "@/lib/i18n";
@@ -177,12 +177,21 @@ export function PartInspector({
   );
 
   return (
-    <div className="no-scrollbar" style={{ padding: "12px 12px 20px", overflowY: "auto", height: "100%" }}>
-      <PartHeader kind={item.kind} p={p} locked={!!locked} onDuplicate={onDuplicate} onToggleLock={onToggleLock} onDelete={onDelete} />
-      {trigger ? <PartTabs value={tab} onChange={setTab} p={p} /> : <div style={{ height: 10 }} />}
+    <PanelShell
+      p={p}
+      locked={!!locked}
+      onUnlock={onToggleLock}
+      head={
+        <>
+          <PartHeader kind={item.kind} p={p} locked={!!locked} onDuplicate={onDuplicate} onToggleLock={onToggleLock} onDelete={onDelete} />
+          {!trigger && <div style={{ height: 10 }} />}
+        </>
+      }
+      tabs={trigger ? <PartTabs value={tab} onChange={setTab} p={p} /> : undefined}
+    >
       {(!trigger || tab === "design") && design}
       {trigger && tab === "behavior" && <TriggerSection item={item} frame={frame} allFrames={allFrames} selfRect={selfRect} onChange={onChange} p={p} />}
       {(!trigger || tab === "behavior") && <NoteSection item={item} ai={ai} onChange={onChange} p={p} />}
-    </div>
+    </PanelShell>
   );
 }

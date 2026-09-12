@@ -6,6 +6,10 @@ import {
   BACK_TARGET,
   BUTTON_H_MAX,
   BUTTON_H_MIN,
+  CHIP_H_MAX,
+  CHIP_H_MIN,
+  CHIP_SIZES,
+  chipHeightOf,
   BUTTON_SIZES,
   FAB_H_MAX,
   FAB_H_MIN,
@@ -44,7 +48,7 @@ import {
 } from "@/lib/tokens";
 import { IconPicker } from "./IconPicker";
 import { Icon, M3Static } from "./M3Node";
-import { Field, IconBtn, Section, Segmented, Select, SelectOption, Slider } from "./ui";
+import { Field, IconBtn, PanelShell, Section, Segmented, Select, SelectOption, Slider, Toggle } from "./ui";
 import { AiHooks, variantsOf } from "./Inspector";
 import { LinkStage, TapStage } from "./TapStage";
 import { AiIconBtn, AlignBox, PartHeader, PartTabs, PlaceFn, Tab, actionOptionsOf } from "./PartPanel";
@@ -522,6 +526,8 @@ export function ButtonInspector({
 
   const isIcon = item.kind === "iconButton";
   const fab = isFab(item.kind);
+  /* a chip is as wide as its label makes it, and carries a selected look of its own */
+  const chip = item.kind === "chip";
   /* a FAB may be asked to open a menu: the entries are its, and each has its own destination */
   const isMenu = hasMenu(item);
   const isExtended = item.kind === "extendedFab";
@@ -562,13 +568,13 @@ export function ButtonInspector({
   /* what the slider shows is the width on the canvas, even while the text sets it */
   const width = item.size ?? measured ?? spec.w;
   /* the one measure each shape is given: a circle's diameter, a label's height, a button's height */
-  const height = isExtended ? extendedFabHeight(item) : item.kind === "fab" ? (item.size ?? 56) : buttonHeightOf(item);
+  const height = chip ? chipHeightOf(item) : isExtended ? extendedFabHeight(item) : item.kind === "fab" ? (item.size ?? 56) : buttonHeightOf(item);
   /* a button is a circle at its narrowest, so how short it is says how narrow it can be */
   const minW = Math.min(buttonMinWidth(item), width);
   /* a circle's one measure is its width; a button's is its height, and a width the author set
    * that is now narrower than the button is tall grows with it */
   const setHeight = (v: number) =>
-    onChange(isIcon || item.kind === "fab" ? { size: v } : isExtended ? { size2: v } : item.size && item.size < v ? { size2: v, size: v } : { size2: v });
+    onChange(isIcon || item.kind === "fab" ? { size: v } : isExtended || chip ? { size2: v } : item.size && item.size < v ? { size2: v, size: v } : { size2: v });
 
   const iconBtn = (icon: string | null, faint: boolean, open: boolean, title: string, onClick: () => void) => (
     <button
@@ -598,11 +604,13 @@ export function ButtonInspector({
   const onIcon = toggleIcon(item);
 
   return (
-    <div className="no-scrollbar" style={{ padding: "12px 12px 20px", overflowY: "auto", height: "100%" }}>
-      <PartHeader kind={item.kind} p={p} locked={!!locked} onDuplicate={onDuplicate} onToggleLock={onToggleLock} onDelete={onDelete} />
-
-      <PartTabs value={tab} onChange={setTab} p={p} />
-
+    <PanelShell
+      p={p}
+      locked={!!locked}
+      onUnlock={onToggleLock}
+      head={<PartHeader kind={item.kind} p={p} locked={!!locked} onDuplicate={onDuplicate} onToggleLock={onToggleLock} onDelete={onDelete} />}
+      tabs={<PartTabs value={tab} onChange={setTab} p={p} />}
+    >
       {tab === "design" && (
         <>
           {fab && (
@@ -677,6 +685,10 @@ export function ButtonInspector({
                   </div>
                 </div>
               )}
+              {chip && (
+                /* a chip is either plain or picked out; the picked look is a style, so it is set here */
+                <Toggle on={!!item.checked} onChange={(checked) => onChange({ checked })} p={p} icon="check_circle" label={t("selected", lang)} grow />
+              )}
             </div>
           </Section>
           <Section id="btn-size" icon="straighten" title={t("size", lang)} p={p}>
@@ -684,7 +696,7 @@ export function ButtonInspector({
                 eye can tell which row belongs to which measure. An icon button is a circle: it
                 has one measure, and the row of M3 sizes is all it needs. */}
             <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-              {!isIcon && !fab && (
+              {!isIcon && !fab && !chip && (
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                   <Slider icon="width" title={t("width", lang)} value={width} min={minW} max={frameW} step={size.step} onChange={(v) => onChange({ size: v })} p={p} />
                   <WidthRow value={item.size} onChange={(size) => onChange({ size })} frameW={frameW} p={p} />
@@ -697,8 +709,8 @@ export function ButtonInspector({
                     icon={isIcon || fab ? "open_in_full" : "height"}
                     title={t(isIcon || fab ? "size" : "height", lang)}
                     value={height}
-                    min={fab ? (isExtended ? 56 : FAB_H_MIN) : BUTTON_H_MIN}
-                    max={fab ? FAB_H_MAX : BUTTON_H_MAX}
+                    min={chip ? CHIP_H_MIN : fab ? (isExtended ? 56 : FAB_H_MIN) : BUTTON_H_MIN}
+                    max={chip ? CHIP_H_MAX : fab ? FAB_H_MAX : BUTTON_H_MAX}
                     step={size.step}
                     onChange={setHeight}
                     p={p}
@@ -706,7 +718,13 @@ export function ButtonInspector({
                   <HeightRow
                     value={height}
                     onChange={setHeight}
-                    steps={fab ? FAB_SIZES.map((f) => ({ key: f.key, h: isExtended ? f.h : f.d })) : undefined}
+                    steps={
+                      chip
+                        ? CHIP_SIZES.map((c) => ({ key: c.key, h: c.h }))
+                        : fab
+                          ? FAB_SIZES.map((f) => ({ key: f.key, h: isExtended ? f.h : f.d }))
+                          : undefined
+                    }
                     p={p}
                   />
                 </div>
@@ -799,6 +817,6 @@ export function ButtonInspector({
           />
         </Section>
       )}
-    </div>
+    </PanelShell>
   );
 }

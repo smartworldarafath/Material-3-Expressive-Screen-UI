@@ -7,6 +7,249 @@ import { COLOR_TOKEN_TEXT, TEXT_TOKEN_TEXT, t, useLang } from "@/lib/i18n";
 import { Icon } from "./M3Node";
 import { onColorFor } from "@/lib/color";
 
+/** how the lock comes over the panel and goes away again: the blur first, then the switch and
+ *  the line under it; on the way out the switch turns itself off before any of it fades */
+/** the row of tabs and the clear gap under it, and the band a panel with no tabs fades its top with */
+const PANEL_TABS_H = 48;
+const PANEL_TABS_GAP = 16;
+const PANEL_FADE_H = 28;
+const VEIL_IN = 0.22;
+const BADGE_IN = 0.18;
+const SWITCH_OFF = 0.26;
+const LOCK_OUT_MS = Math.round((SWITCH_OFF + 0.2) * 1000) + 40;
+/** a cover that has nothing to undo has only its own fade to wait for */
+const AWAY_MS = 240;
+
+/** A part's panel: the title row and the tabs stay where they are, and everything that changes
+ *  the part scrolls under them. While the part is locked that whole area goes behind a blur and
+ *  out of reach -- the design is still there to read, and the tabs still turn, so the author can
+ *  look the part over without being able to touch it. The switch in the middle of the blur is
+ *  the lock itself, and turning it off is how the part comes back. */
+export function PanelShell({
+  p,
+  locked,
+  onUnlock,
+  head,
+  tabs,
+  children,
+}: {
+  p: Palette;
+  locked?: boolean;
+  onUnlock?: () => void;
+  head: React.ReactNode;
+  /** the row of tabs, if the part has one: it floats over what scrolls rather than sitting on it */
+  tabs?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  /* The cover leaves in one of two ways. Turned off at its own switch, it undoes itself in plain
+     sight: the switch goes off first and the blur only then. Gone for any other reason -- the
+     panel is showing another part now -- there is nothing to undo, so it simply fades, and the
+     author is not told a lock came off when none did. */
+  const [drawn, setDrawn] = useState(!!locked);
+  const [phase, setPhase] = useState<"on" | "off" | "away">(locked ? "on" : "away");
+  const bySwitch = useRef(false);
+  useEffect(() => {
+    if (locked) {
+      bySwitch.current = false;
+      setDrawn(true);
+      setPhase("on");
+      return;
+    }
+    if (!drawn || phase !== "on") return;
+    const undone = bySwitch.current;
+    bySwitch.current = false;
+    setPhase(undone ? "off" : "away");
+    const id = setTimeout(() => setDrawn(false), undone ? LOCK_OUT_MS : AWAY_MS);
+    return () => clearTimeout(id);
+  }, [locked, drawn, phase]);
+
+  return (
+    <div style={{ height: "100%", display: "flex", flexDirection: "column", minHeight: 0 }}>
+      <div style={{ padding: "12px 12px 0", flex: "0 0 auto" }}>{head}</div>
+      <div style={{ position: "relative", flex: 1, minHeight: 0 }}>
+        <div
+          className="no-scrollbar"
+          inert={locked || undefined}
+          style={{ padding: `${tabs ? PANEL_TABS_H + PANEL_TABS_GAP : 0}px 12px 20px`, overflowY: "auto", height: "100%" }}
+        >
+          {children}
+        </div>
+        {/* the tabs keep their place while the rest scrolls under them, and the panel's own colour
+            is drawn behind them, thinning out to nothing by where the row ends: what passes up
+            behind the two words dissolves into the panel rather than being cut off against a rule */}
+        <div
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            /* the panel's colour reaches exactly as far as the rule used to, and thins out
+               across the two words on its way there */
+            height: tabs ? PANEL_TABS_H : PANEL_FADE_H,
+            /* the tabs ride above the lock's blur: they are what stays usable while it is on */
+            zIndex: tabs ? 4 : 2,
+            background: tabs
+              ? `linear-gradient(to bottom, ${p.surface} 0%, ${p.surface} 24%, ${p.surface}00 100%)`
+              : `linear-gradient(to bottom, ${p.surface}, ${p.surface}00)`,
+            pointerEvents: tabs ? undefined : "none",
+          }}
+        >
+          {tabs}
+        </div>
+        {drawn && (
+          <LockedCover
+            p={p}
+            phase={phase}
+            onUnlock={
+              onUnlock &&
+              (() => {
+                bySwitch.current = true;
+                onUnlock();
+              })
+            }
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** what a locked part's panel is covered with: the blur, the lock on its switch, and a line saying
+ *  what the switch is for */
+function LockedCover({ p, phase, onUnlock }: { p: Palette; phase: "on" | "off" | "away"; onUnlock?: () => void }) {
+  const lang = useLang();
+  const reducedMotion = useReducedMotion();
+  const on = phase === "on";
+  /* on its way out with the lock still on: the switch keeps its place and only the cover fades */
+  const away = phase === "away";
+  const out = (d: number) => (reducedMotion ? { duration: 0 } : { duration: d, ease: [0.2, 0, 0, 1] as const, ...(away ? {} : { delay: SWITCH_OFF }) });
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: on ? 1 : 0 }}
+      transition={reducedMotion ? { duration: 0 } : on ? { duration: VEIL_IN, ease: [0.2, 0, 0, 1] } : out(0.2)}
+      onPointerDown={(e) => e.preventDefault()}
+      style={{
+        position: "absolute",
+        inset: 0,
+        zIndex: 3,
+        display: "grid",
+        placeItems: "center",
+        padding: 24,
+        pointerEvents: on ? undefined : "none",
+        backdropFilter: "blur(3px)",
+        WebkitBackdropFilter: "blur(3px)",
+        background: `color-mix(in srgb, ${p.surface} 55%, transparent)`,
+      }}
+    >
+      <motion.div
+        initial={{ opacity: 0, y: 6 }}
+        animate={{ opacity: on ? 1 : 0, y: on ? 0 : 6 }}
+        transition={reducedMotion ? { duration: 0 } : on ? { duration: 0.2, ease: [0.2, 0, 0, 1], delay: BADGE_IN } : out(0.18)}
+        style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12, textAlign: "center" }}
+      >
+        {/* a cover that is only fading away keeps the lock shut: nothing was undone */}
+        <LockSwitch on={on || away} p={p} onOff={on ? onUnlock : undefined} />
+        <span style={{ fontSize: 12, lineHeight: 1.5, color: p.onSurfaceVariant, whiteSpace: "nowrap", maxWidth: "100%" }}>{t("lockedEdit", lang)}</span>
+      </motion.div>
+    </motion.div>
+  );
+}
+
+/* the switch the lock sits on: on is locked, and the lock itself rides in the knob. It is turned
+ * off by a tap or by dragging the knob back, the way a real one would be. */
+const TRACK_W = 56;
+const TRACK_H = 34;
+const KNOB = 26;
+const KNOB_INSET = 4;
+const TRAVEL = TRACK_W - KNOB - KNOB_INSET * 2;
+
+function LockSwitch({ on, p, onOff }: { on: boolean; p: Palette; onOff?: () => void }) {
+  const lang = useLang();
+  const reducedMotion = useReducedMotion();
+  const [drag, setDrag] = useState<number | null>(null);
+  const from = useRef(0);
+  const moved = useRef(0);
+  const x = drag !== null ? drag : on ? TRAVEL : 0;
+
+  const start = (e: React.PointerEvent) => {
+    if (!onOff || !on) return;
+    e.preventDefault();
+    e.stopPropagation();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    from.current = e.clientX;
+    moved.current = 0;
+    setDrag(TRAVEL);
+  };
+  const move = (e: React.PointerEvent) => {
+    if (drag === null) return;
+    const dx = e.clientX - from.current;
+    moved.current = Math.max(moved.current, Math.abs(dx));
+    setDrag(clamp(TRAVEL + dx, 0, TRAVEL));
+  };
+  const end = () => {
+    if (drag === null) return;
+    /* a tap turns it off; so does a drag that has taken the knob most of the way back */
+    const off = moved.current < 4 || drag < TRAVEL / 2;
+    setDrag(null);
+    if (off) onOff?.();
+  };
+
+  return (
+    <span
+      role="switch"
+      aria-checked={on}
+      aria-label={t(on ? "unlock" : "lock", lang)}
+      title={t("unlock", lang)}
+      tabIndex={0}
+      onPointerDown={start}
+      onPointerMove={move}
+      onPointerUp={end}
+      onPointerCancel={end}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onOff?.();
+        }
+      }}
+      style={{
+        position: "relative",
+        width: TRACK_W,
+        height: TRACK_H,
+        borderRadius: TRACK_H / 2,
+        boxSizing: "border-box",
+        background: on ? p.primary : p.surfaceContainerHighest,
+        border: on ? "2px solid transparent" : `2px solid ${p.outline}`,
+        transition: "background 200ms, border-color 200ms",
+        cursor: onOff ? "pointer" : "default",
+        touchAction: "none",
+        display: "block",
+      }}
+    >
+      <motion.span
+        initial={{ x: 0 }}
+        animate={{ x }}
+        transition={reducedMotion || drag !== null ? { duration: 0 } : { type: "spring", stiffness: 480, damping: 36, mass: 0.6 }}
+        style={{
+          position: "absolute",
+          left: KNOB_INSET - 2,
+          top: KNOB_INSET - 2,
+          width: KNOB,
+          height: KNOB,
+          borderRadius: KNOB / 2,
+          display: "grid",
+          placeItems: "center",
+          background: on ? p.onPrimary : p.outline,
+          color: on ? p.onPrimaryContainer : p.surfaceContainerHighest,
+          transition: "background 200ms, color 200ms",
+        }}
+      >
+        <Icon name={on ? "lock" : "lock_open"} size={16} />
+      </motion.span>
+    </span>
+  );
+}
+
 export function IconBtn({
   icon,
   on,
