@@ -1,12 +1,12 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { BACK_TARGET, Frame, Item, KIND_SPEC, PHONE_W, Palette, R_INNER, Variant, contentWidth, frameSizeOf, halfWidth, isPhoneFrame, toggleIcon, variantStyle } from "@/lib/tokens";
+import { BACK_TARGET, BUTTON_H_MAX, BUTTON_H_MIN, BUTTON_SIZES, Frame, Item, KIND_SPEC, LINK_TARGET, PHONE_W, Palette, R_INNER, Variant, buttonHeightOf, buttonMinWidth, contentWidth, frameSizeOf, halfWidth, isPhoneFrame, toggleIcon, variantStyle } from "@/lib/tokens";
 import { IconPicker } from "./IconPicker";
 import { Icon, M3Static } from "./M3Node";
 import { Field, IconBtn, Section, Select, SelectOption, Slider } from "./ui";
 import { AiHooks, variantsOf } from "./Inspector";
-import { TapStage } from "./TapStage";
+import { LinkStage, TapStage } from "./TapStage";
 import { KIND_TEXT, t, useLang } from "@/lib/i18n";
 
 type Tab = "design" | "behavior";
@@ -187,11 +187,11 @@ function VariantRow({ value, onChange, p }: { value: Variant; onChange: (v: Vari
  *  cells stay plain words: a drawing next to them only repeated what the word already said. */
 function WidthRow({ value, onChange, frameW, p }: { value: number | undefined; onChange: (size: number | undefined) => void; frameW: number; p: Palette }) {
   const lang = useLang();
-  const cells: { key: string; size?: number; label: string }[] = [
-    { key: "auto", label: t("autoWidth", lang) },
-    { key: "half", size: halfWidth(frameW), label: t("halfWidth", lang) },
-    { key: "content", size: contentWidth(frameW), label: t("contentWidth", lang) },
-    { key: "screen", size: frameW, label: t("screenWidth", lang) },
+  const cells: { key: string; size?: number; label: string; hint: string }[] = [
+    { key: "auto", label: t("autoWidth", lang), hint: t("autoWidthHint", lang) },
+    { key: "half", size: halfWidth(frameW), label: t("halfWidth", lang), hint: t("halfWidthHint", lang) },
+    { key: "content", size: contentWidth(frameW), label: t("contentWidth", lang), hint: t("contentWidthHint", lang) },
+    { key: "screen", size: frameW, label: t("screenWidth", lang), hint: t("screenWidthHint", lang) },
   ];
   const h = 40;
   return (
@@ -200,13 +200,15 @@ function WidthRow({ value, onChange, frameW, p }: { value: number | undefined; o
         const on = value === c.size;
         const first = i === 0;
         const last = i === cells.length - 1;
+        /* the word says what the width is for, the number says what it comes to on this screen */
+        const title = `${c.label}${c.size ? ` · ${c.size}dp` : ""} — ${c.hint}`;
         return (
           <button
             key={c.key}
             role="radio"
             aria-checked={on}
-            title={c.label}
-            aria-label={c.label}
+            title={title}
+            aria-label={title}
             onClick={() => onChange(c.size)}
             className="m3-press"
             style={{
@@ -225,12 +227,61 @@ function WidthRow({ value, onChange, frameW, p }: { value: number | undefined; o
               fontSize: 12,
               fontWeight: on ? 700 : 600,
               overflow: "hidden",
+              whiteSpace: "nowrap",
+              transition: "background 120ms, color 120ms",
               textOverflow: "ellipsis",
+            }}
+          >
+            {c.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/** the five heights M3 names, as one connected run. Each cell carries its own name, because
+ *  XS to XL is what the size is called everywhere else in Material. */
+function HeightRow({ value, onChange, p }: { value: number; onChange: (h: number) => void; p: Palette }) {
+  const h = 40;
+  return (
+    <div role="radiogroup" style={{ display: "flex", gap: 3 }}>
+      {BUTTON_SIZES.map((c, i) => {
+        const on = value === c.h;
+        const first = i === 0;
+        const last = i === BUTTON_SIZES.length - 1;
+        const label = c.key.toUpperCase();
+        const title = `${label} · ${c.h}dp`;
+        return (
+          <button
+            key={c.key}
+            role="radio"
+            aria-checked={on}
+            title={title}
+            aria-label={title}
+            onClick={() => onChange(c.h)}
+            className="m3-press"
+            style={{
+              flex: 1,
+              minWidth: 0,
+              height: h,
+              border: "none",
+              padding: "0 4px",
+              cursor: "pointer",
+              borderTopLeftRadius: first ? h / 2 : R_INNER,
+              borderBottomLeftRadius: first ? h / 2 : R_INNER,
+              borderTopRightRadius: last ? h / 2 : R_INNER,
+              borderBottomRightRadius: last ? h / 2 : R_INNER,
+              background: on ? p.primary : p.surfaceContainerHigh,
+              color: on ? p.onPrimary : p.onSurfaceVariant,
+              fontSize: 12,
+              fontWeight: on ? 700 : 600,
+              overflow: "hidden",
               whiteSpace: "nowrap",
               transition: "background 120ms, color 120ms",
             }}
           >
-            {c.label}
+            {label}
           </button>
         );
       })}
@@ -300,25 +351,9 @@ function ToggleStage({ item, shownOn, onPick, p }: { item: Item; shownOn: boolea
       >
         <M3Static item={look} palette={p} style={{ transition: "background 200ms, color 200ms" }} />
       </button>
-      <span
-        style={{
-          position: "absolute",
-          right: 10,
-          top: 10,
-          height: 24,
-          padding: "0 10px 0 6px",
-          borderRadius: 12,
-          background: shownOn ? p.primary : p.surfaceContainerHigh,
-          color: shownOn ? p.onPrimary : p.onSurfaceVariant,
-          fontSize: 11,
-          fontWeight: 600,
-          display: "inline-flex",
-          alignItems: "center",
-          gap: 4,
-        }}
-      >
-        <Icon name={shownOn ? "check_circle" : "radio_button_unchecked"} size={14} fill={shownOn} />
-        {shownOn ? t("onState", lang) : t("normalState", lang)}
+      {/* a hand in the corner: the stage is something to tap, and that is all it says */}
+      <span aria-hidden style={{ position: "absolute", right: 10, top: 10, color: p.outline, display: "inline-flex" }}>
+        <Icon name="touch_app" size={18} />
       </span>
     </div>
   );
@@ -502,6 +537,7 @@ export function ButtonInspector({
   }, [item.id]);
 
   const isToggle = !!item.toggle;
+  const isLink = item.action?.to === LINK_TARGET;
   const setToggle = (patch: Partial<NonNullable<Item["toggle"]>>) => onChange({ toggle: { ...(item.toggle ?? {}), ...patch } });
 
   /** what a tap does: nothing, flip the button's own look, go back, or open one of the screens */
@@ -510,6 +546,7 @@ export function ButtonInspector({
     { key: "none", label: t("none", lang), icon: "block" },
     { key: "toggle", label: t("toggleTitle", lang), icon: "swap_horiz" },
     { key: BACK_TARGET, label: t("back", lang), icon: "arrow_back" },
+    { key: LINK_TARGET, label: t("openLink", lang), icon: "open_in_new" },
     ...[...allFrames]
       .sort((a, b) => a.x - b.x || a.y - b.y)
       .filter((f) => f.id !== frame?.id)
@@ -524,14 +561,24 @@ export function ButtonInspector({
     }
     setShownOn(false);
     setPicker("none");
-    onChange({ toggle: undefined, action: k === "none" ? undefined : { to: k, transition: item.action?.transition ?? "slide" } });
+    if (k === LINK_TARGET) {
+      /* a link leaves the sketch for the browser, so no screen transition plays with it */
+      onChange({ toggle: undefined, action: { to: LINK_TARGET, transition: "none", url: item.action?.url } });
+      return;
+    }
+    const transition = item.action && item.action.to !== LINK_TARGET ? item.action.transition : "slide";
+    onChange({ toggle: undefined, action: k === "none" ? undefined : { to: k, transition } });
   };
 
   const frameW = frame ? frameSizeOf(frame).w : PHONE_W;
   const size = spec.size!;
   /* what the slider shows is the width on the canvas, even while the text sets it */
   const width = item.size ?? measured ?? spec.w;
-  const minW = Math.min(size.min, width);
+  const height = buttonHeightOf(item);
+  /* a button is a circle at its narrowest, so how short it is says how narrow it can be */
+  const minW = Math.min(buttonMinWidth(item), width);
+  /* a width the author set that is now narrower than the button is tall grows with it */
+  const setHeight = (size2: number) => onChange(item.size && item.size < size2 ? { size2, size: size2 } : { size2 });
 
   const iconBtn = (icon: string | null, faint: boolean, open: boolean, title: string, onClick: () => void) => (
     <button
@@ -633,10 +680,18 @@ export function ButtonInspector({
               )}
             </div>
           </Section>
-          <Section id="btn-width" icon="straighten" title={t("width", lang)} p={p}>
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              <Slider icon="width" title={t("width", lang)} value={width} min={minW} max={frameW} step={size.step} onChange={(v) => onChange({ size: v })} p={p} />
-              <WidthRow value={item.size} onChange={(size) => onChange({ size })} frameW={frameW} p={p} />
+          <Section id="btn-size" icon="straighten" title={t("size", lang)} p={p}>
+            {/* the two axes are each a slider over its presets, with room between them so the
+                eye can tell which row belongs to which measure */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                <Slider icon="width" title={t("width", lang)} value={width} min={minW} max={frameW} step={size.step} onChange={(v) => onChange({ size: v })} p={p} />
+                <WidthRow value={item.size} onChange={(size) => onChange({ size })} frameW={frameW} p={p} />
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                <Slider icon="height" title={t("height", lang)} value={height} min={BUTTON_H_MIN} max={BUTTON_H_MAX} step={size.step} onChange={setHeight} p={p} />
+                <HeightRow value={height} onChange={setHeight} p={p} />
+              </div>
             </div>
           </Section>
           {onPlace && (
@@ -656,6 +711,8 @@ export function ButtonInspector({
                 <ToggleStage item={item} shownOn={shownOn} onPick={setShownOn} p={p} />
                 <div style={{ fontSize: 12, lineHeight: 1.5, color: p.onSurfaceVariant, padding: "0 4px" }}>{t("toggleLookHint", lang)}</div>
               </>
+            ) : isLink ? (
+              <LinkStage self={frame} selfRect={selfRect} action={item.action} onChange={(action) => onChange({ action })} p={p} />
             ) : (
               <TapStage frames={allFrames} self={frame} selfRect={selfRect} action={item.action} onChange={(action) => onChange({ action })} p={p} />
             )}
@@ -673,6 +730,7 @@ export function ButtonInspector({
             grow
             rows={2}
             maxHeight={200}
+            aiBusy={ai.busy}
             action={<AiIconBtn ai={ai} p={p} />}
           />
         </Section>

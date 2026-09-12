@@ -6,6 +6,11 @@ import {
   Platform,
   Action,
   BACK_TARGET,
+  H,
+  LINK_TARGET,
+  buttonHeightOf,
+  buttonSizeKeyOf,
+  linkUrlOf,
   Doc,
   FONTS,
   Frame,
@@ -143,13 +148,27 @@ function railStateText(it: Item, lang: Lang): string {
 
 /* ================= single parts ================= */
 
+/** how big a button is: the width the author set, and the height whenever it leaves M3's medium
+ *  one, named by the M3 size it lands on so the code can reach for that size directly */
+function buttonSize(it: Item, lang: Lang): string {
+  const h = buttonHeightOf(it);
+  const key = buttonSizeKeyOf(h);
+  const named = key ? ` / M3 ${key.toUpperCase()}` : "";
+  const parts: string[] = [];
+  if (it.size) parts.push(lang === "ja" ? `幅 ${it.size}dp` : lang === "zh" ? `宽 ${it.size}dp` : lang === "ko" ? `너비 ${it.size}dp` : `${it.size}dp wide`);
+  if (h !== H) parts.push((lang === "ja" ? `高さ ${h}dp` : lang === "zh" ? `高 ${h}dp` : lang === "ko" ? `높이 ${h}dp` : `${h}dp tall`) + named);
+  if (!parts.length) return "";
+  const body = parts.join(lang === "en" ? ", " : lang === "ko" ? ", " : "、");
+  return lang === "en" || lang === "ko" ? ` (${body})` : `（${body}）`;
+}
+
 function itemJa(it: Item): string {
   const q = qj;
   const v = VARIANT_TEXT.ja[it.variant];
   const noun = KIND_TEXT.ja[it.kind]?.noun ?? it.kind;
   switch (it.kind) {
     case "button":
-      return `${hasText(it.label) ? q(it.label) : "ラベルなし"}の${v}ボタン${it.icon ? `（${it.icon} アイコン付き）` : ""}${it.size ? `（幅 ${it.size}dp）` : ""}`;
+      return `${hasText(it.label) ? q(it.label) : "ラベルなし"}の${v}ボタン${it.icon ? `（${it.icon} アイコン付き）` : ""}${buttonSize(it, "ja")}`;
     case "iconButton":
       return `${it.icon ?? "空"} アイコンの${v}アイコンボタン`;
     case "fab":
@@ -240,7 +259,7 @@ function itemEn(it: Item): string {
   const noun = KIND_TEXT.en[it.kind]?.noun ?? it.kind;
   switch (it.kind) {
     case "button":
-      return `a ${v} button ${hasText(it.label) ? q(it.label) : "with no label"}${it.icon ? ` with a ${it.icon} icon` : ""}${it.size ? ` (${it.size}dp wide)` : ""}`;
+      return `a ${v} button ${hasText(it.label) ? q(it.label) : "with no label"}${it.icon ? ` with a ${it.icon} icon` : ""}${buttonSize(it, "en")}`;
     case "iconButton":
       return `a ${v} icon button with the ${it.icon ?? "empty"} icon`;
     case "fab":
@@ -331,7 +350,7 @@ function itemZh(it: Item): string {
   const noun = KIND_TEXT.zh[it.kind]?.noun ?? it.kind;
   switch (it.kind) {
     case "button":
-      return `${hasText(it.label) ? q(it.label) : "无标签"}的${v}按钮${it.icon ? `（带 ${it.icon} 图标）` : ""}${it.size ? `（宽 ${it.size}dp）` : ""}`;
+      return `${hasText(it.label) ? q(it.label) : "无标签"}的${v}按钮${it.icon ? `（带 ${it.icon} 图标）` : ""}${buttonSize(it, "zh")}`;
     case "iconButton":
       return `${it.icon ?? "空"} 图标的${v}图标按钮`;
     case "fab":
@@ -421,7 +440,7 @@ function itemKo(it: Item): string {
   const v = VARIANT_TEXT.ko[it.variant];
   const noun = KIND_TEXT.ko[it.kind]?.noun ?? it.kind;
   switch (it.kind) {
-    case "button": return `${hasText(it.label) ? q(it.label) : "레이블 없는"} ${v} 버튼${it.icon ? `(${it.icon} 아이콘 포함)` : ""}${it.size ? `(너비 ${it.size}dp)` : ""}`;
+    case "button": return `${hasText(it.label) ? q(it.label) : "레이블 없는"} ${v} 버튼${it.icon ? `(${it.icon} 아이콘 포함)` : ""}${buttonSize(it, "ko")}`;
     case "iconButton": return `${it.icon ?? "빈"} 아이콘의 ${v} 아이콘 버튼`;
     case "fab": return `${it.icon ?? "빈"} 아이콘의 ${v} FAB${it.size && it.size >= 96 ? "(대형)" : it.size && it.size <= 40 ? "(소형)" : ""}`;
     case "extendedFab": return `${q(it.label)}${it.icon ? ` 및 ${it.icon} 아이콘` : ""} 확장 FAB(${v})`;
@@ -565,6 +584,14 @@ function groupName(g: Group, lang: Lang): string {
 
 function actionText(a: Action, frames: Frame[], lang: Lang): string | null {
   const q = quote(lang);
+  if (a.to === LINK_TARGET) {
+    const href = linkUrlOf(a);
+    if (!href) return null;
+    if (lang === "ja") return `${href} をブラウザの別タブで開く`;
+    if (lang === "zh") return `在浏览器的新标签页中打开 ${href}`;
+    if (lang === "ko") return `${href}를 브라우저 새 탭에서 연다`;
+    return `opens ${href} in a new browser tab`;
+  }
   if (a.to === BACK_TARGET) {
     return lang === "ja" ? "前の画面に戻る（入ったときの遷移を逆再生する）" : lang === "zh" ? "返回上一个屏幕（反向播放进入时的过渡动画）" : lang === "ko" ? "이전 화면으로 돌아간다(진입 전환을 반대로 재생)" : "goes back to the previous screen (playing the entry transition in reverse)";
   }
@@ -899,7 +926,7 @@ function paletteLines(p: Palette): string[] {
 const STYLE_NOTES: Record<Lang, Partial<Record<Kind | "boxSheet", string>>> = {
   ja: {
     button:
-      "ボタン: 高さ 56dp のミディアムサイズで、角は完全な丸（ピル型）。塗りつぶしは primary、トーナルは secondaryContainer、アウトラインは outline の 1dp 枠。横に連結したボタングループは 3dp の隙間で並べ、隣り合う内側の角だけ 8dp に小さくし、外側の角は丸のままにする（M3 Expressive の Connected button group）。",
+      "ボタン: 高さ 56dp のミディアムサイズで、角は完全な丸（ピル型）。塗りつぶしは primary、トーナルは secondaryContainer、アウトラインは outline の 1dp 枠。横に連結したボタングループは 3dp の隙間で並べ、隣り合う内側の角だけ 8dp に小さくし、外側の角は丸のままにする（M3 Expressive の Connected button group）。高さを指定されたボタンは M3 のサイズ（XS 32dp / S 40dp / M 56dp / L 96dp / XL 136dp）に従い、左右の余白・文字・アイコンをそのサイズのものにし、角丸は高さの半分にする。",
     iconButton:
       "アイコンボタン: 48dp の円形。塗りつぶし・トーナル・アウトライン・スタンダードを指定通りに使い分ける。連結したアイコンボタン群は Connected button group として実装する。",
     fab: "FAB: 通常は 56dp・角丸 16dp、大サイズは 96dp・角丸 28dp、小サイズは 40dp・角丸 12dp。トーナルは primaryContainer、塗りつぶしは primary。画面端から 16dp 離して浮かせ、影は Level 3。",
@@ -948,7 +975,7 @@ const STYLE_NOTES: Record<Lang, Partial<Record<Kind | "boxSheet", string>>> = {
   },
   en: {
     button:
-      "Buttons: medium size, 56dp tall, fully rounded (pill). Filled uses primary, tonal uses secondaryContainer, outlined has a 1dp outline border. A connected button group is a row with 3dp gaps where only the inner adjoining corners shrink to 8dp and the outer corners stay round (the M3 Expressive connected button group).",
+      "Buttons: medium size, 56dp tall, fully rounded (pill). Filled uses primary, tonal uses secondaryContainer, outlined has a 1dp outline border. A connected button group is a row with 3dp gaps where only the inner adjoining corners shrink to 8dp and the outer corners stay round (the M3 Expressive connected button group). A button given a height follows the M3 size scale (XS 32dp, S 40dp, M 56dp, L 96dp, XL 136dp): take the side padding, the label size and the icon size of that size, and keep the corner radius at half the height.",
     iconButton:
       "Icon buttons: 48dp circles in the filled / tonal / outlined / standard style as specified. A connected run of icon buttons is a connected button group.",
     fab: "FAB: 56dp with 16dp corners; large is 96dp with 28dp corners; small is 40dp with 12dp corners. Tonal uses primaryContainer, filled uses primary. Float it 16dp from the screen edge with a level 3 shadow.",
@@ -997,7 +1024,7 @@ const STYLE_NOTES: Record<Lang, Partial<Record<Kind | "boxSheet", string>>> = {
   },
   zh: {
     button:
-      "按钮：中号，高 56dp，完全圆角（胶囊形）。填充用 primary，色调用 secondaryContainer，描边用 1dp 的 outline 边框。横向相连的按钮组以 3dp 间距排列，只把相邻的内侧圆角缩小到 8dp，外侧保持圆角（M3 Expressive 的 Connected button group）。",
+      "按钮：中号，高 56dp，完全圆角（胶囊形）。填充用 primary，色调用 secondaryContainer，描边用 1dp 的 outline 边框。横向相连的按钮组以 3dp 间距排列，只把相邻的内侧圆角缩小到 8dp，外侧保持圆角（M3 Expressive 的 Connected button group）。指定了高度的按钮遵循 M3 尺寸（XS 32dp / S 40dp / M 56dp / L 96dp / XL 136dp）：左右内边距、文字和图标取该尺寸的值，圆角为高度的一半。",
     iconButton: "图标按钮：48dp 圆形。按指定使用填充／色调／描边／标准样式。相连的图标按钮组实现为 Connected button group。",
     fab: "FAB：常规 56dp、圆角 16dp；大尺寸 96dp、圆角 28dp；小尺寸 40dp、圆角 12dp。色调用 primaryContainer，填充用 primary。距屏幕边缘 16dp 悬浮，阴影为 Level 3。",
     extendedFab: "扩展 FAB：高 56dp，圆角 16dp，左侧图标、右侧标签。",
@@ -1042,7 +1069,7 @@ const STYLE_NOTES: Record<Lang, Partial<Record<Kind | "boxSheet", string>>> = {
     badge: "徽标：无文字时为 6dp 圆点，有文字时为高 16dp 的胶囊。背景为 error，文字为 onError 的 labelSmall。叠放在图标或项目的右上角。",
   },
   ko: {
-    button: "버튼: 높이 56dp의 중간 크기, 완전 둥근 알약 모양. 채움은 primary, 토널은 secondaryContainer, 윤곽선은 1dp outline 테두리를 사용한다. 연결 버튼 그룹은 간격 3dp, 맞닿는 안쪽 모서리 8dp, 바깥쪽 모서리는 둥글게 유지한다.",
+    button: "버튼: 높이 56dp의 중간 크기, 완전 둥근 알약 모양. 채움은 primary, 토널은 secondaryContainer, 윤곽선은 1dp outline 테두리를 사용한다. 연결 버튼 그룹은 간격 3dp, 맞닿는 안쪽 모서리 8dp, 바깥쪽 모서리는 둥글게 유지한다. 높이가 지정된 버튼은 M3 크기(XS 32dp / S 40dp / M 56dp / L 96dp / XL 136dp)를 따라 좌우 여백, 글자 크기, 아이콘 크기를 그 크기의 값으로 하고 모서리는 높이의 절반으로 한다.",
     navRail: "내비게이션 레일: 너비 80dp, 배경 surfaceContainer, 왼쪽 가장자리의 전체 높이를 채운다. 항목은 위에서부터 세로로 배치한다. 선택 항목은 secondaryContainer 알약 표시기(56×32dp), 채운 아이콘과 아래쪽 labelMedium 레이블로 표시한다. 콘텐츠는 레일 오른쪽에 배치한다.",
     iconButton: "아이콘 버튼: 48dp 원형. 지정된 채움, 토널, 윤곽선, 표준 스타일을 사용하며 연결된 아이콘 버튼은 Connected button group으로 구현한다.",
     fab: "FAB: 기본 56dp/모서리 16dp, 대형 96dp/28dp, 소형 40dp/12dp. 토널은 primaryContainer, 채움은 primary를 사용하고 화면 가장자리에서 16dp 띄워 Level 3 그림자를 적용한다.",

@@ -94,6 +94,25 @@ body {
   opacity: 1;
 }
 
+/* a button that changes M3 size grows into the new one: the box, the padding it keeps
+   around its content and the type and icon inside it all travel together, over the same
+   340ms the canvas uses to settle a part. The hidden measuring copy carries the class too,
+   so a button with no set width reports its width as it eases. */
+.m3-size-ease,
+.m3-size-ease .msr {
+  transition: padding 340ms cubic-bezier(0.2, 0, 0, 1), gap 340ms cubic-bezier(0.2, 0, 0, 1),
+    font-size 340ms cubic-bezier(0.2, 0, 0, 1), height 340ms cubic-bezier(0.2, 0, 0, 1);
+}
+/* while an edge or a slider is being dragged the part follows the pointer instead */
+.m3-size-now .m3-size-ease,
+.m3-size-now .m3-size-ease .msr,
+/* the hidden copy the editor measures reports the size that was asked for, at once:
+   the layout around the part is built from it, and only the drawn part eases */
+.m3-measure .m3-size-ease,
+.m3-measure .m3-size-ease .msr {
+  transition: none;
+}
+
 /* range input, themed per palette via CSS vars */
 input[type="range"].m3-range {
   -webkit-appearance: none;
@@ -169,7 +188,9 @@ input.m3-number {
 
 @media (prefers-reduced-motion: reduce) {
   .m3-press,
-  .m3-tile {
+  .m3-tile,
+  .m3-size-ease,
+  .m3-size-ease .msr {
     transition: none;
   }
   .m3-spin,

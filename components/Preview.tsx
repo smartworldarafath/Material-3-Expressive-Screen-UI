@@ -7,6 +7,8 @@ import type { TargetAndTransition, Variants } from "motion/react";
 import {
   Action,
   BACK_TARGET,
+  LINK_TARGET,
+  linkUrlOf,
   BEZEL,
   Doc,
   Frame,
@@ -819,6 +821,12 @@ export function Preview({
       if (swiped.current) return;
       if (a.to === BACK_TARGET) {
         back();
+        return;
+      }
+      /* a link leaves the sketch: the page opens in a tab of its own, and the preview stays put */
+      if (a.to === LINK_TARGET) {
+        const href = linkUrlOf(a);
+        if (href) window.open(href, "_blank", "noopener,noreferrer");
         return;
       }
       if (!frames.some((f) => f.id === a.to)) return;

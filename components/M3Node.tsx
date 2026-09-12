@@ -13,6 +13,8 @@ import {
   Radii,
   STATUS_BAR_H,
   baseRadii,
+  buttonHeightOf,
+  buttonMetrics,
   CARD_MEDIA_GAP,
   CARD_PADDING,
   CARD_TEXT_GAP,
@@ -107,26 +109,30 @@ export function ButtonContent({ item }: { item: Item }) {
   const w = useWeight();
   const hasIcon = !!item.icon;
   const hasLabel = item.label.trim().length > 0;
-  const padX = hasLabel ? (hasIcon ? 22 : 26) : 16;
+  /* padding, gap, icon and label all come from the M3 size the height lands on;
+   * with no label the icon is centred instead, which makes the button a circle */
+  const m = buttonMetrics(buttonHeightOf(item));
+  const padX = hasLabel ? m.padX : Math.round((m.h - m.icon) / 2);
   return (
     <span
+      className="m3-size-ease"
       style={{
         display: "inline-flex",
         alignItems: "center",
         justifyContent: "center",
         width: item.size ? "100%" : undefined,
         boxSizing: "border-box",
-        gap: hasIcon && hasLabel ? 8 : 0,
+        gap: hasIcon && hasLabel ? m.gap : 0,
         paddingLeft: padX,
         paddingRight: padX,
-        height: H,
-        fontSize: 16,
+        height: m.h,
+        fontSize: m.font,
         fontWeight: w(500, 700),
         letterSpacing: 0.1,
         whiteSpace: "nowrap",
       }}
     >
-      {hasIcon && <Icon name={item.icon!} size={24} fill={item.variant === "filled"} />}
+      {hasIcon && <Icon name={item.icon!} size={m.icon} fill={item.variant === "filled"} />}
       {hasLabel && <span>{item.label}</span>}
     </span>
   );
@@ -1395,8 +1401,11 @@ export function M3Node({
         boxShadow: shadowOf(item),
         outline: selected ? `2px solid ${palette.primary}` : "2px solid transparent",
         outlineOffset: 3,
-        /* a part that changes width with its screen eases the way the screen does */
-        transition: measured || instant ? "outline-color 120ms" : `outline-color 120ms, width ${SETTLE_MS}ms cubic-bezier(0.2, 0, 0, 1)`,
+        /* a part that changes size with its screen, or with the size the author picked,
+           eases the way the screen does; a measured part has no width of its own to ease */
+        transition: instant
+          ? "outline-color 120ms"
+          : `outline-color 120ms, height ${SETTLE_MS}ms cubic-bezier(0.2, 0, 0, 1)${measured ? "" : `, width ${SETTLE_MS}ms cubic-bezier(0.2, 0, 0, 1)`}`,
         flex: "0 0 auto",
       }}
     >

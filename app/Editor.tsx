@@ -17,6 +17,10 @@ import {
   Axis,
   BACK_TARGET,
   baseRadii,
+  draftGradient,
+  BUTTON_H_MAX,
+  BUTTON_H_MIN,
+  buttonMinWidth,
   explodeGroup,
   freeRadii,
   radiiOfRuns,
@@ -107,7 +111,6 @@ import { ConfirmDialog, IconBtn, Segmented } from "@/components/ui";
 import { Lang, LangContext, SEED_TEXT, getLang, setGlobalLang, t, translateDefaultFrameName, translateDefaultText } from "@/lib/i18n";
 
 /** the screens while a model drafts: primary, tertiary and primary container, drifting */
-const DRAFT_GRADIENT = (p: Palette) => `linear-gradient(120deg, ${p.primaryContainer}, ${p.tertiaryContainer}, ${p.primary}, ${p.secondaryContainer}, ${p.primaryContainer})`;
 const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
 
 /** the dragged part's own travel: a little lag reads as weight */
@@ -1227,49 +1230,90 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
     setDrag({ ...d });
   };
 
-  /** the in-flight width drag on a lone button's edge handle */
+  /** which edge of a lone button an in-flight size drag holds */
+  type Side = "left" | "right" | "top" | "bottom";
+  /** the in-flight size drag on a lone button's edge handle */
   const [widthDragId, setWidthDragId] = useState<string | null>(null);
-  /** a size patch from the panel's slider is in flight: the part follows the slider with no easing */
+  /** a size drag from the panel's slider is in flight: the part follows the slider with no easing */
   const [sizeEditId, setSizeEditId] = useState<string | null>(null);
   const sizeEditTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastSizeEdit = useRef<{ id: string; t: number } | null>(null);
   const markSizeEdit = (id: string) => {
+    const now = performance.now();
+    const prev = lastSizeEdit.current;
+    lastSizeEdit.current = { id, t: now };
+    /* one tap on a preset is a size to grow into; a stream of them is a drag, and a drag
+     * must land where the pointer is rather than trail an easing behind it */
+    if (!prev || prev.id !== id || now - prev.t > 150) return;
     setSizeEditId(id);
     if (sizeEditTimer.current) clearTimeout(sizeEditTimer.current);
     sizeEditTimer.current = setTimeout(() => setSizeEditId(null), 400);
   };
-  /** how far the group under a left-edge width drag is drawn from where it sits, so the right edge
-   *  stays put. It rides on the same commit as the new width, which keeps the two in step; the
-   *  group's own x only moves once the drag ends. */
-  const [widthShift, setWidthShift] = useState<{ gid: string; dx: number } | null>(null);
-  const widthDragRef = useRef<{ id: string; gid: string; side: "left" | "right"; startX: number; startW: number; w: number; max: number } | null>(null);
-  const onWidthHandleDown = (e: React.PointerEvent, g: Group, item: Item, side: "left" | "right") => {
+  /** how far the group under a left- or top-edge drag is drawn from where it sits, so the opposite
+   *  edge stays put. It rides on the same commit as the new size, which keeps the two in step; the
+   *  group's own position only moves once the drag ends. */
+  const [widthShift, setWidthShift] = useState<{ gid: string; dx: number; dy: number } | null>(null);
+  const widthDragRef = useRef<{ id: string; gid: string; side: Side; vertical: boolean; start0: number; startV: number; v: number; min: number; max: number } | null>(null);
+  const onWidthHandleDown = (e: React.PointerEvent, g: Group, item: Item, side: Side) => {
     if (e.button !== 0) return;
     e.preventDefault();
     e.stopPropagation();
     flushPending();
     const f = frameOfGroup(g, framesRef.current, widthsRef.current);
     snapshot();
-    const startW = sizeOf(item, widthsRef.current).w;
-    widthDragRef.current = { id: item.id, gid: g.id, side, startX: e.clientX, startW, w: startW, max: f ? frameSizeOf(f).w : PHONE_W };
+    const vertical = side === "top" || side === "bottom";
+    const box = sizeOf(item, widthsRef.current);
+    const startV = vertical ? box.h : box.w;
+    widthDragRef.current = {
+      id: item.id,
+      gid: g.id,
+      side,
+      vertical,
+      start0: vertical ? e.clientY : e.clientX,
+      startV,
+      v: startV,
+      /* a button is a circle at its narrowest, so its height says how narrow it may be drawn */
+      min: vertical ? BUTTON_H_MIN : buttonMinWidth(item),
+      max: vertical ? BUTTON_H_MAX : f ? frameSizeOf(f).w : PHONE_W,
+    };
     setWidthDragId(item.id);
     const move = (ev: PointerEvent) => {
       const d = widthDragRef.current;
       if (!d) return;
-      const dx = (ev.clientX - d.startX) / viewRef.current.z;
-      const raw = d.startW + (d.side === "right" ? dx : -dx);
-      const w = clamp(Math.round(raw / 4) * 4, KIND_SPEC.button.size!.min, d.max);
-      if (w === d.w) return;
-      d.w = w;
-      if (d.side === "left") setWidthShift({ gid: d.gid, dx: d.startW - w });
-      setGroups((prev) => prev.map((gr) => (gr.id !== d.gid ? gr : { ...gr, items: gr.items.map((it) => (it.id === d.id ? { ...it, size: w } : it)) })));
+      const delta = ((d.vertical ? ev.clientY : ev.clientX) - d.start0) / viewRef.current.z;
+      const raw = d.startV + (d.side === "right" || d.side === "bottom" ? delta : -delta);
+      const v = clamp(Math.round(raw / 4) * 4, d.min, d.max);
+      if (v === d.v) return;
+      d.v = v;
+      if (d.side === "left") setWidthShift({ gid: d.gid, dx: d.startV - v, dy: 0 });
+      if (d.side === "top") setWidthShift({ gid: d.gid, dx: 0, dy: d.startV - v });
+      setGroups((prev) =>
+        prev.map((gr) =>
+          gr.id !== d.gid
+            ? gr
+            : {
+                ...gr,
+                items: gr.items.map((it) =>
+                  it.id !== d.id
+                    ? it
+                    : d.vertical
+                      ? /* a width the author set that is now narrower than the button is tall grows with it */
+                        { ...it, size2: v, ...(it.size && it.size < v ? { size: v } : {}) }
+                      : { ...it, size: v },
+                ),
+              },
+        ),
+      );
     };
     const up = () => {
       const d = widthDragRef.current;
       /* the drawn offset becomes the group's real position, in one step and with no easing */
-      if (d && d.side === "left" && d.w !== d.startW) {
-        const dx = d.startW - d.w;
+      if (d && (d.side === "left" || d.side === "top") && d.v !== d.startV) {
+        const shift = d.startV - d.v;
         instantRef.current.add(d.gid);
-        setGroups((prev) => prev.map((gr) => (gr.id !== d.gid ? gr : { ...gr, x: gr.x + dx })));
+        setGroups((prev) =>
+          prev.map((gr) => (gr.id !== d.gid ? gr : d.side === "top" ? { ...gr, y: gr.y + shift } : { ...gr, x: gr.x + shift })),
+        );
       }
       setWidthShift(null);
       widthDragRef.current = null;
@@ -1793,7 +1837,7 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
       return;
     }
     snapshotFor(id + ":" + Object.keys(patch).join(","));
-    if ("size" in patch) markSizeEdit(id);
+    if ("size" in patch || "size2" in patch) markSizeEdit(id);
     setGroups((prev) =>
       "railExpanded" in patch || "railModal" in patch ? updateRail(prev, framesRef.current, widthsRef.current, id, patch) : prev.map((g) => {
         const idx = g.items.findIndex((it) => it.id === id);
@@ -3287,6 +3331,7 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
           left: 0,
           top: 0,
           marginLeft: widthShift?.gid === g.id ? widthShift.dx : undefined,
+          marginTop: widthShift?.gid === g.id ? widthShift.dy : undefined,
           display: "flex",
           flexDirection: g.axis === "x" ? "row" : "column",
           alignItems: g.axis === "x" ? "center" : "stretch",
@@ -3378,7 +3423,7 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
     <LangContext.Provider value={lang}>
     <ThemeContext.Provider value={theme}>
       <div
-        className={revealing ? "app-root m3e-reveal" : "app-root"}
+        className={`app-root${revealing ? " m3e-reveal" : ""}${widthDragId || sizeEditId ? " m3-size-now" : ""}`}
         /* the preview sits outside this tree and owns the keyboard while it is up */
         inert={editAccess !== "editable" || previewId !== null}
         aria-hidden={editAccess !== "editable" || previewId !== null}
@@ -3394,6 +3439,7 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
         {/* hidden measuring layer for text-sized kinds */}
         <div
           aria-hidden
+          className="m3-measure"
           style={{
             position: "fixed",
             left: -99999,
@@ -3760,7 +3806,7 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
                           height: h + BEZEL * 2,
                           borderRadius: radius + BEZEL,
                           backgroundColor: p.inverseSurface,
-                          backgroundImage: draftBusy ? DRAFT_GRADIENT(p) : undefined,
+                          backgroundImage: draftBusy ? draftGradient(p) : undefined,
                           backgroundSize: draftBusy ? "300% 300%" : undefined,
                           animation: draftBusy ? "m3e-drift 3s ease-in-out infinite" : undefined,
                           boxShadow: on
@@ -3806,7 +3852,8 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
                 .filter((g) => !frameOf.has(g.id))
                 .map((g) => renderGroup(g, 0, 0))}
 
-              {/* a lone button shows a handle on each side: dragging one changes its width in place */}
+              {/* a lone button shows a handle on each of its four edges: dragging one changes its
+                  width or its height in place, and the opposite edge stays where it is */}
               {!handMode && !drag && selectedIds.length === 1 && selected?.kind === "button" && (() => {
                 const g = groups.find((x) => x.items.length === 1 && !x.free && !x.locked && x.items[0].id === selected.id);
                 if (!g) return null;
@@ -3815,30 +3862,42 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
                  * neither dwarf a button zoomed far out nor vanish on one zoomed far in */
                 const hh = clamp((b.b - b.t) * 0.55, 12 / view.z, 32 / view.z);
                 const hw = clamp(hh * 0.22, 3 / view.z, 7 / view.z);
+                /* the side handles keep the button's proportions; the top and bottom ones are the
+                 * same pill laid down, and never wider than the button they sit on */
+                const vw = Math.min(hh, (b.r - b.l) * 0.55);
+                const cx = (b.l + b.r) / 2;
                 const cy = (b.t + b.b) / 2;
-                /* the same offset the group is drawn with while its left edge is being dragged */
-                const sh = widthShift?.gid === g.id ? widthShift.dx : 0;
-                return (["left", "right"] as const).map((side) => (
-                  <div
-                    key={side}
-                    onPointerDown={(e) => onWidthHandleDown(e, g, selected, side)}
-                    title={t("resizeWidth", lang)}
-                    style={{
-                      position: "absolute",
-                      left: (side === "left" ? b.l : b.r) + sh - hw / 2,
-                      top: cy - hh / 2,
-                      width: hw,
-                      height: hh,
-                      borderRadius: hw,
-                      background: p.primary,
-                      border: `${1 / view.z}px solid ${p.surface}`,
-                      boxSizing: "border-box",
-                      cursor: "ew-resize",
-                      zIndex: 55,
-                      touchAction: "none",
-                    }}
-                  />
-                ));
+                /* the same offset the group is drawn with while its left or top edge is being dragged */
+                const sx = widthShift?.gid === g.id ? widthShift.dx : 0;
+                const sy = widthShift?.gid === g.id ? widthShift.dy : 0;
+                return (["left", "right", "top", "bottom"] as const).map((side) => {
+                  const vertical = side === "top" || side === "bottom";
+                  const w = vertical ? vw : hw;
+                  const h = vertical ? hw : hh;
+                  const x = vertical ? cx : side === "left" ? b.l : b.r;
+                  const y = vertical ? (side === "top" ? b.t : b.b) : cy;
+                  return (
+                    <div
+                      key={side}
+                      onPointerDown={(e) => onWidthHandleDown(e, g, selected, side)}
+                      title={t(vertical ? "resizeHeight" : "resizeWidth", lang)}
+                      style={{
+                        position: "absolute",
+                        left: x + sx - w / 2,
+                        top: y + sy - h / 2,
+                        width: w,
+                        height: h,
+                        borderRadius: Math.min(w, h),
+                        background: p.primary,
+                        border: `${1 / view.z}px solid ${p.surface}`,
+                        boxSizing: "border-box",
+                        cursor: vertical ? "ns-resize" : "ew-resize",
+                        zIndex: 55,
+                        touchAction: "none",
+                      }}
+                    />
+                  );
+                });
               })()}
 
 

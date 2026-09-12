@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { COLOR_TOKENS, CardLayout, ColorToken, PLACES, Palette, Place, R_INNER, TEXT_TOKENS, TextToken, clamp } from "@/lib/tokens";
-import { AnimatePresence, motion } from "motion/react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { COLOR_TOKENS, CardLayout, ColorToken, PLACES, Palette, Place, R_INNER, SETTLE_MS, TEXT_TOKENS, TextToken, clamp, draftGradient } from "@/lib/tokens";
+import { AnimatePresence, animate, motion, useReducedMotion } from "motion/react";
 import { COLOR_TOKEN_TEXT, TEXT_TOKEN_TEXT, t, useLang } from "@/lib/i18n";
 import { Icon } from "./M3Node";
 import { onColorFor } from "@/lib/color";
@@ -266,6 +266,9 @@ export function Select({
   );
 }
 
+/** how wide the band is that a field wears while a model writes into it */
+const RING = 3;
+
 export function Field({
   value,
   onChange,
@@ -278,6 +281,7 @@ export function Field({
   height = 44,
   action,
   maxHeight,
+  aiBusy,
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -291,6 +295,9 @@ export function Field({
   action?: React.ReactNode;
   /** tallest a growing field gets before it starts to scroll */
   maxHeight?: number;
+  /** a model is writing into this field: it wears the same drifting gradient the screens wear,
+   *  and the text it hands back is written out a letter at a time instead of dropped in */
+  aiBusy?: boolean;
   /** a multiline field that grows with its text instead of scrolling, starting at `rows` lines;
    *  it wraps but never takes a line break, since the canvas wraps the text on its own */
   grow?: boolean;
@@ -299,15 +306,139 @@ export function Field({
   const lang = useLang();
   const filled = value.length > 0;
   const areaRef = useRef<HTMLTextAreaElement>(null);
+  const reduced = useReducedMotion();
+  /* the ring stays mounted through its own fade out, so the gradient leaves as quietly as it came */
+  const [ring, setRing] = useState(false);
+  const [ringOn, setRingOn] = useState(false);
+  useEffect(() => {
+    if (aiBusy) {
+      setRing(true);
+      /* the second frame is the one that has the ring on screen at nothing: turning it up from
+       * there is what the eye reads as a fade rather than a light being switched on */
+      let next = 0;
+      const id = requestAnimationFrame(() => {
+        next = requestAnimationFrame(() => setRingOn(true));
+      });
+      return () => {
+        cancelAnimationFrame(id);
+        cancelAnimationFrame(next);
+      };
+    }
+    setRingOn(false);
+    if (!ring) return;
+    const id = setTimeout(() => setRing(false), 320);
+    return () => clearTimeout(id);
+  }, [aiBusy, ring]);
+
+  /* What the model wrote is already in the field, drawn exactly as the field will keep it.
+   * Nothing is copied: the field is covered, grows to the height the text needs, and is then
+   * uncovered word by word, so no letter ever moves. */
+  const [reveal, setReveal] = useState<{ phase: "grow" | "wipe"; p: number } | null>(null);
+  /* the lines to uncover, measured off the field once the text is in it */
+  const [lines, setLines] = useState<{ n: number; top: number; left: number; width: number; height: number } | null>(null);
+  const wasAi = useRef(false);
+  const easeHeight = useRef(false);
+  const before = useRef(value);
+  useEffect(() => {
+    if (aiBusy) {
+      wasAi.current = true;
+      return;
+    }
+    /* the run is over: whatever text arrives with it is the model's, anything later is the author's */
+    const id = setTimeout(() => (wasAi.current = false), 400);
+    return () => clearTimeout(id);
+  }, [aiBusy]);
+  /* before the field is given its new height: the height is then eased into, not jumped to */
+  useLayoutEffect(() => {
+    const was = before.current;
+    before.current = value;
+    if (!wasAi.current || value === was || !value) return;
+    wasAi.current = false;
+    if (!multiline) return;
+    /* only a field that grows has a height to ease; a fixed one just uncovers its text */
+    easeHeight.current = !!grow;
+    setReveal({ phase: "grow", p: 0 });
+  }, [value, multiline, grow]);
+  const phase = reveal?.phase;
+  useLayoutEffect(() => {
+    const el = areaRef.current;
+    if (phase !== "wipe" || !el) return;
+    const cs = getComputedStyle(el);
+    const lh = parseFloat(cs.lineHeight) || parseFloat(cs.fontSize) * 1.55;
+    const top = parseFloat(cs.paddingTop);
+    const left = parseFloat(cs.paddingLeft);
+    const width = el.clientWidth - left - parseFloat(cs.paddingRight);
+    const text = el.scrollHeight - top - parseFloat(cs.paddingBottom);
+    setLines({ n: Math.max(1, Math.round(text / lh)), top, left, width, height: lh });
+  }, [phase, value]);
+  useEffect(() => {
+    if (!phase) return;
+    if (reduced) {
+      setReveal(null);
+      return;
+    }
+    if (phase === "grow") {
+      /* the box settles first; only then does the text come out from under the cover */
+      const id = setTimeout(() => setReveal({ phase: "wipe", p: 0 }), SETTLE_MS);
+      return () => clearTimeout(id);
+    }
+    const span = clamp(value.length * 10, 450, 900);
+    const start = performance.now();
+    let frame = requestAnimationFrame(function step() {
+      const k = Math.min(1, (performance.now() - start) / span);
+      setReveal((cur) => (cur?.phase === "wipe" ? { phase: "wipe", p: k } : cur));
+      if (k < 1) frame = requestAnimationFrame(step);
+      else setReveal(null);
+    });
+    return () => cancelAnimationFrame(frame);
+    /* the sweep runs off its own clock: only a change of phase may start it over */
+  }, [phase, reduced, value.length]);
+  /* the cover: one soft band lying over the whole text, drawn off downwards. The band is deep
+   * enough that the words fade up rather than being wiped away, the top ones a little ahead of
+   * the ones below them. */
+  const cover = (() => {
+    if (!reveal) return null;
+    const clear = "linear-gradient(rgba(0,0,0,0), rgba(0,0,0,0))";
+    if (reveal.phase === "grow" || !lines) return { WebkitMaskImage: clear, maskImage: clear };
+    /* the soft edge is two thirds of the text's own height, so a short note fades in as one */
+    const soft = 0.66;
+    const at = -soft + reveal.p * (1 + soft);
+    const block = lines.n * lines.height;
+    const image = `linear-gradient(to bottom, #000 ${(at * 100).toFixed(1)}%, rgba(0,0,0,0) ${((at + soft) * 100).toFixed(1)}%)`;
+    const position = `${lines.left}px ${lines.top}px`;
+    const size = `${lines.width}px ${block}px`;
+    return {
+      WebkitMaskImage: image,
+      maskImage: image,
+      WebkitMaskPosition: position,
+      maskPosition: position,
+      WebkitMaskSize: size,
+      maskSize: size,
+      WebkitMaskRepeat: "no-repeat",
+      maskRepeat: "no-repeat",
+    };
+  })();
   useEffect(() => {
     const el = areaRef.current;
     if (!el || !grow) return;
+    /* the model's text arrives whole: the field takes its new height over the same time a part
+     * on the canvas takes to settle, and reads its own height back without the easing in the way */
+    const ease = easeHeight.current && !reduced;
+    easeHeight.current = false;
+    const from = ease ? el.offsetHeight : 0;
+    el.style.transition = "none";
     el.style.height = "auto";
     const full = el.scrollHeight;
     const capped = maxHeight ? Math.min(full, maxHeight) : full;
+    if (ease) {
+      el.style.height = `${from}px`;
+      void el.offsetHeight;
+      el.style.transition = `height ${SETTLE_MS}ms cubic-bezier(0.2, 0, 0, 1)`;
+    }
     el.style.height = `${capped}px`;
     el.style.overflowY = full > capped ? "auto" : "hidden";
-  }, [value, grow, maxHeight]);
+    if (!ease) el.style.transition = "";
+  }, [value, grow, maxHeight, reduced]);
   /* with a pinned run the text keeps the full width and passes under it; otherwise the clear
    * button takes a column of its own at the trailing edge */
   const pinned = !!(multiline && action);
@@ -331,6 +462,9 @@ export function Field({
     </span>
   );
   const base: React.CSSProperties = {
+    /* a block: an inline field leaves a line box's descender under it, and a ring drawn around
+     * that box would be thicker along the bottom than anywhere else */
+    display: "block",
     width: "100%",
     padding: multiline ? `12px ${padRight}px ${padBottom}px ${icon ? 42 : 14}px` : `0 ${padRight}px 0 ${icon ? 42 : 14}px`,
     borderRadius: multiline ? 18 : height / 2,
@@ -346,6 +480,34 @@ export function Field({
   };
   return (
     <div style={{ position: "relative", width: "100%" }}>
+      {ring && (
+        <div
+          aria-hidden
+          style={{
+            position: "absolute",
+            inset: -RING,
+            borderRadius: (multiline ? 18 : height / 2) + RING,
+            backgroundImage: draftGradient(p),
+            backgroundSize: "300% 300%",
+            animation: "m3e-drift 3s ease-in-out infinite",
+            opacity: ringOn ? 1 : 0,
+            transition: "opacity 300ms ease",
+            pointerEvents: "none",
+          }}
+        />
+      )}
+      {cover && (
+        <div
+          aria-hidden
+          style={{
+            position: "absolute",
+            inset: 0,
+            borderRadius: multiline ? 18 : height / 2,
+            background: p.surfaceContainerHigh,
+            pointerEvents: "none",
+          }}
+        />
+      )}
       {icon && (
         <span
           style={{
@@ -369,14 +531,22 @@ export function Field({
           onChange={(e) => onChange(grow ? e.target.value.replace(/[\r\n]+/g, " ") : e.target.value)}
           onKeyDown={grow ? (e) => { if (e.key === "Enter") e.preventDefault(); } : undefined}
           placeholder={placeholder}
-          style={grow ? { ...base, overflow: "hidden" } : base}
+          onFocus={() => setReveal(null)}
+          style={{
+            ...base,
+            ...(grow ? { overflow: "hidden" } : null),
+            position: "relative",
+            /* the cover masks the whole field, so while it is on, the field's own colour is
+             * painted by the plate behind it and the text is all that can be hidden */
+            ...(cover ? { background: "transparent", caretColor: "transparent", ...cover } : null),
+          }}
         />
       ) : (
         <input
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}
-          style={{ ...base, height }}
+          style={{ ...base, height, position: "relative" }}
         />
       )}
       {pinned ? (
@@ -507,6 +677,49 @@ export function Slider({
     setEditing(false);
     setText(String(value));
   };
+  /* a value set from elsewhere — a preset, another control — travels to its new place over the
+   * same time the part on the canvas takes to grow, so the knob and the part move together.
+   * What the author does on the slider itself is followed exactly. */
+  const reduced = useReducedMotion();
+  const [shown, setShown] = useState(value);
+  const shownRef = useRef(value);
+  const mine = useRef(false);
+  const travelling = useRef(false);
+  useEffect(() => {
+    const from = shownRef.current;
+    const land = () => {
+      shownRef.current = value;
+      setShown(value);
+    };
+    /* a value that keeps arriving is a part already on its way — a width that follows the text
+     * inside it, say. Then the knob follows each value exactly instead of trailing its own easing. */
+    if (mine.current || reduced || travelling.current || from === value) {
+      mine.current = false;
+      travelling.current = false;
+      land();
+      return;
+    }
+    travelling.current = true;
+    const run = animate(from, value, {
+      duration: SETTLE_MS / 1000,
+      ease: [0.2, 0, 0, 1],
+      onUpdate: (v) => {
+        shownRef.current = v;
+        setShown(v);
+      },
+      onComplete: () => {
+        travelling.current = false;
+        land();
+      },
+    });
+    return () => run.stop();
+  }, [value, reduced]);
+  const emit = (v: number) => {
+    mine.current = true;
+    shownRef.current = v;
+    setShown(v);
+    onChange(v);
+  };
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
       <span title={title} style={{ color: p.onSurfaceVariant, lineHeight: 1, flex: "0 0 auto", display: "inline-flex" }}>
@@ -518,9 +731,11 @@ export function Slider({
         aria-label={title}
         min={min}
         max={max}
-        step={step}
-        value={value}
-        onChange={(e) => onChange(Number(e.target.value))}
+        /* on its way the knob is free of the step, so it sweeps across instead of
+           ticking from one stop to the next; the author's own drag keeps the step */
+        step={travelling.current ? "any" : step}
+        value={shown}
+        onChange={(e) => emit(clamp(Math.round(Number(e.target.value) / step) * step, min, max))}
         style={{ "--track": p.secondaryContainer, "--thumb": p.primary } as React.CSSProperties}
       />
       <span style={{ position: "relative", flex: "0 0 auto", display: "inline-flex", alignItems: "center" }}>
@@ -540,7 +755,7 @@ export function Slider({
             setText(e.target.value);
             // apply as you type once the number is already in range, so the canvas follows
             const n = Math.round(Number(e.target.value));
-            if (e.target.value.trim() !== "" && Number.isFinite(n) && n >= min && n <= max) onChange(n);
+            if (e.target.value.trim() !== "" && Number.isFinite(n) && n >= min && n <= max) emit(n);
           }}
           onBlur={commit}
           onKeyDown={(e) => {

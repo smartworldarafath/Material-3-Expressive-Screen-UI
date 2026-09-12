@@ -4,6 +4,43 @@ import { Contrast, isLightColor, schemeFromSeed } from "./color";
 
 /* ---------- geometry ---------- */
 export const H = 56; // M3 medium button height (dp)
+
+/** The five button sizes M3 Expressive names, and what each one is made of: the height,
+ *  the padding on either side, the gap between icon and label, the icon and the label.
+ *  A height between two steps takes values between theirs, so the slider stays M3-shaped
+ *  the whole way rather than only on the five stops. */
+export const BUTTON_SIZES = [
+  { key: "xs", h: 32, padX: 12, gap: 8, icon: 20, font: 14 },
+  { key: "s", h: 40, padX: 16, gap: 8, icon: 20, font: 14 },
+  { key: "m", h: 56, padX: 24, gap: 8, icon: 24, font: 16 },
+  { key: "l", h: 96, padX: 48, gap: 12, icon: 32, font: 24 },
+  { key: "xl", h: 136, padX: 64, gap: 16, icon: 40, font: 32 },
+] as const;
+export type ButtonSizeKey = (typeof BUTTON_SIZES)[number]["key"];
+export const BUTTON_H_MIN = BUTTON_SIZES[0].h;
+export const BUTTON_H_MAX = BUTTON_SIZES[BUTTON_SIZES.length - 1].h;
+export type ButtonMetrics = { h: number; padX: number; gap: number; icon: number; font: number };
+
+/** what a button of this height is made of; between two named sizes the parts are mixed in proportion */
+export function buttonMetrics(height: number): ButtonMetrics {
+  const h = clamp(Math.round(height), BUTTON_H_MIN, BUTTON_H_MAX);
+  type Step = (typeof BUTTON_SIZES)[number];
+  let lo: Step = BUTTON_SIZES[0];
+  let hi: Step = BUTTON_SIZES[BUTTON_SIZES.length - 1];
+  for (let i = 0; i < BUTTON_SIZES.length - 1; i++) {
+    if (h >= BUTTON_SIZES[i].h && h <= BUTTON_SIZES[i + 1].h) {
+      lo = BUTTON_SIZES[i];
+      hi = BUTTON_SIZES[i + 1];
+      break;
+    }
+  }
+  const f = hi.h === lo.h ? 0 : (h - lo.h) / (hi.h - lo.h);
+  const mix = (a: number, b: number) => Math.round(lerp(a, b, f));
+  return { h, padX: mix(lo.padX, hi.padX), gap: mix(lo.gap, hi.gap), icon: mix(lo.icon, hi.icon), font: mix(lo.font, hi.font) };
+}
+
+/** the named size a height lands exactly on, if it lands on one */
+export const buttonSizeKeyOf = (height: number): ButtonSizeKey | null => BUTTON_SIZES.find((s) => s.h === height)?.key ?? null;
 export const GAP = 3; // connected group spacing
 export const R_FULL = 28; // outer corner of a connected run
 export const R_INNER = 8; // inner corner when connected (M3 small)
@@ -389,6 +426,11 @@ export const setGlobalShape = (s: ShapeScale) => {
   curShape = s;
 };
 export const getShape = () => curShape;
+
+/** the band of colour a part takes while a model writes into it: the screens wear it as a fill,
+ *  a field as a ring. It drifts with the `m3e-drift` keyframes. */
+export const draftGradient = (p: Palette) =>
+  `linear-gradient(120deg, ${p.primaryContainer}, ${p.tertiaryContainer}, ${p.primary}, ${p.secondaryContainer}, ${p.primaryContainer})`;
 
 /** a default corner radius under the document's shape scale */
 export function scaleR(r: number): number {
@@ -1207,7 +1249,7 @@ export type Item = {
   /** what `note` said before the AI rewrote it, so the rewrite can be undone */
   noteHistory?: string[];
   bold?: boolean;
-  /** height for free-form boxes */
+  /** height for free-form boxes, and for a button following the M3 size scale */
   size2?: number;
   /** palette token used as background (boxes, list items) */
   fill?: ColorToken;
@@ -1231,6 +1273,32 @@ export const TOGGLEABLE: Kind[] = ["button", "iconButton", "fab", "extendedFab"]
 /** target id that pops the preview stack instead of opening a frame */
 export const BACK_TARGET = "back";
 
+/** target id that opens a web page in the browser instead of a screen */
+export const LINK_TARGET = "link";
+
+/** the address a link action opens, once it is one a browser may follow; a bare host is read as https */
+export function linkUrlOf(a: Action | undefined): string | null {
+  const raw = a?.url?.trim();
+  if (!raw) return null;
+  try {
+    const u = new URL(/^[a-z][a-z0-9+.-]*:/i.test(raw) ? raw : `https://${raw}`);
+    return u.protocol === "http:" || u.protocol === "https:" ? u.href : null;
+  } catch {
+    return null;
+  }
+}
+
+/** the host the small browser in the trigger tab shows */
+export function linkHostOf(a: Action | undefined): string | null {
+  const href = linkUrlOf(a);
+  if (!href) return null;
+  try {
+    return new URL(href).host;
+  } catch {
+    return null;
+  }
+}
+
 /** a swipe on a frame: the finger's direction */
 export type SwipeDir = "left" | "right" | "up" | "down";
 export const SWIPE_DIRS: { key: SwipeDir; icon: string; transition: Transition }[] = [
@@ -1250,7 +1318,12 @@ export const SLIDE_SPEC: Partial<Record<Transition, { axis: "x" | "y"; enter: nu
 };
 
 export type Transition = "slide" | "slideLeft" | "slideUp" | "slideDown" | "fade" | "expand" | "none";
-export type Action = { to: string; transition: Transition };
+export type Action = { to: string; transition: Transition; /** the address a `LINK_TARGET` action opens */ url?: string };
+
+/** the height a button is drawn at: the author's, else M3's medium button */
+export const buttonHeightOf = (it: Item) => clamp(Math.round(it.size2 ?? H), BUTTON_H_MIN, BUTTON_H_MAX);
+/** a button is at its narrowest a circle, so how short it is sets how narrow it can be */
+export const buttonMinWidth = (it: Item) => buttonHeightOf(it);
 
 export const TRANSITIONS: { key: Transition; label: string; icon: string }[] = [
   { key: "slide", label: "Slide from right", icon: "arrow_back" },
@@ -1741,8 +1814,9 @@ export function sizeOf(it: Item, widths: Record<string, number>) {
   const n = it.size ?? s.defSize ?? s.w;
   switch (it.kind) {
     case "switch":
-    case "button":
       return { w: it.size ?? widths[it.id] ?? s.w, h: s.h };
+    case "button":
+      return { w: it.size ?? widths[it.id] ?? s.w, h: buttonHeightOf(it) };
     case "extendedFab":
     case "chip":
     case "checkbox":
@@ -1798,6 +1872,9 @@ export function sizeOf(it: Item, widths: Record<string, number>) {
 export function baseRadii(it: Item): Radii {
   const s = KIND_SPEC[it.kind];
   switch (it.kind) {
+    /* a button stays fully round whatever height it is given */
+    case "button":
+      return uniformRadii(scaleR(buttonHeightOf(it) / 2));
     case "box":
       if (it.corners) return { ...it.corners };
     // falls through
@@ -1910,7 +1987,9 @@ export const toolbarWidth = (it: Item) => {
 
 export const connectSpecOf = (it: Item): ConnectSpec | undefined => {
   const c = KIND_SPEC[it.kind].connect;
-  return c && { ...c, outer: scaleR(c.outer), inner: scaleR(c.inner) };
+  /* the ends of a run are as round as the part is tall, so a taller button keeps its full corners */
+  const outer = it.kind === "button" ? buttonHeightOf(it) / 2 : c?.outer ?? 0;
+  return c && { ...c, outer: scaleR(outer), inner: scaleR(c.inner) };
 };
 export const connectable = (it: Item) => !!KIND_SPEC[it.kind].connect;
 /** two parts fuse when they share an axis and a family (buttons and icon buttons mix) */

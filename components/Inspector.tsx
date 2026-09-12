@@ -348,7 +348,7 @@ export function AiField({ ai, history, onRestore, p, value, onChange, placeholde
   const lang = useLang();
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-      <Field value={value} onChange={onChange} placeholder={placeholder} p={p} multiline rows={3} />
+      <Field value={value} onChange={onChange} placeholder={placeholder} p={p} multiline rows={3} aiBusy={ai.busy} />
       <div style={{ display: "flex", justifyContent: "flex-end" }}>
         <ButtonRun>
           <AiWriteBtn p={p} busy={ai.busy} disabled={!ai.ready} onClick={ai.onRun} onCancel={ai.onCancel} label={t("aiWriteShort", lang)} title={ai.ready ? t("aiWrite", lang) : (ai.reason ?? t("aiNoKey", lang))} />

@@ -141,6 +141,7 @@ export function IconPicker({
       </div>
 
       {/* search line and grid share one surface: the line stays put while the icons scroll under it */}
+      <div style={{ position: "relative" }}>
       <div
         className="no-scrollbar"
         style={{
@@ -158,16 +159,24 @@ export function IconPicker({
             zIndex: 1,
             display: "flex",
             alignItems: "center",
-            gap: 8,
             height: 44,
-            padding: "0 12px",
+            padding: "0 14px",
             background: palette.surfaceContainerLow,
-            borderBottom: `1px solid ${palette.outlineVariant}`,
           }}
         >
-          <span className="msr" style={{ fontSize: 20, color: palette.outline, flex: "0 0 auto" }}>
-            search
-          </span>
+          {/* the icons pass under the search line and fade into it, rather than meeting a rule */}
+          <div
+            aria-hidden
+            style={{
+              position: "absolute",
+              left: 0,
+              right: 0,
+              top: "100%",
+              height: 20,
+              background: `linear-gradient(to bottom, ${palette.surfaceContainerLow}, transparent)`,
+              pointerEvents: "none",
+            }}
+          />
           <input
             aria-label={t("searchIcons", lang)}
             value={q}
@@ -256,6 +265,21 @@ export function IconPicker({
             </div>
           )}
         </div>
+      </div>
+      {/* and they fade out again at the foot of the box */}
+      <div
+        aria-hidden
+        style={{
+          position: "absolute",
+          left: 0,
+          right: 0,
+          bottom: 0,
+          height: 28,
+          borderRadius: "0 0 16px 16px",
+          background: `linear-gradient(to top, ${palette.surfaceContainerLow}, transparent)`,
+          pointerEvents: "none",
+        }}
+      />
       </div>
     </div>
   );
