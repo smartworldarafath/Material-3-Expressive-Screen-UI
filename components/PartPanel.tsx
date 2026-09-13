@@ -1,11 +1,37 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Action, BACK_TARGET, Frame, Item, KIND_SPEC, LINK_TARGET, MENU_TARGET, Palette, TAPPABLE, TOGGLEABLE, isFab, isPhoneFrame } from "@/lib/tokens";
+import { Reorder, useDragControls } from "motion/react";
+import {
+  Action,
+  BACK_TARGET,
+  ENTRY_BOUNDS,
+  Frame,
+  Item,
+  KIND_SPEC,
+  LINK_TARGET,
+  MENU_TARGET,
+  NavTab,
+  Palette,
+  Radii,
+  TAPPABLE,
+  TOGGLEABLE,
+  Variant,
+  contentWidth,
+  defaultTabsFor,
+  halfWidth,
+  isFab,
+  isPhoneFrame,
+  removeTabPatch,
+  reorderTabsPatch,
+  scaleR,
+  variantStyle,
+} from "@/lib/tokens";
 import { Lang } from "@/lib/i18n";
 import { Icon } from "./M3Node";
-import { Field, IconBtn, Section, Select, SelectOption } from "./ui";
-import { AiHooks } from "./Inspector";
+import { IconPicker } from "./IconPicker";
+import { CornerIcon, Field, IconBtn, RUN_CELL, Section, Segmented, Select, SelectOption, Slider, Toggle } from "./ui";
+import { AiHooks, variantsOf } from "./Inspector";
 import { LinkStage, TapStage } from "./TapStage";
 import { KIND_TEXT, t, useLang } from "@/lib/i18n";
 
@@ -210,10 +236,10 @@ function PartMenu({
     e.preventDefault();
     items[next]?.focus();
   };
-  const rows: { key: string; icon: string; label: string; title?: string; danger?: boolean; onClick: () => void }[] = [
-    { key: "duplicate", icon: "content_copy", label: t("duplicate", lang), title: t("duplicateKey", lang), onClick: onDuplicate },
+  const rows: { key: string; icon: string; label: string; danger?: boolean; onClick: () => void }[] = [
+    { key: "duplicate", icon: "content_copy", label: t("duplicate", lang), onClick: onDuplicate },
     ...(onToggleLock ? [{ key: "lock", icon: locked ? "lock_open" : "lock", label: t(locked ? "unlock" : "lock", lang), onClick: onToggleLock }] : []),
-    { key: "delete", icon: "delete", label: t("delete", lang), title: t("deleteKey", lang), danger: true, onClick: onDelete },
+    { key: "delete", icon: "delete", label: t("delete", lang), danger: true, onClick: onDelete },
   ];
   return (
     <div ref={box} style={{ position: "relative", flex: "0 0 auto" }}>
@@ -239,7 +265,6 @@ function PartMenu({
             <button
               key={r.key}
               role="menuitem"
-              title={r.title}
               tabIndex={-1}
               onClick={() => {
                 close();
@@ -427,6 +452,395 @@ export function NoteSection({ item, ai, onChange, p }: { item: Item; ai: AiHooks
         action={<AiIconBtn ai={ai} p={p} />}
       />
     </Section>
+  );
+}
+
+/** The styles a part comes in, as one connected run, each cell painted the way that style
+ *  looks; the chosen one carries a check mark and nothing else is written on them. */
+export function StyleRun({ kind, value, onChange, p }: { kind: Item["kind"]; value: Variant; onChange: (v: Variant) => void; p: Palette }) {
+  const lang = useLang();
+  const variants = variantsOf(kind);
+  return (
+    <Segmented<Variant>
+      options={variants.map((v) => {
+        const st = variantStyle(v.key, p);
+        return {
+          key: v.key,
+          title: v.label,
+          node: v.key === value ? <Icon name="check" size={20} /> : <span />,
+          style: {
+            ...st,
+            /* a text button paints nothing, so its cell gets a faint edge to be found by */
+            border: v.key === "outlined" ? st.border : v.key === "text" ? `1px dashed ${p.outlineVariant}` : "none",
+            boxShadow: v.key === "elevated" ? "0 1px 3px rgba(0,0,0,0.2)" : "none",
+            minWidth: 0,
+            padding: "0 4px",
+          },
+        };
+      })}
+      value={value}
+      onChange={onChange}
+      p={p}
+      label={t("style", lang)}
+      tight
+    />
+  );
+}
+
+/** The width presets as one connected run: the width the part takes on its own, then the three
+ *  widths a screen is built from. The four names carry the meaning, so the cells stay plain
+ *  words; a part that has no width of its own is offered the three. */
+export function WidthRun({ value, onChange, frameW, p, auto = true }: { value: number | undefined; onChange: (size: number | undefined) => void; frameW: number; p: Palette; auto?: boolean }) {
+  const lang = useLang();
+  const cells: { key: string; size?: number; label: string }[] = [
+    ...(auto ? [{ key: "auto", label: t("autoWidth", lang) }] : []),
+    { key: "half", size: halfWidth(frameW), label: t("halfWidth", lang) },
+    { key: "content", size: contentWidth(frameW), label: t("contentWidth", lang) },
+    { key: "screen", size: frameW, label: t("screenWidth", lang) },
+  ];
+  return (
+    <Segmented<string>
+      /* the cell carries the word; hovering says the dp it comes to on this screen */
+      options={cells.map((c) => ({ key: c.key, label: c.label, title: c.size ? `${c.size}dp` : c.label, style: RUN_CELL }))}
+      value={cells.find((c) => c.size === value)?.key ?? ""}
+      onChange={(k) => onChange(cells.find((c) => c.key === k)?.size)}
+      p={p}
+      label={t("width", lang)}
+      tight
+    />
+  );
+}
+
+/** the width of a part on the slider, with the run of a screen's widths under it */
+export function WidthRows({ value, min, max, step = 4, frameW, onChange, p, auto = false }: { value: number; min: number; max: number; step?: number; frameW: number; onChange: (size: number | undefined) => void; p: Palette; auto?: boolean }) {
+  const lang = useLang();
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <Slider icon="width" title={t("width", lang)} value={value} min={Math.min(min, value)} max={Math.max(frameW, max)} step={step} onChange={(v) => onChange(v)} p={p} />
+      <WidthRun value={value} onChange={onChange} frameW={frameW} p={p} auto={auto} />
+    </div>
+  );
+}
+
+/** a cell that shows an icon and opens the picker for it; empty, it offers to add one */
+export function IconCell({ icon, faint, open, title, onClick, p }: { icon: string | null; faint?: boolean; open: boolean; title: string; onClick: () => void; p: Palette }) {
+  return (
+    <button
+      onClick={onClick}
+      title={title}
+      aria-label={title}
+      aria-expanded={open}
+      className="m3-press"
+      style={{
+        width: 44,
+        height: 44,
+        flex: "0 0 auto",
+        borderRadius: 22,
+        border: icon || open ? "none" : `1.5px dashed ${p.outline}`,
+        background: open ? p.primary : icon ? p.surfaceContainerHigh : "transparent",
+        color: open ? p.onPrimary : icon ? (faint ? p.outline : p.onSurface) : p.outline,
+        cursor: "pointer",
+        display: "grid",
+        placeItems: "center",
+      }}
+    >
+      {icon ? <Icon name={icon} size={22} /> : <Icon name="add" size={20} />}
+    </button>
+  );
+}
+
+/** The icons a part carries at its two ends -- or the one it carries -- each a cell that opens
+ *  the picker in place. A part whose words sit between them shows the field there too. */
+export function IconRow({ slots, onPick, children, p }: { slots: { key: string; value: string | null; title: string }[]; onPick: (key: string, icon: string | null) => void; children?: React.ReactNode; p: Palette }) {
+  const [open, setOpen] = useState<string | null>(null);
+  const picked = slots.find((s) => s.key === open) ?? null;
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        {slots[0] && <IconCell icon={slots[0].value} open={open === slots[0].key} title={slots[0].title} onClick={() => setOpen(open === slots[0].key ? null : slots[0].key)} p={p} />}
+        {children ? <div style={{ flex: 1, minWidth: 0 }}>{children}</div> : <span style={{ flex: 1 }} />}
+        {slots[1] && <IconCell icon={slots[1].value} open={open === slots[1].key} title={slots[1].title} onClick={() => setOpen(open === slots[1].key ? null : slots[1].key)} p={p} />}
+      </div>
+      {picked && <IconPicker value={picked.value} onChange={(icon) => onPick(picked.key, icon)} onClose={() => setOpen(null)} palette={p} />}
+    </div>
+  );
+}
+
+/** The entries a part carries -- a bar's destinations, a menu's items, a tab row's tabs, a
+ *  dropdown's options -- one row each, dragged by the handle at the start of its words. Carrying a
+ *  row down onto the button that adds entries turns that button into the one that takes this one
+ *  out, so there is nothing to delete with until something is being dragged. A bar that shows one
+ *  entry as the current one marks it at the start of the row. */
+export function EntryList({
+  item,
+  onChange,
+  p,
+  icons = true,
+  labels = true,
+  selectable = false,
+  clearable = false,
+}: {
+  item: Item;
+  onChange: (patch: Partial<Item>) => void;
+  p: Palette;
+  /** each entry has an icon */
+  icons?: boolean;
+  /** each entry has words */
+  labels?: boolean;
+  /** one entry is the current one, marked at the start of its row */
+  selectable?: boolean;
+  /** the current one may be unmarked again: a dropdown may start with nothing chosen */
+  clearable?: boolean;
+}) {
+  const lang = useLang();
+  /* the row whose icon is being picked, by the name the row keeps through a reorder */
+  const [pick, setPick] = useState<string | null>(null);
+  const [dragging, setDragging] = useState<number | null>(null);
+  const [overBin, setOverBin] = useState(false);
+  const bin = useRef<HTMLButtonElement | null>(null);
+  const tabs: NavTab[] = item.tabs ?? [];
+  const bounds = ENTRY_BOUNDS[item.kind] ?? { min: 1, max: 12 };
+  /* a name per row that survives a reorder, so the list knows which row moved where. Rows are
+   * named as they appear, never during render, and a list that came back a different length
+   * or from a different part starts its names over. */
+  const keys = useRef<{ id: string; names: string[] }>({ id: item.id, names: [] });
+  if (keys.current.id !== item.id) keys.current = { id: item.id, names: [] };
+  const named = useRef(0);
+  while (keys.current.names.length < tabs.length) keys.current.names.push(`e${named.current++}`);
+  if (keys.current.names.length > tabs.length) keys.current.names.length = tabs.length;
+  const names = keys.current.names;
+  const picked = pick === null ? -1 : names.indexOf(pick);
+  const selected = !selectable ? -1 : clearable && item.selected === undefined ? -1 : Math.min(item.selected ?? 0, Math.max(0, tabs.length - 1));
+  const set = (i: number, patch: Partial<NavTab>) => onChange({ tabs: tabs.map((t, j) => (j === i ? { ...t, ...patch } : t)) });
+  const onBin = (e: { clientX: number; clientY: number }) => {
+    const r = bin.current?.getBoundingClientRect();
+    return !!r && e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top - 8 && e.clientY <= r.bottom + 8;
+  };
+  const canAdd = tabs.length < bounds.max;
+  const canRemove = tabs.length > bounds.min;
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+      <Reorder.Group
+        axis="y"
+        values={names}
+        onReorder={(next: string[]) => {
+          const order = next.map((k) => names.indexOf(k));
+          keys.current.names = next;
+          onChange(reorderTabsPatch(item, order));
+        }}
+        style={{ display: "flex", flexDirection: "column", gap: 6, padding: 0, margin: 0 }}
+      >
+        {tabs.map((tab, i) => (
+          <EntryRow
+            key={names[i]}
+            id={names[i]}
+            tab={tab}
+            icons={icons}
+            labels={labels}
+            selected={selectable ? selected === i : undefined}
+            onSelect={selectable ? () => onChange({ selected: clearable && selected === i ? undefined : i }) : undefined}
+            open={pick === names[i]}
+            onPick={() => setPick(pick === names[i] ? null : names[i])}
+            onLabel={(label) => set(i, { label })}
+            onDragStart={() => setDragging(i)}
+            onDrag={(e) => setOverBin(canRemove && onBin(e))}
+            onDragEnd={(e) => {
+              const drop = canRemove && onBin(e);
+              setDragging(null);
+              setOverBin(false);
+              if (drop) {
+                if (pick === names[i]) setPick(null);
+                keys.current.names = names.filter((_, j) => j !== i);
+                onChange(removeTabPatch(item, i));
+              }
+            }}
+            p={p}
+          />
+        ))}
+      </Reorder.Group>
+      {picked >= 0 && tabs[picked] && (
+        <IconPicker value={tabs[picked].icon || null} onChange={(icon) => set(picked, { icon: icon ?? "" })} onClose={() => setPick(null)} palette={p} />
+      )}
+      {(canAdd || dragging !== null) && (
+        <button
+          ref={bin}
+          disabled={!canAdd && dragging === null}
+          onClick={() => {
+            if (!canAdd) return;
+            const spare = defaultTabsFor(item.kind);
+            onChange({ tabs: [...tabs, { ...spare[tabs.length % spare.length] }] });
+          }}
+          className="m3-press"
+          style={{
+            height: 44,
+            borderRadius: 22,
+            border: `1px ${dragging !== null ? "dashed" : "solid"} ${overBin ? p.error : dragging !== null ? (canRemove ? p.error : p.outlineVariant) : p.outline}`,
+            background: overBin ? p.errorContainer : "transparent",
+            color: dragging !== null ? (canRemove ? p.error : p.outline) : p.primary,
+            fontSize: 13,
+            fontWeight: 600,
+            cursor: dragging !== null ? "copy" : "pointer",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 6,
+            transition: "background 120ms, color 120ms, border-color 120ms",
+          }}
+        >
+          <Icon name={dragging !== null ? "delete" : "add"} size={18} />
+          {t(dragging !== null ? "dropToRemove" : item.kind === "select" ? "addOption" : "addTab", lang)}
+        </button>
+      )}
+    </div>
+  );
+}
+
+/** one entry: the handle at the start of its words, the words, and the icon beside them */
+function EntryRow({
+  id,
+  tab,
+  icons,
+  labels,
+  selected,
+  onSelect,
+  open,
+  onPick,
+  onLabel,
+  onDragStart,
+  onDrag,
+  onDragEnd,
+  p,
+}: {
+  id: string;
+  tab: NavTab;
+  icons: boolean;
+  labels: boolean;
+  selected?: boolean;
+  onSelect?: () => void;
+  open: boolean;
+  onPick: () => void;
+  onLabel: (v: string) => void;
+  onDragStart: () => void;
+  onDrag: (e: { clientX: number; clientY: number }) => void;
+  onDragEnd: (e: { clientX: number; clientY: number }) => void;
+  p: Palette;
+}) {
+  const lang = useLang();
+  const controls = useDragControls();
+  const handle = (
+    <span
+      onPointerDown={(e) => {
+        e.preventDefault();
+        controls.start(e);
+      }}
+      title={t("reorder", lang)}
+      style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 38, cursor: "grab", touchAction: "none" }}
+    />
+  );
+  return (
+    <Reorder.Item
+      value={id}
+      dragListener={false}
+      dragControls={controls}
+      onDragStart={onDragStart}
+      onDrag={(e) => onDrag(e as PointerEvent)}
+      onDragEnd={(e) => onDragEnd(e as PointerEvent)}
+      style={{ listStyle: "none", display: "flex", gap: 6, alignItems: "center", position: "relative" }}
+    >
+      {onSelect && (
+        <IconBtn
+          icon={selected ? "radio_button_checked" : "radio_button_unchecked"}
+          p={p}
+          size={44}
+          on={selected}
+          onClick={onSelect}
+          title={t("selectedTab", lang)}
+        />
+      )}
+      {labels ? (
+        <div style={{ position: "relative", flex: 1, minWidth: 0 }}>
+          <Field value={tab.label} onChange={onLabel} placeholder={t("label", lang)} p={p} icon="drag_indicator" height={44} />
+          {/* the handle sits where the field draws its mark, and is the only thing that drags */}
+          {handle}
+        </div>
+      ) : (
+        /* an entry with no words is dragged by the mark on its own */
+        <div style={{ position: "relative", flex: 1, height: 44, display: "flex", alignItems: "center", paddingLeft: 12, color: p.onSurfaceVariant }}>
+          <Icon name="drag_indicator" size={20} />
+          {handle}
+        </div>
+      )}
+      {icons && <IconCell icon={tab.icon || null} open={open} title={t("changeIcon", lang)} onClick={onPick} p={p} />}
+    </Reorder.Item>
+  );
+}
+
+/** The corners of a part: one radius for all four until the author asks for each. The seed
+ *  is what the canvas draws for the part today. */
+export function CornerRows({ item, onChange, p, max = 48 }: { item: Item; onChange: (patch: Partial<Item>) => void; p: Palette; max?: number }) {
+  const lang = useLang();
+  const spec = KIND_SPEC[item.kind];
+  const isBox = item.kind === "box";
+  const top = item.radiusTop ?? (isBox ? 0 : scaleR(spec.radius));
+  const bottom = isBox ? (item.radiusBottom ?? 0) : top;
+  const corners: Radii | undefined = item.corners ?? (isBox && top !== bottom ? { tl: top, tr: top, bl: bottom, br: bottom } : undefined);
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      {!corners && (
+        <Slider
+          icon="rounded_corner"
+          title={t("cornerRadius", lang)}
+          value={top}
+          min={0}
+          max={max}
+          step={1}
+          onChange={(r) => onChange(isBox ? { radiusTop: r, radiusBottom: r } : { radiusTop: r })}
+          p={p}
+        />
+      )}
+      {(item.kind === "card" || isBox) && (
+        <Toggle
+          on={!!corners}
+          onChange={(each) =>
+            onChange(
+              each
+                ? { corners: { tl: top, tr: top, bl: bottom, br: bottom } }
+                : { corners: undefined, radiusTop: corners?.tl ?? top, radiusBottom: isBox ? (corners?.tl ?? top) : undefined },
+            )
+          }
+          p={p}
+          icon="crop_free"
+          label={t("cornersEach", lang)}
+          grow
+        />
+      )}
+      {corners &&
+        (["tl", "tr", "bl", "br"] as const).map((k) => (
+          <Slider
+            key={k}
+            iconNode={<CornerIcon side={k} />}
+            title={t(k === "tl" ? "cornerTl" : k === "tr" ? "cornerTr" : k === "bl" ? "cornerBl" : "cornerBr", lang)}
+            value={corners[k]}
+            min={0}
+            max={max}
+            step={1}
+            onChange={(v) => onChange({ corners: { ...corners, [k]: v } })}
+            p={p}
+          />
+        ))}
+    </div>
+  );
+}
+
+/** the two edges a bar can round: the top and the bottom, or a rail's left and right */
+export function EdgeCornerRows({ item, onChange, p }: { item: Item; onChange: (patch: Partial<Item>) => void; p: Palette }) {
+  const lang = useLang();
+  const rail = item.kind === "navRail";
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <Slider iconNode={<CornerIcon side={rail ? "left" : "top"} />} title={t(rail ? "cornerLeft" : "cornerTop", lang)} value={item.radiusTop ?? 0} min={0} max={40} step={1} onChange={(radiusTop) => onChange({ radiusTop })} p={p} />
+      <Slider iconNode={<CornerIcon side={rail ? "right" : "bottom"} />} title={t(rail ? "cornerRight" : "cornerBottom", lang)} value={item.radiusBottom ?? 0} min={0} max={40} step={1} onChange={(radiusBottom) => onChange({ radiusBottom })} p={p} />
+    </div>
   );
 }
 

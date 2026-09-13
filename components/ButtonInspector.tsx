@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Reorder, useDragControls } from "motion/react";
 import {
   Action,
   BUTTON_H_MAX,
@@ -21,94 +20,28 @@ import {
   KIND_SPEC,
   LINK_TARGET,
   MENU_TARGET,
-  fabOpen,
   hasMenu,
-  menuOpen,
   menuPatch,
-  NavTab,
   PHONE_W,
   Palette,
-  R_INNER,
   SPLIT_MENU_SLOT,
-  Variant,
   actionSlotsOf,
   buttonHeightOf,
-  contentWidth,
-  defaultTabsFor,
   extendedFabHeight,
   fabTypePatch,
   frameSizeOf,
-  halfWidth,
   isFab,
-  removeTabPatch,
-  reorderTabsPatch,
   toggleIcon,
-  variantStyle,
 } from "@/lib/tokens";
 import { IconPicker } from "./IconPicker";
 import { Icon, M3Static } from "./M3Node";
-import { Field, NamedSizes, PanelShell, RUN_CELL, Section, Segmented, Select, SelectOption, Slider, Toggle } from "./ui";
-import { AiHooks, variantsOf } from "./Inspector";
+import { Field, NamedSizes, PanelShell, Section, Segmented, Select, SelectOption, Slider, Toggle } from "./ui";
+import { AiHooks } from "./Inspector";
 import { LinkStage, TapStage } from "./TapStage";
-import { AlignBox, NoteSection, PartHeader, PartTabs, PlaceFn, Tab, actionOptionsOf } from "./PartPanel";
+import { AlignBox, EntryList, IconCell, NoteSection, PartHeader, PartTabs, PlaceFn, StyleRun, Tab, WidthRun, actionOptionsOf } from "./PartPanel";
 import { KIND_TEXT, t, useLang } from "@/lib/i18n";
 
 export type { PlaceFn };
-
-/** the button styles as one connected run, each cell painted the way that style looks;
- *  the chosen one carries a check mark and nothing else is written on them */
-function VariantRow({ kind, value, onChange, p }: { kind: Item["kind"]; value: Variant; onChange: (v: Variant) => void; p: Palette }) {
-  const lang = useLang();
-  const variants = variantsOf(kind);
-  return (
-    <Segmented<Variant>
-      options={variants.map((v) => {
-        const st = variantStyle(v.key, p);
-        return {
-          key: v.key,
-          title: v.label,
-          node: v.key === value ? <Icon name="check" size={20} /> : <span />,
-          style: {
-            ...st,
-            /* a text button paints nothing, so its cell gets a faint edge to be found by */
-            border: v.key === "outlined" ? st.border : v.key === "text" ? `1px dashed ${p.outlineVariant}` : "none",
-            boxShadow: v.key === "elevated" ? "0 1px 3px rgba(0,0,0,0.2)" : "none",
-            minWidth: 0,
-            padding: "0 4px",
-          },
-        };
-      })}
-      value={value}
-      onChange={onChange}
-      p={p}
-      label={t("style", lang)}
-      tight
-    />
-  );
-}
-
-/** the width presets as one connected run. The four names carry the meaning on their own, so the
- *  cells stay plain words: a drawing next to them only repeated what the word already said. */
-function WidthRow({ value, onChange, frameW, p }: { value: number | undefined; onChange: (size: number | undefined) => void; frameW: number; p: Palette }) {
-  const lang = useLang();
-  const cells: { key: string; size?: number; label: string; hint: string }[] = [
-    { key: "auto", label: t("autoWidth", lang), hint: t("autoWidthHint", lang) },
-    { key: "half", size: halfWidth(frameW), label: t("halfWidth", lang), hint: t("halfWidthHint", lang) },
-    { key: "content", size: contentWidth(frameW), label: t("contentWidth", lang), hint: t("contentWidthHint", lang) },
-    { key: "screen", size: frameW, label: t("screenWidth", lang), hint: t("screenWidthHint", lang) },
-  ];
-  return (
-    <Segmented<string>
-      /* the word says what the width is for, the number says what it comes to on this screen */
-      options={cells.map((c) => ({ key: c.key, label: c.label, title: `${c.label}${c.size ? ` · ${c.size}dp` : ""} — ${c.hint}`, style: RUN_CELL }))}
-      value={cells.find((c) => c.size === value)?.key ?? ""}
-      onChange={(k) => onChange(cells.find((c) => c.key === k)?.size)}
-      p={p}
-      label={t("width", lang)}
-      tight
-    />
-  );
-}
 
 /** the two shapes a FAB takes, as one connected run: the circle and the one with a label.
  *  Picking one turns the part into it, keeping what they share. */
@@ -123,176 +56,6 @@ function FabTypeRow({ value, onChange, p }: { value: FabKind; onChange: (k: FabK
       p={p}
       label={t("partType", lang)}
     />
-  );
-}
-
-/** What a FAB menu opens: one row per entry, dragged by the handle at the start of its words.
- *  Carrying a row down onto the button that adds entries turns that button into the one that
- *  takes this one out, so there is nothing to delete with until something is being dragged. */
-function MenuItems({ item, onChange, p }: { item: Item; onChange: (patch: Partial<Item>) => void; p: Palette }) {
-  const lang = useLang();
-  /* the row whose icon is being picked, by the name the row keeps through a reorder */
-  const [pick, setPick] = useState<string | null>(null);
-  const [dragging, setDragging] = useState<number | null>(null);
-  const [overBin, setOverBin] = useState(false);
-  const bin = useRef<HTMLButtonElement | null>(null);
-  const tabs: NavTab[] = item.tabs ?? [];
-  /* a name per row that survives a reorder, so the list knows which row moved where. Rows are
-   * named as they appear, never during render, and a list that came back a different length
-   * or from a different part starts its names over. */
-  const keys = useRef<{ id: string; names: string[] }>({ id: item.id, names: [] });
-  if (keys.current.id !== item.id) keys.current = { id: item.id, names: [] };
-  const named = useRef(0);
-  while (keys.current.names.length < tabs.length) keys.current.names.push(`e${named.current++}`);
-  if (keys.current.names.length > tabs.length) keys.current.names.length = tabs.length;
-  const names = keys.current.names;
-  const picked = pick === null ? -1 : names.indexOf(pick);
-  const set = (i: number, patch: Partial<NavTab>) => onChange({ tabs: tabs.map((t, j) => (j === i ? { ...t, ...patch } : t)) });
-  const onBin = (e: { clientX: number; clientY: number }) => {
-    const r = bin.current?.getBoundingClientRect();
-    return !!r && e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top - 8 && e.clientY <= r.bottom + 8;
-  };
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-      <Reorder.Group
-        axis="y"
-        values={names}
-        onReorder={(next: string[]) => {
-          const order = next.map((k) => names.indexOf(k));
-          keys.current.names = next;
-          onChange(reorderTabsPatch(item, order));
-        }}
-        style={{ display: "flex", flexDirection: "column", gap: 6, padding: 0, margin: 0 }}
-      >
-        {tabs.map((tab, i) => (
-          <MenuRow
-            key={names[i]}
-            id={names[i]}
-            tab={tab}
-            open={pick === names[i]}
-            onPick={() => setPick(pick === names[i] ? null : names[i])}
-            onLabel={(label) => set(i, { label })}
-            onDragStart={() => setDragging(i)}
-            onDrag={(e) => setOverBin(onBin(e))}
-            onDragEnd={(e) => {
-              const drop = onBin(e);
-              setDragging(null);
-              setOverBin(false);
-              if (drop && tabs.length > 1) {
-                if (pick === names[i]) setPick(null);
-                keys.current.names = names.filter((_, j) => j !== i);
-                onChange(removeTabPatch(item, i));
-              }
-            }}
-            p={p}
-          />
-        ))}
-      </Reorder.Group>
-      {picked >= 0 && tabs[picked] && (
-        <IconPicker value={tabs[picked].icon} onChange={(icon) => set(picked, { icon: icon ?? "" })} onClose={() => setPick(null)} palette={p} />
-      )}
-      <button
-        ref={bin}
-        onClick={() => {
-          const spare = defaultTabsFor(item.kind === "splitButton" ? "splitButton" : "fabMenu");
-          onChange({ tabs: [...tabs, { ...spare[tabs.length % spare.length] }] });
-        }}
-        className="m3-press"
-        style={{
-          height: 44,
-          borderRadius: 22,
-          border: `1px ${dragging !== null ? "dashed" : "solid"} ${overBin ? p.error : dragging !== null ? p.error : p.outline}`,
-          background: overBin ? p.errorContainer : "transparent",
-          color: dragging !== null ? p.error : p.primary,
-          fontSize: 13,
-          fontWeight: 600,
-          cursor: dragging !== null ? "copy" : "pointer",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          gap: 6,
-          transition: "background 120ms, color 120ms, border-color 120ms",
-        }}
-      >
-        <Icon name={dragging !== null ? "delete" : "add"} size={18} />
-        {t(dragging !== null ? "dropToRemove" : "addTab", lang)}
-      </button>
-      {/* how an entry is moved and how it is taken out, in the one line it takes to say */}
-      <div style={{ fontSize: 11, lineHeight: 1.4, color: p.onSurfaceVariant, padding: "0 6px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-        {t("menuItemsHint", lang)}
-      </div>
-    </div>
-  );
-}
-
-/** one entry: the handle at the start of its words, the words, and the icon beside them */
-function MenuRow({
-  id,
-  tab,
-  open,
-  onPick,
-  onLabel,
-  onDragStart,
-  onDrag,
-  onDragEnd,
-  p,
-}: {
-  id: string;
-  tab: NavTab;
-  open: boolean;
-  onPick: () => void;
-  onLabel: (v: string) => void;
-  onDragStart: () => void;
-  onDrag: (e: { clientX: number; clientY: number }) => void;
-  onDragEnd: (e: { clientX: number; clientY: number }) => void;
-  p: Palette;
-}) {
-  const lang = useLang();
-  const controls = useDragControls();
-  return (
-    <Reorder.Item
-      value={id}
-      dragListener={false}
-      dragControls={controls}
-      onDragStart={onDragStart}
-      onDrag={(e) => onDrag(e as PointerEvent)}
-      onDragEnd={(e) => onDragEnd(e as PointerEvent)}
-      style={{ listStyle: "none", display: "flex", gap: 6, alignItems: "center", position: "relative" }}
-    >
-      <div style={{ position: "relative", flex: 1, minWidth: 0 }}>
-        <Field value={tab.label} onChange={onLabel} placeholder={t("label", lang)} p={p} icon="drag_indicator" height={44} />
-        {/* the handle sits where the field draws its mark, and is the only thing that drags */}
-        <span
-          onPointerDown={(e) => {
-            e.preventDefault();
-            controls.start(e);
-          }}
-          title={t("reorder", lang)}
-          style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 38, cursor: "grab", touchAction: "none" }}
-        />
-      </div>
-      <button
-        onClick={onPick}
-        title={t("changeIcon", lang)}
-        aria-label={t("changeIcon", lang)}
-        aria-expanded={open}
-        className="m3-press"
-        style={{
-          width: 44,
-          height: 44,
-          flex: "0 0 auto",
-          borderRadius: 22,
-          border: tab.icon || open ? "none" : `1.5px dashed ${p.outline}`,
-          background: open ? p.primary : tab.icon ? p.surfaceContainerHigh : "transparent",
-          color: open ? p.onPrimary : tab.icon ? p.onSurface : p.outline,
-          cursor: "pointer",
-          display: "grid",
-          placeItems: "center",
-        }}
-      >
-        {tab.icon ? <Icon name={tab.icon} size={22} /> : <Icon name="add" size={20} />}
-      </button>
-    </Reorder.Item>
   );
 }
 
@@ -517,29 +280,7 @@ export function ButtonInspector({
     setSegAction({ to: k, transition: segAction && segAction.to !== LINK_TARGET ? segAction.transition : "slide" });
   };
 
-  const iconBtn = (icon: string | null, faint: boolean, open: boolean, title: string, onClick: () => void) => (
-    <button
-      onClick={onClick}
-      title={title}
-      aria-label={title}
-      aria-expanded={open}
-      className="m3-press"
-      style={{
-        width: 44,
-        height: 44,
-        flex: "0 0 auto",
-        borderRadius: 22,
-        border: icon || open ? "none" : `1.5px dashed ${p.outline}`,
-        background: open ? p.primary : icon ? p.surfaceContainerHigh : "transparent",
-        color: open ? p.onPrimary : icon ? (faint ? p.outline : p.onSurface) : p.outline,
-        cursor: "pointer",
-        display: "grid",
-        placeItems: "center",
-      }}
-    >
-      {icon ? <Icon name={icon} size={22} /> : <Icon name="add" size={20} />}
-    </button>
-  );
+  const iconBtn = (icon: string | null, faint: boolean, open: boolean, title: string, onClick: () => void) => <IconCell icon={icon} faint={faint} open={open} title={title} onClick={onClick} p={p} />;
   const onIcon = toggleIcon(item);
 
   return (
@@ -597,7 +338,7 @@ export function ButtonInspector({
               <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                 {isToggle && <StateMark on={false} p={p} title={t("normalState", lang)} />}
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <VariantRow
+                  <StyleRun
                     kind={item.kind}
                     value={item.variant}
                     onChange={(variant) => {
@@ -612,7 +353,7 @@ export function ButtonInspector({
                 <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                   <StateMark on p={p} title={t("onState", lang)} />
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <VariantRow
+                    <StyleRun
                       kind={item.kind}
                       value={item.toggle?.variant ?? item.variant}
                       onChange={(variant) => {
@@ -638,7 +379,7 @@ export function ButtonInspector({
               {!isIcon && !fab && !chip && !split && (
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                   <Slider icon="width" title={t("width", lang)} value={width} min={minW} max={frameW} step={step} onChange={(v) => onChange({ size: v })} p={p} />
-                  <WidthRow value={item.size} onChange={(size) => onChange({ size })} frameW={frameW} p={p} />
+                  <WidthRun value={item.size} onChange={(size) => onChange({ size })} frameW={frameW} p={p} />
                 </div>
               )}
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -707,7 +448,7 @@ export function ButtonInspector({
             )}
             {menuEditor && (
               <>
-                <MenuItems item={item} onChange={onChange} p={p} />
+                <EntryList item={item} onChange={onChange} p={p} />
                 {/* the entry being sent somewhere, then where it goes */}
                 {actionSlotsOf(item).length > 0 && (<>
                 <Segmented<string>

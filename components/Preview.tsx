@@ -65,6 +65,7 @@ import {
   isScrollableTabs,
   tabScrollOffset,
   SCROLL_TAB_W,
+  topBarHeightOf,
 } from "@/lib/tokens";
 import { Icon, M3Node, Ripples, contentColor, menuShutMs, rippleSize } from "./M3Node";
 import type { Ripple } from "./M3Node";
@@ -491,7 +492,7 @@ function Tappable({
   const slots: { key: string; style: React.CSSProperties }[] = [];
   if (onSlot && item.kind === "topAppBar") {
     /* the icons sit below the status-bar inset only where the bar has one (see sizeOf) */
-    const inset = sizeOf(item, {}).h - 64;
+    const inset = sizeOf(item, {}).h - topBarHeightOf(item);
     if (item.icon) slots.push({ key: "icon", style: { left: 4, top: inset + 8, width: 48, height: 48, borderRadius: 24 } });
     if (item.icon2) slots.push({ key: "icon2", style: { right: 4, top: inset + 8, width: 48, height: 48, borderRadius: 24 } });
   }

@@ -170,6 +170,22 @@ export function railMetrics(it: Item) {
 /** system insets: the status bar above a top app bar and the gesture area below a navigation bar.
  *  Both bars carry their inset as extra height so their background reaches the rounded screen edge. */
 export const STATUS_BAR_H = 24;
+/** M3's three top app bars: small, medium and large, by the height of the bar under the status bar.
+ *  Past the small one the title leaves the icon row and stands on its own line at the foot. */
+export const TOP_BAR_SIZES = [
+  { key: "s", h: 64, font: 22 },
+  { key: "m", h: 112, font: 24 },
+  { key: "l", h: 152, font: 28 },
+] as const;
+/** how tall the bar itself is, without the status bar it may carry */
+export const topBarHeightOf = (it: Item) => clamp(Math.round(it.size2 ?? TOP_BAR_SIZES[0].h), TOP_BAR_SIZES[0].h, TOP_BAR_SIZES[TOP_BAR_SIZES.length - 1].h);
+/** the title size the bar's height asks for: the named size it lands on, or the nearest below */
+export const topBarFontOf = (it: Item) => {
+  const h = topBarHeightOf(it);
+  let font: number = TOP_BAR_SIZES[0].font;
+  for (const b of TOP_BAR_SIZES) if (h >= b.h) font = b.font;
+  return font;
+};
 export const NAV_BAR_H = 24;
 /** M3 layout margin: parts that are not edge-to-edge sit this far from the screen edge */
 export const PHONE_MARGIN = 16;
@@ -595,7 +611,6 @@ export type Kind =
   | "toolbar"
   | "tabs"
   | "radio"
-  | "badge"
   | "carousel"
   | "datePicker"
   | "timePicker";
@@ -992,6 +1007,8 @@ export const KIND_SPEC: Record<Kind, KindSpec> = {
     hasSupporting: false,
     hasIcon: true,
     size: { min: 200, max: PHONE_W, step: 4, icon: "width", presets: WIDTH_PRESETS },
+    /* M3's small, medium and large bars: the title moves under the icons as the bar grows */
+    size2: { min: TOP_BAR_SIZES[0].h, max: TOP_BAR_SIZES[TOP_BAR_SIZES.length - 1].h, step: 4, icon: "height", presets: TOP_BAR_SIZES.map((b) => b.h) },
     defLabel: "タイトル",
     defIcon: "menu",
     defIcon2: "more_vert",
@@ -1497,21 +1514,6 @@ export const KIND_SPEC: Record<Kind, KindSpec> = {
     defLabel: "選択肢",
     defIcon: null,
   },
-  badge: {
-    label: "Badge",
-    noun: "バッジ",
-    category: "content",
-    paletteIcon: "notifications_unread",
-    w: 0,
-    h: 16,
-    radius: 8,
-    hasVariant: false,
-    hasLabel: true,
-    hasSupporting: false,
-    hasIcon: false,
-    defLabel: "3",
-    defIcon: null,
-  },
 };
 
 export const KIND_ORDER: Kind[] = [
@@ -1546,7 +1548,6 @@ export const KIND_ORDER: Kind[] = [
   "carousel",
   "camera",
   "map",
-  "badge",
   "divider",
   "loadingIndicator",
   "linearProgress",
@@ -1740,6 +1741,51 @@ export function progressTypePatch(it: Item, to: ProgressKind): Partial<Item> {
   if (it.kind === to) return {};
   return { kind: to, size: to === "linearProgress" ? CONTENT_W : 48 };
 }
+
+/** The three selection controls, one panel: a switch, a checkbox and a radio button say the same
+ *  thing in three shapes, so a part changes between them keeping its words and its state. A
+ *  switch is the only one given a width; the other two are as wide as their label. */
+export const CHOICE_KINDS = ["switch", "checkbox", "radio"] as const;
+export type ChoiceKind = (typeof CHOICE_KINDS)[number];
+export const isChoice = (k: Kind): k is ChoiceKind => (CHOICE_KINDS as readonly string[]).includes(k);
+export function choiceTypePatch(it: Item, to: ChoiceKind): Partial<Item> {
+  if (it.kind === to) return {};
+  return { kind: to, size: undefined, noCheck: undefined };
+}
+/** The three pictures a screen shows, one panel: a picture, the camera's viewfinder and a map
+ *  are one box with something different in it. A change keeps the box's width and corners; the
+ *  picture put on an image goes with it, since a camera and a map draw their own. */
+export const PICTURE_KINDS = ["image", "camera", "map"] as const;
+export type PictureKind = (typeof PICTURE_KINDS)[number];
+export const isPicture = (k: Kind): k is PictureKind => (PICTURE_KINDS as readonly string[]).includes(k);
+export function pictureTypePatch(it: Item, to: PictureKind): Partial<Item> {
+  if (it.kind === to) return {};
+  return { kind: to, size2: undefined, src: to === "image" ? it.src : undefined };
+}
+/** the two fields that hold a value: a text field, and the dropdown that picks one from a list */
+export const FIELD_KINDS = ["textField", "select"] as const;
+export type FieldKind = (typeof FIELD_KINDS)[number];
+export const isField = (k: Kind): k is FieldKind => (FIELD_KINDS as readonly string[]).includes(k);
+export function fieldTypePatch(it: Item, to: FieldKind): Partial<Item> {
+  if (it.kind === to) return {};
+  return { kind: to, tabs: to === "select" ? (it.tabs?.length ? it.tabs : defaultTabsFor("select")) : it.tabs, selected: to === "select" ? it.selected : undefined };
+}
+
+/** M3's type scale, as the sizes a line of text on the canvas is offered at. The letter names
+ *  the role -- body, title, headline, display -- and the number is the sp it comes to. */
+export const TEXT_SIZES = [
+  { key: "body", value: 16 },
+  { key: "title", value: 22 },
+  { key: "headline", value: 28 },
+  { key: "display", value: 45 },
+] as const;
+
+/** how many destinations a bar, a rail and a toolbar may carry: M3's own bounds */
+export const ENTRY_BOUNDS: Partial<Record<Kind, { min: number; max: number }>> = {
+  bottomNav: { min: 3, max: 5 },
+  navRail: { min: 3, max: 7 },
+  toolbar: { min: 2, max: 6 },
+};
 
 /** target id for the menu a FAB opens: the entries rise out of the button itself */
 export const MENU_TARGET = "menu";
@@ -2312,7 +2358,7 @@ export function makeItem(kind: Kind): Item {
 }
 
 /** Content-sized kinds are measured in the DOM; the rest derive from spec + size. */
-export const MEASURED: Kind[] = ["button", "extendedFab", "chip", "switch", "checkbox", "text", "splitButton", "radio", "badge", "fabMenu"];
+export const MEASURED: Kind[] = ["button", "extendedFab", "chip", "switch", "checkbox", "text", "splitButton", "radio", "fabMenu"];
 /** the part is as wide as its own content makes it, whatever kind it is */
 export const isMeasured = (it: Item) => (MEASURED.includes(it.kind) && !((it.kind === "switch" || it.kind === "button") && it.size)) || menuOpen(it);
 
@@ -2348,8 +2394,6 @@ export function sizeOf(it: Item, widths: Record<string, number>) {
     case "checkbox":
     case "radio":
       return { w: widths[it.id] ?? 128, h: s.h };
-    case "badge":
-      return { w: widths[it.id] ?? 16, h: it.label.trim() ? s.h : 6 };
     case "fabMenu":
       /* the menu is as wide as its widest entry: nothing to set, so nothing to get wrong */
       return { w: widths[it.id] ?? n, h: 56 + (it.tabs?.length ?? 0) * (FAB_MENU_ITEM_H + FAB_MENU_GAP) };
@@ -2373,7 +2417,7 @@ export function sizeOf(it: Item, widths: Record<string, number>) {
     case "topAppBar":
       /* the status-bar inset belongs to a phone: a bar wider than one has no status bar above it.
        * (An Android tablet does; the canvas leaves that to the prompt.) */
-      return { w: n, h: 64 + (n > PHONE_W ? 0 : STATUS_BAR_H) };
+      return { w: n, h: topBarHeightOf(it) + (n > PHONE_W ? 0 : STATUS_BAR_H) };
     case "searchBar":
     case "bottomNav":
     case "listItem":
@@ -2456,7 +2500,6 @@ export function baseRadii(it: Item): Radii {
     /* the two segments keep their own corners, so what the box is asked for is the outer one */
     case "splitButton":
       return uniformRadii(scaleR(buttonHeightOf(it) / 2));
-    case "badge":
     case "radio":
       return uniformRadii(s.radius);
     default:

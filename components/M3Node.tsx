@@ -61,6 +61,9 @@ import {
   tabScrollOffset,
   SCROLL_TAB_W,
   RIPPLE_KINDS,
+  TOP_BAR_SIZES,
+  topBarHeightOf,
+  topBarFontOf,
 } from "@/lib/tokens";
 import { CircularProgress, LinearProgress, LoadingIndicator } from "./Loading";
 import { CarouselBody, DatePickerBody, TimePickerBody } from "./Pickers";
@@ -232,7 +235,6 @@ const NO_BOX: Kind[] = [
   "divider",
   "splitButton",
   "fabMenu",
-  "badge",
   "carousel",
 ];
 
@@ -620,34 +622,6 @@ function RadioContent({ item, p }: { item: Item; p: Palette }) {
   );
 }
 
-/** A badge: a 6dp dot when it has no text, a 16dp pill with the count otherwise. */
-function BadgeContent({ item, p }: { item: Item; p: Palette }) {
-  const text = item.label.trim();
-  if (!text) return <span style={{ display: "inline-block", width: 6, height: 6, borderRadius: 3, background: p.error }} />;
-  return (
-    <span
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        justifyContent: "center",
-        minWidth: 16,
-        height: 16,
-        padding: "0 4px",
-        borderRadius: 8,
-        boxSizing: "border-box",
-        background: p.error,
-        color: p.onError,
-        fontSize: 11,
-        fontWeight: 500,
-        lineHeight: 1,
-        whiteSpace: "nowrap",
-      }}
-    >
-      {text}
-    </span>
-  );
-}
-
 /** Content for kinds that size to their text; rendered again offscreen to measure. */
 export function MeasuredContent({ item, p }: { item: Item; p: Palette }) {
   if (menuOpen(item)) return item.kind === "splitButton" ? <SplitMenuContent item={item} p={p} /> : <FabMenuContent item={item} p={p} />;
@@ -668,8 +642,6 @@ export function MeasuredContent({ item, p }: { item: Item; p: Palette }) {
       return <SplitButtonContent item={item} p={p} />;
     case "radio":
       return <RadioContent item={item} p={p} />;
-    case "badge":
-      return <BadgeContent item={item} p={p} />;
     case "fabMenu":
       return <FabMenuContent item={item} p={p} />;
     default:
@@ -942,31 +914,43 @@ function Body({ item, p, tabScroll, menuShown }: { item: Item; p: Palette; tabSc
       );
     }
 
-    case "topAppBar":
+    case "topAppBar": {
+      /* the small bar keeps its title between the icons; the medium and large ones let it down
+         onto a line of its own at the foot, the way M3's flexible bars do */
+      const barH = topBarHeightOf(item);
+      const tall = barH > TOP_BAR_SIZES[0].h;
+      const font = topBarFontOf(item);
       return (
         <div
           style={{
             display: "flex",
-            alignItems: "center",
-            gap: 4,
+            flexDirection: "column",
             /* the inset the bar has, if any (see sizeOf) */
-            padding: `${sizeOf(item, {}).h - 64}px 4px 0`,
+            padding: `${sizeOf(item, {}).h - barH}px 0 0`,
             height: "100%",
             boxSizing: "border-box",
             position: "relative",
           }}
         >
-          <div style={{ width: 48, height: 48, display: "grid", placeItems: "center", flex: "0 0 auto" }}>
-            {item.icon && <Icon name={item.icon} size={24} color={p.onSurface} />}
+          <div style={{ display: "flex", alignItems: "center", gap: 4, padding: "0 4px", height: 64, flex: "0 0 auto" }}>
+            <div style={{ width: 48, height: 48, display: "grid", placeItems: "center", flex: "0 0 auto" }}>
+              {item.icon && <Icon name={item.icon} size={24} color={p.onSurface} />}
+            </div>
+            <div className="m3-size-ease" style={{ flex: 1, minWidth: 0, fontSize: tall ? 0 : font, opacity: tall ? 0 : 1, fontWeight: w(400, 600), color: p.onSurface, transition: "opacity 200ms", ...ellipsis }}>
+              {item.label}
+            </div>
+            <div style={{ width: 48, height: 48, display: "grid", placeItems: "center", flex: "0 0 auto" }}>
+              {item.icon2 && <Icon name={item.icon2} size={24} color={p.onSurfaceVariant} />}
+            </div>
           </div>
-          <div style={{ flex: 1, minWidth: 0, fontSize: 22, fontWeight: w(400, 600), color: p.onSurface, ...ellipsis }}>
-            {item.label}
-          </div>
-          <div style={{ width: 48, height: 48, display: "grid", placeItems: "center", flex: "0 0 auto" }}>
-            {item.icon2 && <Icon name={item.icon2} size={24} color={p.onSurfaceVariant} />}
-          </div>
+          {tall && (
+            <div className="m3-size-ease" style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "flex-end", padding: "0 16px 24px", fontSize: font, lineHeight: 1.2, fontWeight: w(400, 600), color: p.onSurface, ...ellipsis }}>
+              {item.label}
+            </div>
+          )}
         </div>
       );
+    }
 
     case "searchBar":
       return (

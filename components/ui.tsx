@@ -1158,7 +1158,7 @@ export function NamedSizes({
   const lang = useLang();
   return (
     <Segmented<string>
-      options={steps.map((s) => ({ key: s.key, label: s.key.toUpperCase(), title: `${s.key.toUpperCase()} · ${s.value}dp`, style: RUN_CELL }))}
+      options={steps.map((s) => ({ key: s.key, label: s.key.toUpperCase(), title: `${s.value}dp`, style: RUN_CELL }))}
       value={steps.find((s) => s.value === value)?.key ?? ""}
       onChange={(k) => onChange(steps.find((s) => s.key === k)!.value)}
       p={p}

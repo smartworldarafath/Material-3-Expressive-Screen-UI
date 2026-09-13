@@ -102,6 +102,8 @@ import {
   FULL_WIDTH,
   fitHeight,
   railExpansionSide,
+  CONTENT_W,
+  contentWidth,
 } from "@/lib/tokens";
 import { Icon, M3Node, M3Static, MeasuredContent } from "@/components/M3Node";
 import { CORNER_GAIN, CORNERS, HandleSide, SizeHandles } from "@/components/SizeHandles";
@@ -225,15 +227,24 @@ type Snapshot = { groups: Group[]; frames: Frame[]; meta?: DocMeta };
 
 /** The parts a lone one of can be resized on the canvas itself: the controls that carry a size,
  *  and the indicators, whose width is the thing an author reaches for most. */
-const HANDLED = new Set<Kind>(["button", "iconButton", "chip", "splitButton", "fab", "extendedFab", "linearProgress", "circularProgress", "loadingIndicator", "slider", "carousel"]);
+const HANDLED = new Set<Kind>([
+  "button", "iconButton", "chip", "splitButton", "fab", "extendedFab",
+  "linearProgress", "circularProgress", "loadingIndicator", "slider", "carousel",
+  "card", "box", "image", "camera", "map", "listItem", "searchBar", "textField", "select", "switch", "divider",
+  "topAppBar", "bottomNav", "tabs", "navRail",
+]);
 /** parts held by the four points around them: a circle's diameter, a label's height */
 const ROUND = new Set<Kind>(["iconButton", "chip", "splitButton", "fab", "extendedFab", "circularProgress", "loadingIndicator"]);
+/** the button family: sized on the button scale rather than by the bounds their kind is given */
+const BUTTON_LIKE = new Set<Kind>(["button", "iconButton", "chip", "splitButton", "fab", "extendedFab"]);
 /** these are held by their two ends; they have no height of their own to pull on */
-const WIDE = new Set<Kind>(["linearProgress", "slider"]);
+const WIDE = new Set<Kind>(["linearProgress", "slider", "listItem", "searchBar", "textField", "select", "switch", "divider", "topAppBar", "bottomNav", "tabs"]);
 const BAR_SIDES = ["left", "right"] as const;
-/** a carousel runs the width of the screen: only its height is pulled on */
-const TALL = new Set<Kind>(["carousel"]);
+/** a carousel runs the width of the screen, a rail the height of it: only the other measure is pulled on */
+const TALL = new Set<Kind>(["carousel", "navRail"]);
 const TALL_SIDES = ["top", "bottom"] as const;
+/** a picture is a square: either side pulls its one measure */
+const SQUARE = new Set<Kind>(["image"]);
 
 /** a screen changing size eases the way a settling part does */
 const SIZE_TRANSITION = `width ${SETTLE_MS}ms cubic-bezier(0.2, 0, 0, 1), height ${SETTLE_MS}ms cubic-bezier(0.2, 0, 0, 1), border-radius ${SETTLE_MS}ms cubic-bezier(0.2, 0, 0, 1)`;
@@ -259,8 +270,12 @@ const SEED_FRAMES: Frame[] = [{ id: "seedF1", name: "Home", x: 0, y: 0 }];
  *  bar flush with the old 80dp bottom; keep it on the bottom edge. */
 function migrateGroups(groups: Group[], frames: Frame[]): Group[] {
   const oldNavH = KIND_SPEC.bottomNav.h - NAV_BAR_H;
+  /* a badge was a part of its own once; it is gone, and a sketch that held one loses it */
+  const kept = groups
+    .map((g) => ({ ...g, items: g.items.filter((it) => (it.kind as string) !== "badge") }))
+    .filter((g) => g.items.length > 0);
   /* a menu used to be a part of its own; now it is something a FAB is asked to open */
-  let out = groups.map((g) => (g.items.some((it) => it.kind === "fabMenu") ? { ...g, items: g.items.map(migrateFabMenu) } : g));
+  let out = kept.map((g) => (g.items.some((it) => it.kind === "fabMenu") ? { ...g, items: g.items.map(migrateFabMenu) } : g));
   /* a carousel used to be one box with one caption and one destination; now every card has its own */
   out = out.map((g) => (g.items.some((it) => it.kind === "carousel" && (it.label || it.action)) ? { ...g, items: g.items.map(migrateCarousel) } : g));
   /* a carousel is as wide as the screen it stands on, whatever size that screen is */
@@ -1374,6 +1389,8 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
     max: number;
     /** the undo step for this drag has been taken: it is taken at the first change */
     taken: boolean;
+    /** a square picture: either side pulls its one measure */
+    square: boolean;
   } | null>(null);
   /** What a handle on this side of the part changes, and how far it may be pulled: the measure
    *  it holds, and the bounds that measure has for this kind on this screen. A drag and a key
@@ -1387,28 +1404,31 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
      * their one measure is height */
     const tall = item.kind === "extendedFab" || item.kind === "chip" || item.kind === "splitButton";
     const box = sizeOf(item, widthsRef.current);
-    const startV = vertical || tall ? box.h : box.w;
-    /* an indicator is sized the way its panel sizes it: between the bounds its kind is given,
-     * and a bar as wide as the screen it sits on */
-    const gauge = isProgress(item.kind) || item.kind === "loadingIndicator" || item.kind === "slider" || item.kind === "carousel";
-    /* across, the part's own measure; down, the second one a carousel has */
-    const gaugeSpec = vertical ? KIND_SPEC[item.kind].size2 : KIND_SPEC[item.kind].size;
+    /* a square picture has one measure, whichever side is pulled */
+    const square = SQUARE.has(item.kind);
+    const startV = (vertical || tall) && !square ? box.h : box.w;
+    /* any part outside the button family is sized the way its panel sizes it: between the
+     * bounds its kind is given, and a part as wide as the screen it sits on at most */
+    const gauge = !BUTTON_LIKE.has(item.kind);
+    /* across, the part's own measure; down, the second one it may have */
+    const gaugeSpec = vertical && !square ? KIND_SPEC[item.kind].size2 : KIND_SPEC[item.kind].size;
     /* only a button must stay at least as wide as it is tall: it is a circle at its narrowest */
     const grows = item.kind === "button";
-    const screenW = f ? frameSizeOf(f).w : PHONE_W;
+    const { w: screenW, h: screenH } = f ? frameSizeOf(f) : { w: PHONE_W, h: PHONE_H };
+    /* a bound written as the phone's size means the screen's, whatever screen this is */
+    const onScreen = (v: number | undefined, fallback: number) => (v === undefined ? fallback : v === PHONE_W ? screenW : v === PHONE_H ? screenH : v === CONTENT_W ? contentWidth(screenW) : v);
     return {
       vertical,
       round,
       tall,
+      square,
       grows,
       startV,
       /* a button is a circle at its narrowest, so its height says how narrow it may be drawn; a
        * kind handled without a spec for this measure is simply not pulled */
       min: gauge ? (gaugeSpec?.min ?? startV) : isFab(item.kind) ? (tall ? KIND_SPEC.extendedFab.h : FAB_H_MIN) : item.kind === "chip" ? CHIP_H_MIN : vertical || round ? BUTTON_H_MIN : buttonHeightOf(item),
       max: gauge
-        ? !vertical && (WIDE.has(item.kind) || item.kind === "carousel")
-          ? screenW
-          : (gaugeSpec?.max ?? startV)
+        ? Math.max(startV, onScreen(gaugeSpec?.max, startV))
         : isFab(item.kind)
           ? FAB_H_MAX
           : item.kind === "chip"
@@ -1420,8 +1440,8 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
   };
   /** the patch a new measure is: the height for a part held top and bottom or as wide as its
    *  label, the width or diameter for the rest; a button set narrower than it is tall grows */
-  const sizePatch = (item: Item, d: { vertical: boolean; tall: boolean; grows: boolean }, v: number): Partial<Item> =>
-    d.vertical || d.tall ? { size2: v, ...(d.grows && item.size && item.size < v ? { size: v } : {}) } : { size: v };
+  const sizePatch = (item: Item, d: { vertical: boolean; tall: boolean; grows: boolean; square: boolean }, v: number): Partial<Item> =>
+    (d.vertical || d.tall) && !d.square ? { size2: v, ...(d.grows && item.size && item.size < v ? { size: v } : {}) } : { size: v };
   /** a handle pulled by the keyboard: one 4dp step out or in, kept the way a panel change is */
   const nudgeSize = (g: Group, item: Item, side: HandleSide, dir: 1 | -1) => {
     const d = sizeDragSpec(item, side, frameOfGroup(g, framesRef.current, widthsRef.current) ?? null);
@@ -4209,6 +4229,7 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
                     /* a bar and a slider have a width and nothing else: they are held by their two
                      * ends; a carousel is the other way about and is held by its top and bottom */
                     sides={WIDE.has(selected.kind) ? BAR_SIDES : TALL.has(selected.kind) ? TALL_SIDES : undefined}
+                    /* a part with a height of its own is held by all four edges; one whose height follows its kind by its two ends */
                     box={{ l: b.l + sx, t: b.t + sy, r: b.r + sx, b: b.b + sy }}
                     z={view.z}
                     instant={widthDragId === selected.id || sizeEditId === selected.id}

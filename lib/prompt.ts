@@ -54,6 +54,8 @@ import {
   DateLayout,
   TimeLayout,
   carouselCardsOf,
+  TOP_BAR_SIZES,
+  topBarHeightOf,
 } from "./tokens";
 
 const VARIANT_TEXT: Record<Lang, Record<Variant, string>> = {
@@ -192,6 +194,18 @@ function iconButtonSize(it: Item, lang: Lang): string {
   return ` (${d}dp${named})`;
 }
 
+/** a top app bar taller than the small one names the M3 size it is: medium or large, with the title on its own line */
+function topBarSizeText(it: Item, lang: Lang): string {
+  const h = topBarHeightOf(it);
+  const size = [...TOP_BAR_SIZES].reverse().find((b) => h >= b.h) ?? TOP_BAR_SIZES[0];
+  if (size.key === "s") return "";
+  const name = size.key === "m" ? (lang === "ja" ? "ミディアム" : lang === "zh" ? "中号" : lang === "ko" ? "중간" : "medium") : lang === "ja" ? "ラージ" : lang === "zh" ? "大号" : lang === "ko" ? "대형" : "large";
+  if (lang === "ja") return `（${name}サイズ、高さ ${h}dp、タイトルはアイコン列の下の行）`;
+  if (lang === "zh") return `（${name}，高 ${h}dp，标题位于图标行下方）`;
+  if (lang === "ko") return `(${name} 크기, 높이 ${h}dp, 제목은 아이콘 줄 아래)`;
+  return ` (${name} size, ${h}dp tall, title on its own line under the icons)`;
+}
+
 /** what a carousel's cards say, in order, for the cards that say anything */
 function carouselCardsText(it: Item, lang: Lang): string {
   const q = quote(lang);
@@ -292,7 +306,7 @@ function itemJa(it: Item): string {
     case "chip":
       return `${q(it.label)}のチップ${it.checked ? "（選択状態）" : ""}${it.icon && !it.checked ? `（${it.icon} アイコン付き）` : ""}${chipHeightText(it, "ja")}`;
     case "topAppBar":
-      return `タイトル${q(it.label)}のトップアプリバー${it.icon ? `。左に ${it.icon}` : ""}${it.icon2 ? `、右に ${it.icon2}` : ""}${it.icon || it.icon2 ? " のアイコンボタン" : ""}`;
+      return `タイトル${q(it.label)}のトップアプリバー${topBarSizeText(it, "ja")}${it.icon ? `。左に ${it.icon}` : ""}${it.icon2 ? `、右に ${it.icon2}` : ""}${it.icon || it.icon2 ? " のアイコンボタン" : ""}`;
     case "bottomNav": {
       const tabs = (it.tabs ?? []).map((t) => `${q(t.label || "ラベルなし")}(${t.icon || "アイコンなし"})`);
       return `${tabs.length}項目のナビゲーションバー（${tabs.join("、")}。${selectedText(it, "ja")}）`;
@@ -360,8 +374,6 @@ function itemJa(it: Item): string {
     }
     case "radio":
       return `${q(it.label)}のラジオボタン（初期状態は${it.checked ? "選択" : "未選択"}）`;
-    case "badge":
-      return hasText(it.label) ? `${q(it.label)}と表示するバッジ` : "小さな点のバッジ";
     default:
       return noun;
   }
@@ -389,7 +401,7 @@ function itemEn(it: Item): string {
     case "chip":
       return `a chip ${q(it.label)}${it.checked ? " (selected)" : ""}${it.icon && !it.checked ? ` with a ${it.icon} icon` : ""}${chipHeightText(it, "en")}`;
     case "topAppBar":
-      return `a top app bar titled ${q(it.label)}${it.icon ? ` with a ${it.icon} icon button on the left` : ""}${it.icon2 ? `${it.icon ? " and" : " with"} ${it.icon2} on the right` : ""}`;
+      return `a top app bar titled ${q(it.label)}${topBarSizeText(it, "en")}${it.icon ? ` with a ${it.icon} icon button on the left` : ""}${it.icon2 ? `${it.icon ? " and" : " with"} ${it.icon2} on the right` : ""}`;
     case "bottomNav": {
       const tabs = (it.tabs ?? []).map((t) => `${q(t.label || "unlabeled")} (${t.icon || "no icon"})`);
       return `a navigation bar with ${tabs.length} destinations: ${tabs.join(", ")}; ${selectedText(it, "en")}`;
@@ -457,8 +469,6 @@ function itemEn(it: Item): string {
     }
     case "radio":
       return `a radio button ${q(it.label)} (initially ${it.checked ? "selected" : "unselected"})`;
-    case "badge":
-      return hasText(it.label) ? `a badge reading ${q(it.label)}` : "a small dot badge";
     default:
       return noun;
   }
@@ -486,7 +496,7 @@ function itemZh(it: Item): string {
     case "chip":
       return `${q(it.label)}标签片${it.checked ? "（选中状态）" : ""}${it.icon && !it.checked ? `（带 ${it.icon} 图标）` : ""}${chipHeightText(it, "zh")}`;
     case "topAppBar":
-      return `标题为${q(it.label)}的顶部应用栏${it.icon ? `，左侧是 ${it.icon}` : ""}${it.icon2 ? `，右侧是 ${it.icon2}` : ""}${it.icon || it.icon2 ? " 图标按钮" : ""}`;
+      return `标题为${q(it.label)}的顶部应用栏${topBarSizeText(it, "zh")}${it.icon ? `，左侧是 ${it.icon}` : ""}${it.icon2 ? `，右侧是 ${it.icon2}` : ""}${it.icon || it.icon2 ? " 图标按钮" : ""}`;
     case "bottomNav": {
       const tabs = (it.tabs ?? []).map((t) => `${q(t.label || "无标签")}(${t.icon || "无图标"})`);
       return `${tabs.length}个项目的导航栏（${tabs.join("、")}，${selectedText(it, "zh")}）`;
@@ -554,8 +564,6 @@ function itemZh(it: Item): string {
     }
     case "radio":
       return `${q(it.label)}单选按钮（初始状态为${it.checked ? "选中" : "未选中"}）`;
-    case "badge":
-      return hasText(it.label) ? `显示${q(it.label)}的徽标` : "小圆点徽标";
     default:
       return noun;
   }
@@ -574,7 +582,7 @@ function itemKo(it: Item): string {
     case "fab": return `${it.icon ?? "빈"} 아이콘의 ${v} FAB${it.size && it.size >= 96 ? "(대형)" : it.size && it.size <= 40 ? "(소형)" : ""}${fabMenuText(it, "ko")}`;
     case "extendedFab": return `${q(it.label)}${it.icon ? ` 및 ${it.icon} 아이콘` : ""} 확장 FAB(${v}${it.size2 && it.size2 !== 56 ? `, 높이 ${it.size2}dp` : ""})${fabMenuText(it, "ko")}`;
     case "chip": return `${q(it.label)} 칩${it.checked ? "(선택됨)" : ""}${it.icon && !it.checked ? `(${it.icon} 아이콘 포함)` : ""}${chipHeightText(it, "ko")}`;
-    case "topAppBar": return `제목이 ${q(it.label)}인 상단 앱 바${it.icon ? `, 왼쪽 ${it.icon}` : ""}${it.icon2 ? `, 오른쪽 ${it.icon2}` : ""}${it.icon || it.icon2 ? " 아이콘 버튼" : ""}`;
+    case "topAppBar": return `제목이 ${q(it.label)}인 상단 앱 바${topBarSizeText(it, "ko")}${it.icon ? `, 왼쪽 ${it.icon}` : ""}${it.icon2 ? `, 오른쪽 ${it.icon2}` : ""}${it.icon || it.icon2 ? " 아이콘 버튼" : ""}`;
     case "bottomNav": {
       const tabs = (it.tabs ?? []).map((t) => `${q(t.label || "레이블 없음")}(${t.icon || "아이콘 없음"})`);
       return `${tabs.length}개 항목의 내비게이션 바(${tabs.join(", ")}, ${selectedText(it, "ko")})`;
@@ -623,7 +631,6 @@ function itemKo(it: Item): string {
       return `${labels.join(", ")}의 탭 ${labels.length}개(${selectedText(it, "ko")}${isScrollableTabs(it) ? ", 가로로 스크롤되는 탭" : ""})`;
     }
     case "radio": return `${q(it.label)} 라디오 버튼(초기 상태 ${it.checked ? "선택됨" : "선택 안 됨"})`;
-    case "badge": return hasText(it.label) ? `${q(it.label)}을 표시하는 배지` : "작은 점 배지";
     default: return noun;
   }
 }
@@ -1076,7 +1083,7 @@ const STYLE_NOTES: Record<Lang, Partial<Record<Kind | "boxSheet", string>>> = {
     chip:
       "チップ: 既定は高さ 32dp、角丸 8dp。高さを指定されたチップは M3 のサイズ（XS 32dp / S 40dp / M 56dp）に従い、左右の余白・文字・アイコンをそのサイズのものにする。選択状態は secondaryContainer で塗り、先頭にチェックアイコンを出す。横に連結したチップグループは 3dp の隙間で並べ、隣り合う内側の角だけ 4dp に小さくし、外側の角は丸のままにして、1 つの高さを共有する。はみ出す場合は横スクロール。",
     topAppBar:
-      "トップアプリバー: 高さ 64dp、背景は surface。背景はステータスバーの後ろまで伸ばし、その分（システムインセット）だけ上に余白を取る。タイトルは titleLarge、左右のアイコンボタンは 48dp。スクロール時に surfaceContainer へ色が変わる標準の挙動でよい。",
+      "トップアプリバー: 高さ 64dp、背景は surface。背景はステータスバーの後ろまで伸ばし、その分（システムインセット）だけ上に余白を取る。タイトルは titleLarge、左右のアイコンボタンは 48dp。スクロール時に surfaceContainer へ色が変わる標準の挙動でよい。ミディアム／ラージと指定されたバーは M3 の flexible top app bar で、高さ 112dp／152dp、アイコンは上 64dp の列に、タイトルは下段に独立した行（headlineSmall／headlineMedium）で置き、スクロールで小さいバーに縮む。",
     bottomNav:
       "ナビゲーションバー: 高さ 80dp、背景は surfaceContainer。背景は画面下端のジェスチャーナビゲーション領域まで伸ばし、その分（システムインセット）だけ下に余白を取る。選択中の項目は secondaryContainer のピル型インジケータ（幅 64dp・高さ 32dp）で示し、アイコンは塗りつぶし、ラベルは labelMedium。",
     navRail:
@@ -1114,7 +1121,6 @@ const STYLE_NOTES: Record<Lang, Partial<Record<Kind | "boxSheet", string>>> = {
       "フローティングツールバー: M3 Expressive の HorizontalFloatingToolbar。高さ 64dp、角は完全な丸、画面下端から 16dp 上に浮かせ、内容の上に重ねる。スタンダードは surfaceContainer、ビブラントは primaryContainer。中のアイコンボタンは 48dp。",
     tabs: "タブ: M3 のプライマリタブ。高さ 48dp、ラベルは titleSmall、選択中のタブは primary の文字とラベル幅の 3dp インジケータ（上の角丸）、下に outlineVariant の区切り線。タブをタップすると内容が切り替わる。",
     radio: "ラジオボタン: 20dp の円。選択時は primary の枠と中央の点、未選択は onSurfaceVariant の枠。同じグループ内では 1 つだけ選べる。ラベルは右に bodyLarge。",
-    badge: "バッジ: 文字なしは 6dp の点、文字ありは高さ 16dp のピル。背景は error、文字は onError の labelSmall。アイコンや項目の右上に重ねて置く。",
   },
   en: {
     button:
@@ -1132,7 +1138,7 @@ const STYLE_NOTES: Record<Lang, Partial<Record<Kind | "boxSheet", string>>> = {
     chip:
       "Chips: 32dp tall by default, with 8dp corners. A chip given a height follows the M3 size scale (XS 32dp, S 40dp, M 56dp): take the side padding, the label size and the icon size of that size. The selected state fills with secondaryContainer and shows a leading check icon. A connected chip group is a row with 3dp gaps where only the inner adjoining corners shrink to 4dp, the outer corners stay round, and every chip shares one height; it scrolls horizontally when it overflows.",
     topAppBar:
-      "Top app bar: 64dp tall on surface, with its background extended behind the status bar (pad the top by the system inset). Title in titleLarge, 48dp icon buttons on each side. The standard tint to surfaceContainer on scroll is fine.",
+      "Top app bar: 64dp tall on surface, with its background extended behind the status bar (pad the top by the system inset). Title in titleLarge, 48dp icon buttons on each side. A bar named medium or large is M3's flexible top app bar: 112dp or 152dp tall, the icons in the top 64dp row and the title on its own line at the foot (headlineSmall / headlineMedium), collapsing to the small bar on scroll. The standard tint to surfaceContainer on scroll is fine.",
     bottomNav:
       "Navigation bar: 80dp tall on surfaceContainer, with its background extended down through the gesture navigation area (pad the bottom by the system inset). The active destination shows a secondaryContainer pill indicator (64×32dp), a filled icon and a labelMedium label.",
     navRail:
@@ -1170,7 +1176,6 @@ const STYLE_NOTES: Record<Lang, Partial<Record<Kind | "boxSheet", string>>> = {
       "Floating toolbar: the M3 Expressive HorizontalFloatingToolbar. 64dp tall, fully rounded, floating 16dp above the bottom edge over the content. Standard uses surfaceContainer, vibrant uses primaryContainer. The icon buttons inside are 48dp.",
     tabs: "Tabs: M3 primary tabs. 48dp tall, labels in titleSmall; the selected tab has primary text and a 3dp label-width indicator with rounded top corners, with an outlineVariant divider underneath. Tapping a tab switches the content.",
     radio: "Radio buttons: 20dp circles. Selected shows a primary ring with a center dot, unselected an onSurfaceVariant ring. Only one in a group can be selected. Label on the right in bodyLarge.",
-    badge: "Badges: a 6dp dot without text, a 16dp-tall pill with text. Background error, text onError in labelSmall. Overlay it on the top-right of an icon or item.",
   },
   zh: {
     button:
@@ -1187,7 +1192,7 @@ const STYLE_NOTES: Record<Lang, Partial<Record<Kind | "boxSheet", string>>> = {
     chip:
       "标签片：默认高 32dp，圆角 8dp。指定了高度的标签片遵循 M3 尺寸（XS 32dp / S 40dp / M 56dp）：左右内边距、文字和图标取该尺寸的值。选中状态用 secondaryContainer 填充并在前面显示勾选图标。横向相连的标签片组以 3dp 间距排列，只把相邻的内侧圆角缩小到 4dp，外侧保持圆角，并共享同一高度；溢出时横向滚动。",
     topAppBar:
-      "顶部应用栏：高 64dp，背景为 surface。背景延伸到状态栏后面，并按系统内边距在顶部留出空间。标题用 titleLarge，左右图标按钮 48dp。滚动时变为 surfaceContainer 的标准行为即可。",
+      "顶部应用栏：高 64dp，背景为 surface。背景延伸到状态栏后面，并按系统内边距在顶部留出空间。标题用 titleLarge，左右图标按钮 48dp。滚动时变为 surfaceContainer 的标准行为即可。指定为中号／大号的应用栏是 M3 的 flexible top app bar：高 112dp／152dp，图标位于顶部 64dp 一行，标题单独占底部一行（headlineSmall／headlineMedium），滚动时收缩为小号应用栏。",
     bottomNav:
       "导航栏：高 80dp，背景为 surfaceContainer。背景延伸到屏幕底部的手势导航区域，并按系统内边距在底部留出空间。选中项用 secondaryContainer 的胶囊指示器（宽 64dp、高 32dp）表示，图标为填充样式，标签用 labelMedium。",
     navRail:
@@ -1223,7 +1228,6 @@ const STYLE_NOTES: Record<Lang, Partial<Record<Kind | "boxSheet", string>>> = {
       "悬浮工具栏：M3 Expressive 的 HorizontalFloatingToolbar。高 64dp，完全圆角，悬浮在距屏幕底部 16dp 处并覆盖在内容之上。标准样式用 surfaceContainer，鲜明样式用 primaryContainer。内部图标按钮 48dp。",
     tabs: "标签页：M3 的主标签页。高 48dp，标签用 titleSmall，选中项文字为 primary 并带与标签同宽的 3dp 指示条（上方圆角），下方为 outlineVariant 分割线。点击标签切换内容。",
     radio: "单选按钮：20dp 圆形。选中时为 primary 的圆环加中心圆点，未选中为 onSurfaceVariant 圆环。同一组内只能选一个。标签在右侧，用 bodyLarge。",
-    badge: "徽标：无文字时为 6dp 圆点，有文字时为高 16dp 的胶囊。背景为 error，文字为 onError 的 labelSmall。叠放在图标或项目的右上角。",
   },
   ko: {
     button: "버튼: 높이 56dp의 중간 크기, 완전 둥근 알약 모양. 채움은 primary, 토널은 secondaryContainer, 윤곽선은 1dp outline 테두리를 사용한다. 연결 버튼 그룹은 간격 3dp, 맞닿는 안쪽 모서리 8dp, 바깥쪽 모서리는 둥글게 유지한다. 높이가 지정된 버튼은 M3 크기(XS 32dp / S 40dp / M 56dp / L 96dp / XL 136dp)를 따라 좌우 여백, 글자 크기, 아이콘 크기를 그 크기의 값으로 하고 모서리는 높이의 절반으로 한다.",
@@ -1239,7 +1243,7 @@ const STYLE_NOTES: Record<Lang, Partial<Record<Kind | "boxSheet", string>>> = {
     extendedFab: "확장 FAB: 높이 56dp(M3의 세 크기는 56 / 80 / 96dp이며 모서리와 글자도 이에 맞춘다), 모서리 16dp, 왼쪽에 아이콘, 오른쪽에 레이블을 둔다.",
     chip:
       "칩: 기본 높이 32dp, 모서리 8dp. 높이가 지정된 칩은 M3 크기(XS 32dp / S 40dp / M 56dp)를 따라 좌우 여백, 글자 크기, 아이콘 크기를 그 크기의 값으로 한다. 선택 상태는 secondaryContainer로 채우고 앞쪽에 체크 아이콘을 표시한다. 연결 칩 그룹은 간격 3dp, 맞닿는 안쪽 모서리 4dp, 바깥쪽 모서리는 둥글게 유지하며 하나의 높이를 공유하고, 넘치면 가로 스크롤한다.",
-    topAppBar: "상단 앱 바: 높이 64dp, 배경 surface. 상태 표시줄 뒤까지 배경을 늘리고 시스템 인셋만큼 위쪽 여백을 둔다. 제목은 titleLarge, 양쪽 아이콘 버튼은 48dp를 사용한다.",
+    topAppBar: "상단 앱 바: 높이 64dp, 배경 surface. 상태 표시줄 뒤까지 배경을 늘리고 시스템 인셋만큼 위쪽 여백을 둔다. 제목은 titleLarge, 양쪽 아이콘 버튼은 48dp를 사용한다. 중간/대형으로 지정된 바는 M3 flexible top app bar로 높이 112dp/152dp, 아이콘은 위 64dp 줄에, 제목은 아래 별도 줄(headlineSmall/headlineMedium)에 두고 스크롤하면 작은 바로 줄어든다.",
     bottomNav: "내비게이션 바: 높이 80dp, 배경 surfaceContainer. 제스처 내비게이션 영역까지 배경을 늘리고 시스템 인셋만큼 아래쪽 여백을 둔다. 선택 항목은 64×32dp secondaryContainer 알약 표시기, 채운 아이콘, labelMedium 레이블로 표시한다.",
     searchBar: "검색창: 높이 56dp, 완전 둥근 모서리, 배경 surfaceContainerHigh. 앞쪽 검색 아이콘과 지정된 뒤쪽 아이콘을 둔다.",
     card: "카드: 모서리 20dp. 이미지 영역은 각 카드의 설명에 따라 위쪽·앞쪽·뒤쪽·배경 전체 중 한 곳에 배치한다(배경일 때는 텍스트 쪽에서 스크림을 넣는다. 밝은 텍스트에는 검정, 어두운 텍스트에는 흰색 페이드). 이미지는 비율을 유지한 채 가운데를 기준으로 잘라 영역을 채운다. 채움은 surfaceContainerHighest, 돌출은 surfaceContainerLow와 Level 1 그림자, 윤곽선은 1dp outlineVariant 테두리를 사용한다. 제목 titleMedium, 본문 bodyMedium. 안쪽 여백 20dp, 제목과 본문 사이 4dp, 이미지와 텍스트 사이 12dp.",
@@ -1266,7 +1270,6 @@ const STYLE_NOTES: Record<Lang, Partial<Record<Kind | "boxSheet", string>>> = {
     toolbar: "플로팅 도구 모음: M3 Expressive HorizontalFloatingToolbar. 높이 64dp, 완전 둥근 모서리로 화면 아래쪽에서 16dp 띄운다. 표준은 surfaceContainer, 비브런트는 primaryContainer, 내부 아이콘 버튼은 48dp.",
     tabs: "탭: M3 기본 탭. 높이 48dp, 레이블 titleSmall. 선택 탭은 primary 텍스트와 레이블 너비의 3dp 표시기를 사용하고 아래에 outlineVariant 구분선을 둔다.",
     radio: "라디오 버튼: 20dp 원형. 선택 시 primary 테두리와 가운데 점, 미선택 시 onSurfaceVariant 테두리. 그룹에서 하나만 선택되며 레이블은 오른쪽 bodyLarge.",
-    badge: "배지: 텍스트가 없으면 6dp 점, 있으면 높이 16dp 알약 모양. 배경 error, 텍스트 onError/labelSmall로 아이콘이나 항목 오른쪽 위에 겹쳐 둔다.",
   },
 };
 

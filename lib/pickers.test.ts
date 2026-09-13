@@ -27,6 +27,12 @@ import {
   Doc,
   Item,
   CARD_GAP,
+  TOP_BAR_SIZES,
+  choiceTypePatch,
+  fieldTypePatch,
+  pictureTypePatch,
+  topBarHeightOf,
+  KIND_SPEC,
   carouselCountOf,
   carouselLayoutOf,
   carouselScrollMax,
@@ -258,5 +264,64 @@ describe("a carousel's row of cards", () => {
     expect(next.actions?.["tab:0"]).toEqual({ to: "f2", transition: "slide" });
     /* a row already made of cards is left exactly as it is */
     expect(migrateCarousel(next)).toBe(next);
+  });
+});
+
+describe("the parts that switch kind inside one panel", () => {
+  it("turns a switch into a checkbox and back, keeping its words and its state", () => {
+    const sw: Item = { ...makeItem("switch"), id: "s", label: "Wi-Fi", checked: true, size: 240, noCheck: true };
+    const cb = { ...sw, ...choiceTypePatch(sw, "checkbox") };
+    expect(cb.kind).toBe("checkbox");
+    expect(cb.label).toBe("Wi-Fi");
+    expect(cb.checked).toBe(true);
+    /* the width and the handle's check belong to a switch alone */
+    expect(cb.size).toBeUndefined();
+    expect(cb.noCheck).toBeUndefined();
+    expect(choiceTypePatch(cb, "checkbox")).toEqual({});
+  });
+
+  it("turns a picture into a map and keeps its box, but not the picture", () => {
+    const img: Item = { ...makeItem("image"), id: "i", size: 240, src: "data:x", radiusTop: 12 };
+    const map = { ...img, ...pictureTypePatch(img, "map") };
+    expect(map.kind).toBe("map");
+    expect(map.size).toBe(240);
+    expect(map.radiusTop).toBe(12);
+    expect(map.src).toBeUndefined();
+    /* back to a picture, the box keeps its width and gets a picture again if one is put on it */
+    expect({ ...map, ...pictureTypePatch(map, "image") }.size).toBe(240);
+  });
+
+  it("turns a text field into a dropdown with options to pick from, and back without them", () => {
+    const tf: Item = { ...makeItem("textField"), id: "t", label: "Country" };
+    const sel = { ...tf, ...fieldTypePatch(tf, "select") };
+    expect(sel.kind).toBe("select");
+    expect(sel.tabs?.length).toBeGreaterThan(0);
+    expect(sel.label).toBe("Country");
+    const back = { ...sel, selected: 1, ...fieldTypePatch(sel, "textField") };
+    expect(back.kind).toBe("textField");
+    expect(back.selected).toBeUndefined();
+  });
+});
+
+describe("the top app bar's three sizes", () => {
+  const bar = (patch: Partial<Item> = {}): Item => ({ ...makeItem("topAppBar"), id: "b", ...patch });
+
+  it("is the small bar until it is given a height, and never taller than the large one", () => {
+    expect(topBarHeightOf(bar())).toBe(64);
+    expect(topBarHeightOf(bar({ size2: 112 }))).toBe(112);
+    expect(topBarHeightOf(bar({ size2: 400 }))).toBe(TOP_BAR_SIZES[TOP_BAR_SIZES.length - 1].h);
+    expect(TOP_BAR_SIZES.map((b) => b.h)).toEqual([64, 112, 152]);
+  });
+
+  it("keeps the status bar above whatever height it takes on a phone", () => {
+    expect(sizeOf(bar(), {}).h).toBe(64 + 24);
+    expect(sizeOf(bar({ size2: 152 }), {}).h).toBe(152 + 24);
+    expect(KIND_SPEC.topAppBar.size2?.presets).toEqual([64, 112, 152]);
+  });
+
+  it("names the size in the prompt", () => {
+    const out = buildPrompt(docWith(bar({ label: "Inbox", size2: 112 })), {}, undefined, "en");
+    expect(out).toContain("medium size, 112dp tall");
+    expect(buildPrompt(docWith(bar({ label: "Inbox" })), {}, undefined, "en")).not.toContain("dp tall, title");
   });
 });
