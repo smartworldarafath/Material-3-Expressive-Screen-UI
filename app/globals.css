@@ -101,7 +101,10 @@ body {
 .m3-size-ease,
 .m3-size-ease .msr {
   transition: padding 340ms cubic-bezier(0.2, 0, 0, 1), gap 340ms cubic-bezier(0.2, 0, 0, 1),
-    font-size 340ms cubic-bezier(0.2, 0, 0, 1), height 340ms cubic-bezier(0.2, 0, 0, 1);
+    font-size 340ms cubic-bezier(0.2, 0, 0, 1), height 340ms cubic-bezier(0.2, 0, 0, 1),
+    /* a segment that changes shape -- a split button's arrow while its menu is open -- rounds
+       off over the shorter time a corner takes rather than the time a size does */
+    border-radius 220ms cubic-bezier(0.2, 0, 0, 1);
 }
 /* while an edge or a slider is being dragged the part follows the pointer instead */
 .m3-size-now .m3-size-ease,

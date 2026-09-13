@@ -29,6 +29,10 @@ import {
   fabOpen,
   hasMenu,
   menuOpen,
+  menuRisesAt,
+  menuUp,
+  opensMenu,
+  splitOpens,
   migrateFabMenu,
   buttonMinWidth,
   explodeGroup,
@@ -1182,6 +1186,20 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
     setGesture(g);
   };
 
+  /** where the finger is inside the part being carried: the copy that follows the pointer is
+   *  drawn lit at that point, so the light of the press is not lost when the drag begins */
+  const [dragLit, setDragLit] = useState<{ x: number; y: number; at: number } | null>(null);
+  /** the part that has just landed, and where the press was on it: it takes the light over,
+   *  already grown, and lets it go out in place */
+  const [landed, setLanded] = useState<{ id: string; x: number; y: number } | null>(null);
+  const landTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lightLands = (id: string, x: number, y: number) => {
+    setLanded({ id, x, y });
+    if (landTimer.current) clearTimeout(landTimer.current);
+    /* long enough to be drawn: taking it away again is what makes it fade */
+    landTimer.current = setTimeout(() => setLanded(null), 50);
+  };
+
   const onItemPointerDown = (
     e: React.PointerEvent,
     g: Group,
@@ -1225,6 +1243,9 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
     /* a locked group's part stays selectable, but dragging it does nothing */
     if (g.locked) return;
     setPressedId(item.id);
+    /* the moment of the press travels with it, so the light carries on rather than starting over
+       when the part is handed to the copy that follows the pointer */
+    setDragLit({ x: pt.x - left, y: pt.y - top, at: performance.now() });
     const d: DragState = {
       item,
       base: item,
@@ -1261,6 +1282,7 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
     sy.jump(pt.y - offY);
     setSelectedIds([item.id]);
     setRightTab("edit");
+    setDragLit({ x: offX, y: offY, at: performance.now() });
     const d: DragState = {
       item,
       base: item,
@@ -1330,8 +1352,9 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
     /* a circle is pulled by a point on it: the drag reads along the diagonal and the one
      * measure it has -- its diameter -- follows, so it stays round the whole way */
     const round = CORNERS.includes(side);
-    /* an extended FAB and a chip are as wide as their label makes them: their one measure is height */
-    const tall = item.kind === "extendedFab" || item.kind === "chip";
+    /* an extended FAB, a chip and a split button are as wide as their label makes them:
+     * their one measure is height */
+    const tall = item.kind === "extendedFab" || item.kind === "chip" || item.kind === "splitButton";
     const box = sizeOf(item, widthsRef.current);
     const startV = vertical || tall ? box.h : box.w;
     widthDragRef.current = {
@@ -1517,6 +1540,8 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
       const d = dragRef.current;
       dragRef.current = null;
       setPressedId(null);
+      /* the finger is off: whatever is holding the light lets it go out */
+      setDragLit(null);
       if (!d) return;
       if (!d.active) {
         setDrag(null);
@@ -1633,6 +1658,7 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
           ? prev
           : [...prev, ng],
       );
+      lightLands(item.id, d.baseOffX, d.baseOffY);
       setDrag(null);
     };
 
@@ -2547,8 +2573,8 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
   const [menuId, setMenuId] = useState<string | null>(null);
   useEffect(() => setShowOnId(null), [primaryId]);
   const onLook = (it: Item): Item => {
-    /* a FAB shows its menu while the panel is on the tab that sets it up */
-    if (it.id === menuId && hasMenu(it)) return { ...it, [fabOpen]: true };
+    /* a FAB and a split button show their menu while the panel is on the tab that sets it up */
+    if (it.id === menuId && opensMenu(it)) return { ...it, [fabOpen]: true };
     return it.id === showOnId && it.toggle ? { ...it, label: it.toggle.label ?? it.label, icon: toggleIcon(it), variant: it.toggle.variant ?? it.variant } : it;
   };
   const selectedRect = useMemo(() => {
@@ -3448,6 +3474,7 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
                 widths={widths}
                 radii={corners.get(pl.item.id)}
                 pressed={false}
+                ripple={!handMode}
                 selected={selectedSet.has(pl.item.id)}
                 inRun={runIds.has(pl.item.id)}
                 interactive={!handMode}
@@ -3504,11 +3531,19 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
     /* the corner is the button's own, menu or no menu: the entries rise out of it and the
      * button itself never moves */
     const corner = g.items.length === 1 && isFab(g.items[0].kind) ? sizeOf(g.items[0], widths) : null;
+    /* a split button's menu drops below the button or rises above it, whichever its screen has
+     * room for; a rising one hangs the run from its own bottom, so the button never moves */
+    const menuPart = g.items.length === 1 && g.items[0].id === menuId && splitOpens(g.items[0]) ? g.items[0] : null;
+    const rises = !!menuPart && menuRisesAt(menuPart, g.y, frameOfGroup(g, framesRef.current, widths) ?? null);
     /* The corner is held by the run's own translate rather than by the offset it is animated to.
      * Both halves of it -- the size in pixels and the box's own 100% -- are then settled by the
      * browser in the frame React hands them over in, so a size being dragged cannot leave the
      * drawn box a step behind the offset and make it shiver. */
-    const hang = corner ? `calc(${corner.w}px - 100%) calc(${corner.h}px - 100%)` : undefined;
+    const hang = corner
+      ? `calc(${corner.w}px - 100%) calc(${corner.h}px - 100%)`
+      : rises && menuPart
+        ? `0 calc(${sizeOf(menuPart, widths).h}px - 100%)`
+        : undefined;
 
     return (
       <motion.div
@@ -3582,11 +3617,14 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
           return (
             <M3Node
               key={c.item.id}
-              item={onLook(c.item)}
+              item={menuPart && c.item.id === menuPart.id ? { ...onLook(c.item), [menuUp]: rises } : onLook(c.item)}
               palette={p}
               widths={widths}
               radii={radii}
               pressed={pressedId === c.item.id}
+              /* a press lights the part up from inside, the way it does in the preview */
+              ripple={!handMode}
+              lit={landed && landed.id === c.item.id ? { x: landed.x, y: landed.y, grown: true } : null}
               selected={selectedSet.has(c.item.id)}
               inRun={g.items.length > 1}
               instant={widthDragId === c.item.id || sizeEditId === c.item.id}
@@ -3732,6 +3770,7 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
             item={drag.item}
             palette={p}
             widths={widths}
+            lit={dragLit}
             dragging
             radii={(() => {
               const conn = connectSpecOf(drag.item);
@@ -4064,7 +4103,7 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
                   four points around its circle: dragging one changes the part's size in place,
                   and whatever sits opposite stays where it is */}
               {/* a FAB showing its menu is being edited as a menu, not sized as a button */}
-              {!handMode && !drag && selectedIds.length === 1 && selected?.id !== menuId && (selected?.kind === "button" || selected?.kind === "iconButton" || selected?.kind === "chip" || selected?.kind === "fab" || selected?.kind === "extendedFab") && (() => {
+              {!handMode && !drag && selectedIds.length === 1 && selected?.id !== menuId && (selected?.kind === "button" || selected?.kind === "iconButton" || selected?.kind === "chip" || selected?.kind === "splitButton" || selected?.kind === "fab" || selected?.kind === "extendedFab") && (() => {
                 const g = groups.find((x) => x.items.length === 1 && !x.free && !x.locked && x.items[0].id === selected.id);
                 if (!g) return null;
                 const b = groupBounds(g, widths);

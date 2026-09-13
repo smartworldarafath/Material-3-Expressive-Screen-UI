@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { Item } from "@/lib/tokens";
 import { AnimatePresence, animate, motion, useMotionValue, useTransform, useReducedMotion, useIsPresent } from "motion/react";
 import type { TargetAndTransition, Variants } from "motion/react";
@@ -24,13 +24,25 @@ import {
   PHONE_W,
   Palette,
   SLIDE_SPEC,
+  SPLIT_MAIN_SLOT,
+  SPLIT_MENU_ITEM_H,
+  SPLIT_MENU_PAD,
+  SPLIT_MENU_SHEET_GAP,
+  SPLIT_MENU_SLOT,
   STATUS_BAR_H,
   SWIPE_DIRS,
   SwipeDir,
   TAPPABLE,
   Transition,
   baseRadii,
+  buttonHeightOf,
   connectSpecOf,
+  menuRises,
+  menuRisesAt,
+  menuUp,
+  opensMenu,
+  splitMenuHeight,
+  splitOpens,
   fontFamilyOf,
   freeRadii,
   frameRadius,
@@ -48,7 +60,8 @@ import {
   tabScrollOffset,
   SCROLL_TAB_W,
 } from "@/lib/tokens";
-import { Icon, M3Node, menuShutMs } from "./M3Node";
+import { Icon, M3Node, Ripples, contentColor, menuShutMs, rippleSize } from "./M3Node";
+import type { Ripple } from "./M3Node";
 import { IconBtn } from "./ui";
 import { t, useLang } from "@/lib/i18n";
 import { constrainModalRails, modalRailOf, updateRail } from "@/lib/rail";
@@ -136,7 +149,7 @@ const flips = (it: Item) => (TOGGLES as readonly string[]).includes(it.kind) || 
 /** the look of a part after the visitor tapped it */
 function flippedLook(it: Item): Item {
   /* a FAB opens its menu in place: the entries rise out of the button */
-  if (hasMenu(it)) return { ...it, [fabOpen]: true };
+  if (opensMenu(it)) return { ...it, [fabOpen]: true };
   if ((TOGGLES as readonly string[]).includes(it.kind)) return { ...it, checked: !it.checked };
   if (it.toggle) {
     return {
@@ -149,8 +162,8 @@ function flippedLook(it: Item): Item {
   return it;
 }
 
-/** A part in the preview: presses down and shows a state layer while the
- *  pointer is on it, then fires its action on release, like a real widget. */
+/** A part in the preview: a ripple spreads out of the point touched while the pointer is on it,
+ *  then it fires its action on release, like a real widget. */
 function Tappable({
   item,
   p,
@@ -184,7 +197,17 @@ function Tappable({
 }) {
   const lang = useLang();
   const [pressed, setPressed] = useState(false);
-  const [hot, setHot] = useState<string | null>(null);
+  /* the touches still lighting the part up; each fades once the finger is off it */
+  const [ripples, setRipples] = useState<Ripple[]>([]);
+  const nextRipple = useRef(0);
+  const addRipple = (e: React.PointerEvent, slot: string | null) => {
+    const el = e.currentTarget as HTMLElement;
+    const r = el.getBoundingClientRect();
+    const x = e.clientX - r.left;
+    const y = e.clientY - r.top;
+    setRipples((rs) => [...rs, { id: ++nextRipple.current, part: slot, x, y, d: rippleSize(r, x, y) }]);
+  };
+  const endRipples = () => setRipples((rs) => (rs.length ? [] : rs));
   const menu = !!menuOpen;
   /* a tab row with more tabs than fit scrolls: by wheel, touch, or dragging the row; a chosen tab is brought into view */
   const scrollTabs = isScrollableTabs(item);
@@ -222,7 +245,8 @@ function Tappable({
       window.removeEventListener("pointerup", end);
       window.removeEventListener("pointercancel", end);
       swallowClick.current = moved;
-      if (moved) setHot(null);
+      /* a row the finger dragged was never a tap: the light it took goes out with the drag */
+      if (moved) endRipples();
     };
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", end);
@@ -247,7 +271,44 @@ function Tappable({
   /* the live reading leads the held one: the box widens to the menu on the very frame the tap
      lands, and a layer still cut to the old one would flash across the whole width of it */
   const boxless = openMenu || menuCorner || item.kind === "fabMenu";
+  /* a split button is two shapes with a gap between them: a layer over the whole of it would grey
+     the gap, and the menu standing under it, so each half lights up inside its own shape instead */
+  const segmented = item.kind === "splitButton";
+  /* the ripple takes the colour of whatever is written on the part: white over a filled button,
+     the text's own colour over a pale one */
+  const rippleColor = contentColor(item, p);
+  const rippleNodes = (slot: string | null) => <Ripples list={ripples.filter((r) => r.part === slot)} color={rippleColor} />;
   const ref = useRef<HTMLDivElement>(null);
+  /* The shapes a part is drawn as, read off the drawing itself: a split button says where its two
+     halves are, and they are given a hit area each. Offsets rather than client rects, so a screen
+     drawn at a zoom still reports them in the part's own pixels. */
+  const [shapes, setShapes] = useState<{ key: string; style: React.CSSProperties }[]>([]);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    const found: { key: string; style: React.CSSProperties }[] = [];
+    if (el && item.kind === "splitButton") {
+      for (const seg of Array.from(el.querySelectorAll<HTMLElement>("[data-part-shape]"))) {
+        let x = 0;
+        let y = 0;
+        for (let node: HTMLElement | null = seg; node && node !== el; node = node.offsetParent as HTMLElement | null) {
+          x += node.offsetLeft;
+          y += node.offsetTop;
+        }
+        const cs = getComputedStyle(seg);
+        found.push({
+          key: seg.dataset.partShape as string,
+          style: {
+            left: x,
+            top: y,
+            width: seg.offsetWidth,
+            height: seg.offsetHeight,
+            borderRadius: `${cs.borderTopLeftRadius} ${cs.borderTopRightRadius} ${cs.borderBottomRightRadius} ${cs.borderBottomLeftRadius}`,
+          },
+        });
+      }
+    }
+    setShapes((was) => (JSON.stringify(was) === JSON.stringify(found) ? was : found));
+  });
 
   /* the open menu closes on a tap anywhere else or on Escape */
   useEffect(() => {
@@ -300,6 +361,20 @@ function Tappable({
     const n = item.tabs?.length ?? 0;
     for (let i = 0; i < n; i++) slots.push({ key: `tab:${i}`, style: { left: 8 + i * 52, width: 48, top: 8, height: 48, borderRadius: 24 } });
   }
+  if (onSlot && item.kind === "splitButton") {
+    const h = buttonHeightOf(item);
+    const open = fabMenuOpen(item);
+    const rises = open && menuRises(item);
+    /* each half is a target of its own, cut to the shape the part was drawn with, so the light of
+       a press stays inside the half that was pressed however the button is sized */
+    for (const seg of shapes) slots.push(seg);
+    if (open) {
+      const first = (rises ? 0 : h + SPLIT_MENU_SHEET_GAP) + SPLIT_MENU_PAD;
+      (item.tabs ?? []).forEach((_, i) =>
+        slots.push({ key: `tab:${i}`, style: { left: 0, right: 0, top: first + i * SPLIT_MENU_ITEM_H, height: SPLIT_MENU_ITEM_H } }),
+      );
+    }
+  }
   if (onSlot && item.kind === "fabMenu") {
     /* the pills hug their text on the right; the hit area covers the right part of the row */
     const n = item.tabs?.length ?? 0;
@@ -318,35 +393,47 @@ function Tappable({
           setPressed(true);
           return;
         }
-        if (live) setPressed(true);
+        if (live) {
+          setPressed(true);
+          if (!boxless && !segmented) addRipple(e, null);
+        }
       }}
       onPointerMove={(e) => {
         if (onValue && pressed) dragValue(e);
       }}
-      onPointerUp={() => setPressed(false)}
-      onPointerCancel={() => setPressed(false)}
-      onPointerLeave={() => !onValue && setPressed(false)}
+      onPointerUp={() => {
+        setPressed(false);
+        endRipples();
+      }}
+      onPointerCancel={() => {
+        setPressed(false);
+        endRipples();
+      }}
+      onPointerLeave={() => {
+        if (!onValue) setPressed(false);
+        endRipples();
+      }}
       onClick={onPick ? () => onMenu?.(!menu) : onTap}
       style={{ cursor: live || onValue ? "pointer" : "default", display: "flex", position: "relative", touchAction: scrollTabs ? "pan-x" : "none" }}
     >
       <M3Node item={item} palette={p} widths={widths} radii={radii} interactive={false} pressed={pressed && !onValue && !boxless} tabScroll={scrollTabs ? tabScroll : undefined} />
-      {live && !boxless && (
-        <motion.div
+      {live && !boxless && !segmented && (
+        <div
           aria-hidden
-          initial={false}
-          animate={{ opacity: pressed ? 1 : 0, scale: pressed ? 0.97 : 1 }}
-          transition={{ duration: pressed ? 0.08 : 0.24, ease: EASE }}
           style={{
             position: "absolute",
             inset: 0,
             pointerEvents: "none",
-            background: `color-mix(in srgb, ${p.onSurface} 12%, transparent)`,
+            overflow: "hidden",
+            color: rippleColor,
             borderTopLeftRadius: radii.tl,
             borderTopRightRadius: radii.tr,
             borderBottomLeftRadius: radii.bl,
             borderBottomRightRadius: radii.br,
           }}
-        />
+        >
+          {rippleNodes(null)}
+        </div>
       )}
       {(() => {
       const slotNodes = slots.map((s) => {
@@ -361,11 +448,11 @@ function Tappable({
           aria-current={onRailToggle && s.key === `tab:${item.selected ?? 0}` ? "page" : undefined}
           onPointerDown={(e) => {
             e.stopPropagation();
-            setHot(s.key);
+            addRipple(e, s.key);
           }}
-          onPointerUp={() => setHot(null)}
-          onPointerCancel={() => setHot(null)}
-          onPointerLeave={() => setHot(null)}
+          onPointerUp={endRipples}
+          onPointerCancel={endRipples}
+          onPointerLeave={endRipples}
           onClick={(e) => {
             e.stopPropagation();
             if (s.key === "railToggle") onRailToggle?.(e.detail !== 0);
@@ -375,13 +462,16 @@ function Tappable({
             position: "absolute",
             border: "none",
             padding: 0,
-            color: p.primary,
+            /* the ripple is the colour of whatever is written on the part, so it reads on any fill */
+            color: rippleColor,
             cursor: "pointer",
-            background: hot === s.key ? `color-mix(in srgb, ${p.onSurface} 12%, transparent)` : "transparent",
-            transition: "background 120ms",
+            background: "transparent",
+            overflow: "hidden",
             ...s.style,
           }}
-        />;
+        >
+          {rippleNodes(s.key)}
+        </Slot>;
       });
       if (!scrollTabs) return slotNodes;
       const n = item.tabs?.length ?? 0;
@@ -611,6 +701,10 @@ function Screen({
         /* a FAB opens its menu out of itself: the run hangs from the button's own bottom right,
          * so the entries rise above it and the button stays where the author put it */
         const fabCorner = g.items.length === 1 && hasMenu(g.items[0]) ? sizeOf({ ...g.items[0], [fabOpen]: undefined }, widths) : null;
+        /* a split button whose menu rises hangs from its own bottom edge, so the button itself
+           stays where the author put it and the sheet grows into the room above */
+        const rising = g.items.length === 1 && splitOpens(g.items[0]) && flipped.has(g.items[0].id) && menuRisesAt(g.items[0], g.y, frame);
+        const riseH = rising ? sizeOf({ ...g.items[0], [fabOpen]: undefined }, widths).h : 0;
         return (
         <div
           key={g.id}
@@ -625,9 +719,9 @@ function Screen({
               : {
                   position: "absolute",
                   left: g.x - frame.x + (fabCorner?.w ?? 0),
-                  top: g.y - frame.y + (fabCorner?.h ?? 0),
-                  translate: fabCorner ? "-100% -100%" : undefined,
-                  zIndex: g.items.some((it) => modalIds.has(it.id)) ? 4 : fabCorner ? 3 : g.items.some((it) => it.id === menuId) ? 2 : undefined,
+                  top: g.y - frame.y + (fabCorner?.h ?? riseH),
+                  translate: fabCorner ? "-100% -100%" : rising ? "0 -100%" : undefined,
+                  zIndex: g.items.some((it) => modalIds.has(it.id)) ? 4 : fabCorner ? 3 : g.items.some((it) => it.id === menuId || (splitOpens(it) && flipped.has(it.id))) ? 2 : undefined,
                   display: "flex",
                   flexDirection: g.axis === "x" ? "row" : "column",
                   alignItems: g.axis === "x" ? "center" : "stretch",
@@ -659,6 +753,8 @@ function Screen({
                   : baseRadii(it);
             const act = it.action;
             let shown = flipped.has(it.id) ? flippedLook(it) : it;
+            /* the menu drops below the button, or rises above it where the screen runs out */
+            if (splitOpens(shown) && flipped.has(it.id)) shown = { ...shown, [menuUp]: menuRisesAt(it, g.y, frame) };
             if (it.kind === "slider" && values[it.id] !== undefined) shown = { ...shown, value: values[it.id] };
             if (it.kind === "select" && values[it.id] !== undefined) shown = { ...shown, selected: values[it.id] };
             const navKind = it.kind === "bottomNav" || it.kind === "navRail" || it.kind === "tabs";
@@ -685,8 +781,21 @@ function Screen({
                 railAnimating={railMotion?.items.has(it.id)}
                 onTap={tap}
                 onSlot={
-                  slotActions || navKind
+                  slotActions || navKind || it.kind === "splitButton"
                     ? (slot, animate) => {
+                        /* the half with the words does what the button itself does, and a menu
+                           standing open gives way to it */
+                        if (it.kind === "splitButton" && slot === SPLIT_MAIN_SLOT) {
+                          if (flipped.has(it.id)) onFlip(it.id);
+                          tap?.();
+                          return;
+                        }
+                        /* the arrow opens the menu where it stands, and an entry shuts it again */
+                        if (splitOpens(it) && slot === SPLIT_MENU_SLOT) {
+                          onFlip(it.id);
+                          return;
+                        }
+                        if (splitOpens(it) && flipped.has(it.id) && slot.startsWith("tab:")) onFlip(it.id);
                         /* a tapped destination lights up where it opens nothing; where it opens a
                            screen, that screen's bar shows the destination its author chose, or the
                            tapped one when the author chose none */

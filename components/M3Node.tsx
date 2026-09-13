@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { motion, useReducedMotion } from "motion/react";
+import { createContext, useContext, useEffect, useRef, useState } from "react";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import {
   FAB_MENU_CLOSE,
   FAB_MENU_GAP,
@@ -13,6 +13,13 @@ import {
   NAV_BAR_H,
   Palette,
   Radii,
+  R_INNER,
+  SPLIT_GAP,
+  SPLIT_MAIN_SLOT,
+  SPLIT_MENU_ITEM_H,
+  SPLIT_MENU_PAD,
+  SPLIT_MENU_SHEET_GAP,
+  SPLIT_MENU_SLOT,
   STATUS_BAR_H,
   baseRadii,
   buttonHeightOf,
@@ -37,7 +44,9 @@ import {
   dateLayoutOf,
   onToken,
   scaleR,
+  menuRises,
   sizeOf,
+  splitMetrics,
   variantShadow,
   variantStyle,
   SETTLE_MS,
@@ -92,6 +101,115 @@ export function Icon({
       {name}
     </span>
   );
+}
+
+/** One touch of a part: where it landed, how far the circle has to travel to cover the shape it
+ *  landed in, and which shape that was -- a split button's two halves light up one at a time. */
+export type Ripple = {
+  id: number;
+  part: string | null;
+  x: number;
+  y: number;
+  d: number;
+  /** the size it starts at, as a part of the whole: a light handed from one drawing of a part to
+   *  another carries on from where the first one had got to rather than starting over */
+  from?: number;
+  /** how long it has left to finish growing, in seconds */
+  dur?: number;
+};
+
+/** how long a ripple takes to cover what it was started in */
+export const RIPPLE_GROW = 0.42;
+
+/** how far out of the point touched a circle must grow to cover the whole of an element */
+export function rippleSize(r: { width: number; height: number }, x: number, y: number): number {
+  return 2 * Math.max(Math.hypot(x, y), Math.hypot(r.width - x, y), Math.hypot(x, r.height - y), Math.hypot(r.width - x, r.height - y));
+}
+
+/** The circles themselves: they spread out of the point touched at the colour of whatever is
+ *  written on the part -- white over a filled button -- and fade once the finger is off it.
+ *  M3's pressed state layer is a tenth of that colour; the ripple arrives a shade stronger and
+ *  settles onto it. The caller gives them something to be clipped by. */
+export function Ripples({ list, color }: { list: Ripple[]; color: string }) {
+  const reducedMotion = useReducedMotion();
+  return (
+    <AnimatePresence>
+      {list.map((r) => (
+        <motion.span
+          key={r.id}
+          aria-hidden
+          initial={{ opacity: 0.16, scale: r.from ?? 0 }}
+          animate={{ opacity: 0.12, scale: 1 }}
+          exit={{ opacity: 0, scale: 1 }}
+          transition={reducedMotion ? { duration: 0 } : { scale: { duration: r.dur ?? RIPPLE_GROW, ease: MENU_EASE }, opacity: { duration: 0.3, ease: MENU_EASE } }}
+          style={{
+            position: "absolute",
+            left: r.x - r.d / 2,
+            top: r.y - r.d / 2,
+            width: r.d,
+            height: r.d,
+            borderRadius: "50%",
+            background: color,
+            pointerEvents: "none",
+          }}
+        />
+      ))}
+    </AnimatePresence>
+  );
+}
+
+/** what a part being pressed is lighting up, for the shapes drawn deep inside it to read */
+const RippleCtx = createContext<{ list: Ripple[]; color: string } | null>(null);
+
+/** the light of a press, inside one shape of a part: the shape clips it and keeps its corners */
+function RippleShape({ part }: { part: string | null }) {
+  const ctx = useContext(RippleCtx);
+  if (!ctx) return null;
+  return (
+    <span aria-hidden style={{ position: "absolute", inset: 0, overflow: "hidden", borderRadius: "inherit", pointerEvents: "none" }}>
+      <Ripples list={ctx.list.filter((r) => r.part === part)} color={ctx.color} />
+    </span>
+  );
+}
+
+/** the parts a press lights up from inside: the button family, each in its own shape */
+const RIPPLE_KINDS: Kind[] = ["button", "iconButton", "chip", "fab", "extendedFab", "splitButton"];
+
+/** the touches a part is holding, and where each of them landed */
+function useRipples(on: boolean) {
+  const [list, setList] = useState<Ripple[]>([]);
+  const next = useRef(0);
+  /* the light stays for as long as the finger is down, wherever it travels: a part being dragged
+   * across the canvas keeps it, and it fades once the finger is lifted rather than at the edge
+   * of the part. The release is watched on the window, because that is where a drag ends. */
+  const waiting = useRef<(() => void) | null>(null);
+  const end = () => {
+    waiting.current?.();
+    setList((rs) => (rs.length ? [] : rs));
+  };
+  const add = (e: React.PointerEvent) => {
+    if (!on) return;
+    /* a part made of more than one shape says which one was touched */
+    const seg = (e.target as HTMLElement | null)?.closest?.("[data-part-shape]") as HTMLElement | null;
+    const el = seg ?? (e.currentTarget as HTMLElement);
+    const r = el.getBoundingClientRect();
+    const x = e.clientX - r.left;
+    const y = e.clientY - r.top;
+    setList((rs) => [...rs, { id: ++next.current, part: seg?.dataset.partShape ?? null, x, y, d: rippleSize(r, x, y) }]);
+    waiting.current?.();
+    const done = () => {
+      waiting.current = null;
+      window.removeEventListener("pointerup", done);
+      window.removeEventListener("pointercancel", done);
+      setList((rs) => (rs.length ? [] : rs));
+    };
+    waiting.current = done;
+    window.addEventListener("pointerup", done);
+    window.addEventListener("pointercancel", done);
+  };
+  /* a part taken off the canvas mid-press leaves no listener behind */
+  useEffect(() => () => waiting.current?.(), []);
+  return { list, add, end };
 }
 
 const ellipsis = {
@@ -300,57 +418,169 @@ function TextContent({ item, p }: { item: Item; p: Palette }) {
   );
 }
 
-/** A split button: the labeled action and, after a hairline gap, a menu trigger.
- *  The two halves keep their own corners, so the box around them stays plain. */
-function SplitButtonContent({ item, p }: { item: Item; p: Palette }) {
+/** A split button: the labeled action and, after a hairline gap, the arrow that opens its menu.
+ *  Both segments are read off the button scale the height lands on, and they keep their own
+ *  corners, so the box around them stays plain. */
+function SplitButtonContent({ item, p, open }: { item: Item; p: Palette; open?: boolean }) {
   const w = useWeight();
   const st = variantStyle(item.variant, p);
-  const outer = scaleR(28);
-  const inner = scaleR(8);
+  const h = buttonHeightOf(item);
+  const m = splitMetrics(h);
+  const outer = scaleR(h / 2);
+  const inner = scaleR(R_INNER);
   const hasLabel = item.label.trim().length > 0;
+  /* with no label the icon is centred instead, the way a button with none is */
+  const padX = hasLabel ? m.padX : Math.round((m.h - m.icon) / 2);
   const shadow = variantShadow(item.variant);
   return (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: 2, height: H }}>
+    <span className="m3-size-ease" style={{ display: "inline-flex", alignItems: "center", gap: SPLIT_GAP, height: m.h }}>
       <span
+        className="m3-size-ease"
+        data-part-shape={SPLIT_MAIN_SLOT}
         style={{
           ...st,
           display: "inline-flex",
           alignItems: "center",
-          gap: 8,
-          height: H,
-          padding: hasLabel ? "0 20px 0 22px" : "0 16px",
+          gap: hasLabel && item.icon ? m.gap : 0,
+          height: m.h,
+          paddingLeft: padX,
+          paddingRight: padX,
           borderTopLeftRadius: outer,
           borderBottomLeftRadius: outer,
           borderTopRightRadius: inner,
           borderBottomRightRadius: inner,
-          fontSize: 16,
+          fontSize: m.font,
           fontWeight: w(500, 700),
           whiteSpace: "nowrap",
           boxSizing: "border-box",
           boxShadow: shadow,
+          position: "relative",
+          overflow: "hidden",
         }}
       >
-        {item.icon && <Icon name={item.icon} size={22} fill={item.variant === "filled"} />}
+        {item.icon && <Icon name={item.icon} size={m.icon} fill={item.variant === "filled"} />}
         {hasLabel && <span>{item.label}</span>}
+        <RippleShape part={SPLIT_MAIN_SLOT} />
       </span>
       <span
+        className="m3-size-ease"
+        data-part-shape={SPLIT_MENU_SLOT}
         style={{
           ...st,
           display: "inline-grid",
           placeItems: "center",
-          width: 52,
-          height: H,
-          borderTopLeftRadius: inner,
-          borderBottomLeftRadius: inner,
+          position: "relative",
+          overflow: "hidden",
+          /* the segment is as wide as its arrow with its own padding, so it eases like the other one */
+          height: m.h,
+          paddingLeft: m.trailPadX,
+          paddingRight: m.trailPadX,
+          /* opening the menu rounds this segment right off, the way M3 does it; the segment with
+             the words keeps the shape it had */
+          borderTopLeftRadius: open ? outer : inner,
+          borderBottomLeftRadius: open ? outer : inner,
           borderTopRightRadius: outer,
           borderBottomRightRadius: outer,
           boxSizing: "border-box",
           boxShadow: shadow,
         }}
       >
-        <Icon name="keyboard_arrow_down" size={24} />
+        {/* the arrow turns over while the menu it opened is showing */}
+        <span style={{ display: "inline-flex", transform: open ? "rotate(180deg)" : "none", transition: "transform 200ms cubic-bezier(0.2, 0, 0, 1)" }}>
+          <Icon name="keyboard_arrow_down" size={m.icon} />
+        </span>
+        <RippleShape part={SPLIT_MENU_SLOT} />
       </span>
     </span>
+  );
+}
+
+/** A split button with its menu open: the button where the author put it, and the sheet of
+ *  entries beside it -- below the button where the screen has room, above it where it does not.
+ *  The sheet grows out of the edge nearest the button, so the two read as one gesture. */
+function SplitMenuContent({ item, p, shown = true }: { item: Item; p: Palette; shown?: boolean }) {
+  const w = useWeight();
+  const reducedMotion = useReducedMotion();
+  const up = menuRises(item);
+  const tabs = item.tabs ?? [];
+  /* the preview draws its screens inside an AnimatePresence that blocks animations on mount, so
+     the sheet is drawn shut for one frame and told to open on the next */
+  const [phase, setPhase] = useState<"shut" | "open" | "closing">("shut");
+  useEffect(() => {
+    if (!shown) {
+      setPhase((was) => (was === "shut" ? "shut" : "closing"));
+      return;
+    }
+    const id = requestAnimationFrame(() => setPhase("open"));
+    return () => cancelAnimationFrame(id);
+  }, [shown]);
+  const open = phase === "open";
+  const sheet = (
+    <motion.div
+      initial={false}
+      animate={{ opacity: open ? 1 : 0, scaleY: open ? 1 : 0.7 }}
+      transition={reducedMotion ? { duration: 0 } : { duration: open ? MENU_ROLL : MENU_SHUT, ease: MENU_EASE }}
+      style={{
+        /* it unrolls out of the edge the button is on */
+        transformOrigin: up ? "50% 100%" : "50% 0%",
+        background: p.surfaceContainer,
+        color: p.onSurface,
+        borderRadius: scaleR(12),
+        padding: `${SPLIT_MENU_PAD}px 0`,
+        boxShadow: "0 8px 24px rgba(0,0,0,0.18), 0 2px 6px rgba(0,0,0,0.10)",
+        boxSizing: "border-box",
+        overflow: "hidden",
+      }}
+    >
+      {tabs.map((tab, i) => (
+        <motion.div
+          key={i}
+          initial={false}
+          /* the entry nearest the button is read first, so it is the first to arrive */
+          animate={{ opacity: open ? 1 : 0 }}
+          transition={
+            reducedMotion
+              ? { duration: 0 }
+              : open
+                ? { duration: 0.12, delay: (up ? tabs.length - 1 - i : i) * MENU_STAGGER }
+                : { duration: 0.06 }
+          }
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 12,
+            height: SPLIT_MENU_ITEM_H,
+            padding: "0 12px",
+            fontSize: 14,
+            fontWeight: w(500, 700),
+            whiteSpace: "nowrap",
+            boxSizing: "border-box",
+          }}
+        >
+          {tab.icon && <Icon name={tab.icon} size={24} />}
+          <span style={ellipsis}>{tab.label}</span>
+        </motion.div>
+      ))}
+    </motion.div>
+  );
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "stretch",
+        justifyContent: up ? "flex-end" : "flex-start",
+        gap: SPLIT_MENU_SHEET_GAP,
+        height: "100%",
+      }}
+    >
+      {up && sheet}
+      {/* the button keeps its own width whatever the sheet under it comes to */}
+      <span style={{ alignSelf: "flex-start" }}>
+        <SplitButtonContent item={item} p={p} open={open} />
+      </span>
+      {!up && sheet}
+    </div>
   );
 }
 
@@ -409,7 +639,7 @@ function BadgeContent({ item, p }: { item: Item; p: Palette }) {
 
 /** Content for kinds that size to their text; rendered again offscreen to measure. */
 export function MeasuredContent({ item, p }: { item: Item; p: Palette }) {
-  if (menuOpen(item)) return <FabMenuContent item={item} p={p} />;
+  if (menuOpen(item)) return item.kind === "splitButton" ? <SplitMenuContent item={item} p={p} /> : <FabMenuContent item={item} p={p} />;
   switch (item.kind) {
     case "button":
       return <ButtonContent item={item} />;
@@ -671,7 +901,7 @@ function Body({ item, p, tabScroll, menuShown }: { item: Item; p: Palette; tabSc
   const hasLabel = item.label.trim().length > 0;
   const hasSupporting = !!item.supporting?.trim();
 
-  if (menuOpen(item)) return <FabMenuContent item={item} p={p} shown={menuShown} />;
+  if (menuOpen(item)) return item.kind === "splitButton" ? <SplitMenuContent item={item} p={p} shown={menuShown} /> : <FabMenuContent item={item} p={p} shown={menuShown} />;
   if (MEASURED.includes(item.kind)) return <MeasuredContent item={item} p={p} />;
 
   switch (item.kind) {
@@ -1451,6 +1681,15 @@ function Body({ item, p, tabScroll, menuShown }: { item: Item; p: Palette; tabSc
   return null;
 }
 
+/** The colour whatever is written on a part is drawn in, and so the colour a ripple over it
+ *  takes: white over a filled button, the text's own colour over a pale surface. A split button
+ *  paints no box of its own, so its two segments answer for it. */
+export function contentColor(item: Item, p: Palette): string {
+  if (item.kind === "splitButton") return variantStyle(item.variant, p).color as string;
+  const c = boxStyle(item, p).color;
+  return typeof c === "string" ? c : p.onSurface;
+}
+
 function boxStyle(item: Item, p: Palette): React.CSSProperties {
   if (NO_BOX.includes(item.kind) || menuOpen(item)) return { background: "transparent", border: "none" };
   switch (item.kind) {
@@ -1558,6 +1797,8 @@ export function M3Node({
   onPointerDown,
   tabScroll,
   instant,
+  ripple,
+  lit,
 }: {
   item: Item;
   palette: Palette;
@@ -1574,6 +1815,14 @@ export function M3Node({
   onPointerDown?: (e: React.PointerEvent) => void;
   /** how far a scrollable tab row is scrolled in the preview; the canvas uses the resting position */
   tabScroll?: number;
+  /** a press lights the part up from inside, the way Android does. The preview lights its own
+   *  parts through the hit areas it lays over them, so it leaves this off. */
+  ripple?: boolean;
+  /** a light the part is given rather than one it took itself: where the finger is on a part
+   *  being carried across the canvas, and where it was on one that has just landed. It stays for
+   *  as long as it is given, and goes out on its own once it is taken away. `at` is when the
+   *  press began, so a light handed over mid-spread carries on rather than starting again. */
+  lit?: { x: number; y: number; at?: number; grown?: boolean } | null;
 }) {
   const reducedMotion = useReducedMotion();
   const instantRail = reducedMotion && item.kind === "navRail" && isWideRail(item);
@@ -1585,13 +1834,46 @@ export function M3Node({
   const size = sizeOf(drawn, widths);
   const measured = isMeasured(drawn);
   const clips = !NO_BOX.includes(item.kind) && !menuOpen(drawn) && item.kind !== "textField" && item.kind !== "select";
+  /* only the button family lights up from inside; everything else is left as it was drawn */
+  const lights = !!ripple && RIPPLE_KINDS.includes(item.kind);
+  const ripples = useRipples(lights);
+  /* a given light belongs to the shape it was given inside: on a split button, the half the
+   * finger is on */
+  const litPart =
+    lit && item.kind === "splitButton" ? (lit.x > size.w - splitMetrics(buttonHeightOf(item)).trailW ? SPLIT_MENU_SLOT : SPLIT_MAIN_SLOT) : null;
+  /* how far the light had already spread where it came from: read once, when it arrives, so the
+   * circle picks up where the other drawing left off and keeps going at the same pace */
+  const litSpread = useRef<{ from: number; dur: number } | null>(null);
+  if (!lit) litSpread.current = null;
+  else if (!litSpread.current) {
+    const gone = lit.grown ? RIPPLE_GROW : lit.at ? Math.max(0, (performance.now() - lit.at) / 1000) : 0;
+    litSpread.current = { from: Math.min(1, gone / RIPPLE_GROW), dur: Math.max(0, RIPPLE_GROW - gone) };
+  }
+  const shown: Ripple[] = lit
+    ? [
+        ...ripples.list,
+        {
+          id: 0,
+          part: litPart,
+          x: lit.x,
+          y: lit.y,
+          d: rippleSize({ width: size.w, height: size.h }, lit.x, lit.y),
+          from: litSpread.current?.from,
+          dur: litSpread.current?.dur,
+        },
+      ]
+    : ripples.list;
 
   return (
     <motion.div
       data-node={item.id}
       data-kind={item.kind}
       data-wide-rail={item.kind === "navRail" && isWideRail(item) ? "true" : undefined}
-      onPointerDown={onPointerDown}
+      onPointerDown={(e) => {
+        ripples.add(e);
+        onPointerDown?.(e);
+      }}
+      onPointerCancel={ripples.end}
       initial={false}
       animate={{
         borderTopLeftRadius: r.tl,
@@ -1636,7 +1918,12 @@ export function M3Node({
         flex: "0 0 auto",
       }}
     >
-      <Body item={drawn} p={palette} tabScroll={tabScroll} menuShown={menu.open} />
+      <RippleCtx.Provider value={{ list: shown, color: contentColor(drawn, palette) }}>
+        <Body item={drawn} p={palette} tabScroll={tabScroll} menuShown={menu.open} />
+        {/* a part drawn as one shape is lit through its own box; one made of several -- a split
+            button -- carries the light inside each of them instead */}
+        {(lights || !!lit) && item.kind !== "splitButton" && <RippleShape part={null} />}
+      </RippleCtx.Provider>
     </motion.div>
   );
 }

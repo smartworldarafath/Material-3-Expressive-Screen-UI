@@ -1,5 +1,5 @@
 import type { CSSProperties } from "react";
-import { FAB_MENU_TABS, KIND_TEXT, Lang, NAV_TABS, TAB_LABELS, getLang, t, SELECT_OPTIONS } from "./i18n";
+import { FAB_MENU_TABS, KIND_TEXT, Lang, NAV_TABS, SPLIT_MENU_TABS, TAB_LABELS, getLang, t, SELECT_OPTIONS } from "./i18n";
 import { Contrast, isLightColor, schemeFromSeed } from "./color";
 
 /* ---------- geometry ---------- */
@@ -62,6 +62,25 @@ export function chipMetrics(height: number): ChipMetrics {
   const s = onScale(CHIP_SIZES, height);
   return { h: s.h, padX: s.of((c) => c.padX), lead: s.of((c) => c.lead), gap: s.of((c) => c.gap), icon: s.of((c) => c.icon), font: s.of((c) => c.font) };
 }
+
+/** the hairline a split button's two segments stand apart */
+export const SPLIT_GAP = 2;
+export type SplitMetrics = ButtonMetrics & { trailPadX: number; trailW: number };
+/** A split button is a button cut in two: the segment that carries the action, and the arrow
+ *  segment that opens its menu. Both stand on the button scale, so the leading segment is made
+ *  of exactly what a button of that height is made of, and the arrow segment is its icon with
+ *  tighter padding on either side of it. */
+export function splitMetrics(height: number): SplitMetrics {
+  const m = buttonMetrics(height);
+  const trailPadX = Math.round(m.padX * 0.6);
+  return { ...m, trailPadX, trailW: m.icon + trailPadX * 2 };
+}
+
+/** The menu a split button's arrow opens: an M3 menu sheet of its entries, standing a hairline
+ *  away from the button on the side it has room for. */
+export const SPLIT_MENU_ITEM_H = 48;
+export const SPLIT_MENU_PAD = 8;
+export const SPLIT_MENU_SHEET_GAP = 4;
 
 /** M3's three FAB sizes; an extended FAB is the same three, given room for its label */
 export const FAB_SIZES = [
@@ -1197,6 +1216,8 @@ export const KIND_SPEC: Record<Kind, KindSpec> = {
     hasLabel: true,
     hasSupporting: false,
     hasIcon: true,
+    /* as wide as its label makes it, so the height is the one measure it is given */
+    size2: { min: BUTTON_H_MIN, max: BUTTON_H_MAX, step: 4, icon: "height", presets: BUTTON_SIZES.map((b) => b.h) },
     defLabel: "送信",
     defIcon: "send",
     defVariant: "filled",
@@ -1403,6 +1424,8 @@ export type Item = {
   minute?: number;
   /** runtime-only: the editor is showing this FAB's menu open. Never written to JSON. */
   [fabOpen]?: boolean;
+  /** runtime-only: the menu rises out of the part's top rather than dropping below it. */
+  [menuUp]?: boolean;
 };
 
 export type ToggleLook = { icon?: string | null; variant?: Variant; label?: string };
@@ -1503,12 +1526,37 @@ export function fabTypePatch(it: Item, to: FabKind): Partial<Item> {
 
 /** target id for the menu a FAB opens: the entries rise out of the button itself */
 export const MENU_TARGET = "menu";
+/** the half of a split button a tap landed on: the words, or the arrow beside them */
+export const SPLIT_MAIN_SLOT = "main";
+/** the slot a split button's arrow segment carries: the label segment keeps the part's own action,
+ *  and the arrow -- which is what opens the menu -- is sent somewhere of its own */
+export const SPLIT_MENU_SLOT = "menu";
 /** the FAB has a menu to open */
 export const hasMenu = (it: Item) => isFab(it.kind) && it.action?.to === MENU_TARGET;
+/** a split button's arrow opens the entries the button carries; with none it opens nothing */
+export const splitOpens = (it: Item) => it.kind === "splitButton" && (it.tabs?.length ?? 0) > 0;
+/** the part has a menu to open: a FAB asked to, and a split button because that is what its
+ *  arrow segment is for */
+export const opensMenu = (it: Item) => hasMenu(it) || splitOpens(it);
 /** runtime-only: the editor is showing that menu open. Never part of a saved sketch. */
 export const fabOpen = Symbol("fabOpen");
+/** runtime-only: the menu is drawn rising out of the part's top. Never part of a saved sketch. */
+export const menuUp = Symbol("menuUp");
 /** the menu is drawn open: in the editor while it is being set up, in the preview once tapped */
-export const menuOpen = (it: Item) => hasMenu(it) && it[fabOpen] === true;
+export const menuOpen = (it: Item) => opensMenu(it) && it[fabOpen] === true;
+/** how tall the sheet of entries stands */
+export const splitMenuHeight = (it: Item) => (it.tabs?.length ?? 0) * SPLIT_MENU_ITEM_H + SPLIT_MENU_PAD * 2;
+/** the menu is drawn above the button rather than below it */
+export const menuRises = (it: Item) => it[menuUp] === true;
+/** Which way the menu unrolls: down while the sheet fits under the button, and up when it does
+ *  not and there is more room above -- so a button near the foot of a screen opens upwards and
+ *  one near its head opens down. A part on no screen at all drops, the way a menu usually does. */
+export function menuRisesAt(it: Item, top: number, frame: Frame | null): boolean {
+  if (!frame || !splitOpens(it)) return false;
+  const y = top - frame.y;
+  const below = frameSizeOf(frame).h - (y + buttonHeightOf(it));
+  return SPLIT_MENU_SHEET_GAP + splitMenuHeight(it) > below && y > below;
+}
 /** the patch that gives a FAB a menu, or takes it away again; its entries are kept either way */
 export function menuPatch(it: Item, on: boolean): Partial<Item> {
   if (!on) return { action: undefined, [fabOpen]: undefined };
@@ -1567,7 +1615,7 @@ export const TRANSITIONS: { key: Transition; label: string; icon: string }[] = [
 export function actionSlotsOf(it: Item): IconSlot[] {
   if (it.kind === "topAppBar" || it.kind === "bottomNav" || it.kind === "navRail" || it.kind === "toolbar") return iconSlotsOf(it).filter((s) => !!s.value);
   /* the entries of a menu, whichever FAB opens it */
-  if (it.kind === "fabMenu" || hasMenu(it)) return (it.tabs ?? []).map((t, i) => ({ key: `tab:${i}`, label: t.label || `${i + 1}`, value: t.icon || null }));
+  if (it.kind === "fabMenu" || opensMenu(it)) return (it.tabs ?? []).map((t, i) => ({ key: `tab:${i}`, label: t.label || `${i + 1}`, value: t.icon || null }));
   if (it.kind === "tabs") return (it.tabs ?? []).map((t, i) => ({ key: `tab:${i}`, label: t.label || `${i + 1}`, value: null }));
   return [];
 }
@@ -1980,6 +2028,8 @@ export function defaultTabsFor(kind: Kind): NavTab[] {
       return SELECT_OPTIONS[getLang()].map((label) => ({ icon: "", label }));
     case "fabMenu":
       return FAB_MENU_TABS[getLang()].map((t) => ({ ...t }));
+    case "splitButton":
+      return SPLIT_MENU_TABS[getLang()].map((t) => ({ ...t }));
     case "toolbar":
       return TOOLBAR_ICONS.map((icon) => ({ icon, label: "" }));
     default:
@@ -2031,7 +2081,7 @@ export function makeItem(kind: Kind): Item {
     it.tabs = defaultTabs();
     it.railExpanded = false;
   }
-  if (kind === "tabs" || kind === "fabMenu" || kind === "select") it.tabs = defaultTabsFor(kind);
+  if (kind === "tabs" || kind === "fabMenu" || kind === "select" || kind === "splitButton") it.tabs = defaultTabsFor(kind);
   if (kind === "toolbar") it.tabs = defaultTabsFor(kind).slice(0, 4);
   return it;
 }
@@ -2068,8 +2118,9 @@ export function sizeOf(it: Item, widths: Record<string, number>) {
         : { w: widths[it.id] ?? 128, h: extendedFabHeight(it) };
     case "chip":
       return { w: widths[it.id] ?? 128, h: chipHeightOf(it) };
-    case "checkbox":
     case "splitButton":
+      return { w: widths[it.id] ?? 128, h: buttonHeightOf(it) + (menuOpen(it) ? SPLIT_MENU_SHEET_GAP + splitMenuHeight(it) : 0) };
+    case "checkbox":
     case "radio":
       return { w: widths[it.id] ?? 128, h: s.h };
     case "badge":
@@ -2177,9 +2228,11 @@ export function baseRadii(it: Item): Radii {
       return uniformRadii(it.radiusTop ?? scaleR(s.radius));
     case "carousel":
       return uniformRadii(it.radiusTop ?? 0);
+    /* the two segments keep their own corners, so what the box is asked for is the outer one */
+    case "splitButton":
+      return uniformRadii(scaleR(buttonHeightOf(it) / 2));
     case "badge":
     case "radio":
-    case "splitButton":
       return uniformRadii(s.radius);
     default:
       return uniformRadii(scaleR(s.radius));

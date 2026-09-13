@@ -33,7 +33,7 @@ export const SEED_TEXT: Record<Lang, { favorite: string; share: string; inbox: s
 export function translateDefaultText(value: string, kind: string, field: "label" | "supporting" | "tab", lang: Lang): string {
   for (const { key: from } of LANGS) {
     if (field === "tab") {
-      const labels = (l: Lang) => kind === "tabs" ? TAB_LABELS[l] : kind === "select" ? SELECT_OPTIONS[l] : (kind === "fabMenu" ? FAB_MENU_TABS[l] : NAV_TABS[l]).map((tab) => tab.label);
+      const labels = (l: Lang) => kind === "tabs" ? TAB_LABELS[l] : kind === "select" ? SELECT_OPTIONS[l] : (kind === "fabMenu" ? FAB_MENU_TABS[l] : kind === "splitButton" ? SPLIT_MENU_TABS[l] : NAV_TABS[l]).map((tab) => tab.label);
       const index = labels(from).indexOf(value);
       if (index >= 0) return labels(lang)[index] ?? value;
     } else {
@@ -387,6 +387,8 @@ export const UI = {
   menuItemsHint: { ja: "ドラッグで並べ替え、このボタンに重ねて削除", en: "Drag to reorder, or onto this button to remove", zh: "拖动可排序，拖到此按钮上可删除" },
   reorder: { ja: "ドラッグで並べ替え", en: "Drag to reorder", zh: "拖动以重新排序" },
   menuItems: { ja: "メニューの項目", en: "Menu items", zh: "菜单项" },
+  splitMain: { ja: "メインの操作", en: "Main action", zh: "主操作" },
+  splitMenu: { ja: "矢印（メニュー）", en: "Arrow (menu)", zh: "箭头（菜单）" },
   selectDate: { ja: "日付を選択", en: "Select date", zh: "选择日期" },
   selectTime: { ja: "時刻を選択", en: "Select time", zh: "选择时间" },
   dateLabel: { ja: "日付", en: "Date", zh: "日期" },
@@ -543,7 +545,7 @@ export const KO: Record<UIKey, string> = {
   leading: "앞쪽", trailing: "뒤쪽", home: "홈", screenN: "화면", copySuffix: " 복사본", mobileNote: "전체 기능은 데스크톱 브라우저에서 사용할 수 있습니다",
   addButton: "버튼 추가", done: "완료", theme: "테마", settings: "테마 및 설정", shape: "모양", typography: "글꼴", motion: "모션",
   brightness: "밝기", light: "라이트", dark: "다크", contrast: "대비", bothModes: "둘 다", contrastStandard: "표준", contrastMedium: "중간", contrastHigh: "높음",
-  design: "디자인", trigger: "트리거", noteDialog: "버튼 사양", partSpec: "이 부품의 사양", toggleLookHint: "디자인 탭에서 꾸밀 수 있습니다", addFrameHint: "화면을 추가하면 여기서 이동을 설정할 수 있습니다", replay: "다시 재생", toggleTitle: "전환", whenPressedExample: "예: 저장하고 목록으로 돌아가기", dragArrow: "여기서 화살표 끌기", removeArrow: "화살표 제거", recenter: "가운데로", resizeWidth: "드래그하여 너비 변경", resizeHeight: "드래그하여 높이 변경", resizeSize: "드래그하여 크기 변경", openLink: "링크 열기", fabType: "종류", fabPlain: "표준", fabExtended: "확장", fabAsMenu: "메뉴", fabMenuAction: "메뉴 열기", dropToRemove: "삭제", menuItemsHint: "드래그로 순서 변경, 이 버튼에 겹치면 삭제", reorder: "드래그하여 순서 변경", menuItems: "메뉴 항목", selectDate: "날짜 선택", selectTime: "시간 선택", dateLabel: "날짜", dateExample: "3월 17일 (월)", monthExample: "2026년 3월", hourLabel: "시", minuteLabel: "분", layout: "표시", carouselMultiBrowse: "멀티", carouselUncontained: "균등", carouselHero: "히어로", carouselFullScreen: "전체 화면", dateModal: "대화상자", dateDocked: "도킹", dateInput: "입력란", timeDial: "시계판", timeInput: "입력란", cards: "카드 수", selectedDay: "선택한 날", linkUrl: "링크 URL", linkInvalid: "http 또는 https로 시작하는 URL을 입력하세요", linkBrowser: "브라우저", shapeScale: "모서리 둥글기", shapeSquare: "사각형", shapeRounded: "둥근형", shapeFull: "완전 둥근형",
+  design: "디자인", trigger: "트리거", noteDialog: "버튼 사양", partSpec: "이 부품의 사양", toggleLookHint: "디자인 탭에서 꾸밀 수 있습니다", addFrameHint: "화면을 추가하면 여기서 이동을 설정할 수 있습니다", replay: "다시 재생", toggleTitle: "전환", whenPressedExample: "예: 저장하고 목록으로 돌아가기", dragArrow: "여기서 화살표 끌기", removeArrow: "화살표 제거", recenter: "가운데로", resizeWidth: "드래그하여 너비 변경", resizeHeight: "드래그하여 높이 변경", resizeSize: "드래그하여 크기 변경", openLink: "링크 열기", fabType: "종류", fabPlain: "표준", fabExtended: "확장", fabAsMenu: "메뉴", fabMenuAction: "메뉴 열기", dropToRemove: "삭제", menuItemsHint: "드래그로 순서 변경, 이 버튼에 겹치면 삭제", reorder: "드래그하여 순서 변경", menuItems: "메뉴 항목", splitMain: "주 동작", splitMenu: "화살표(메뉴)", selectDate: "날짜 선택", selectTime: "시간 선택", dateLabel: "날짜", dateExample: "3월 17일 (월)", monthExample: "2026년 3월", hourLabel: "시", minuteLabel: "분", layout: "표시", carouselMultiBrowse: "멀티", carouselUncontained: "균등", carouselHero: "히어로", carouselFullScreen: "전체 화면", dateModal: "대화상자", dateDocked: "도킹", dateInput: "입력란", timeDial: "시계판", timeInput: "입력란", cards: "카드 수", selectedDay: "선택한 날", linkUrl: "링크 URL", linkInvalid: "http 또는 https로 시작하는 URL을 입력하세요", linkBrowser: "브라우저", shapeScale: "모서리 둥글기", shapeSquare: "사각형", shapeRounded: "둥근형", shapeFull: "완전 둥근형",
   shapeHint: "모든 부품의 기본 모서리를 한 번에 바꿉니다. 부품에 직접 입력한 반경은 유지됩니다.", fontFamily: "글꼴", emphasized: "강조 스타일",
   emphasizedHint: "제목과 레이블에 더 굵은 M3 Expressive 스타일을 사용합니다.", motionScheme: "모션 방식", motionStandard: "표준", motionExpressive: "익스프레시브",
   motionHint: "익스프레시브는 통통 튀는 스프링 효과입니다. 미리보기 화면 전환과 프롬프트에 반영됩니다.", tryIt: "탭하여 확인",
@@ -763,6 +765,30 @@ export const FAB_MENU_TABS: Record<Lang, { icon: string; label: string }[]> = {
     { icon: "mic", label: "오디오" },
     { icon: "attach_file", label: "파일" },
     { icon: "event", label: "일정" },
+  ],
+};
+
+/** what a split button's arrow opens: the few things done with the main action beside it */
+export const SPLIT_MENU_TABS: Record<Lang, { icon: string; label: string }[]> = {
+  ja: [
+    { icon: "schedule_send", label: "予約送信" },
+    { icon: "save", label: "下書きに保存" },
+    { icon: "share", label: "共有" },
+  ],
+  en: [
+    { icon: "schedule_send", label: "Schedule send" },
+    { icon: "save", label: "Save draft" },
+    { icon: "share", label: "Share" },
+  ],
+  zh: [
+    { icon: "schedule_send", label: "定时发送" },
+    { icon: "save", label: "保存草稿" },
+    { icon: "share", label: "分享" },
+  ],
+  ko: [
+    { icon: "schedule_send", label: "예약 전송" },
+    { icon: "save", label: "임시 저장" },
+    { icon: "share", label: "공유" },
   ],
 };
 

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Reorder, useDragControls } from "motion/react";
 import {
+  Action,
   BACK_TARGET,
   BUTTON_H_MAX,
   BUTTON_H_MIN,
@@ -29,6 +30,7 @@ import {
   PHONE_W,
   Palette,
   R_INNER,
+  SPLIT_MENU_SLOT,
   Variant,
   actionSlotsOf,
   buttonHeightOf,
@@ -289,7 +291,7 @@ function MenuItems({ item, onChange, p }: { item: Item; onChange: (patch: Partia
       <button
         ref={bin}
         onClick={() => {
-          const spare = defaultTabsFor("fabMenu");
+          const spare = defaultTabsFor(item.kind === "splitButton" ? "splitButton" : "fabMenu");
           onChange({ tabs: [...tabs, { ...spare[tabs.length % spare.length] }] });
         }}
         className="m3-press"
@@ -505,6 +507,8 @@ export function ButtonInspector({
   const [tab, setTab] = useState<Tab>("design");
   /** which entry of a FAB menu the trigger tab is setting */
   const [slot, setSlot] = useState("tab:0");
+  /** which segment of a split button the trigger tab is setting */
+  const [seg, setSeg] = useState<string>("main");
   /** which icon slot the picker edits: the normal look or the "on" look */
   const [picker, setPicker] = useState<"none" | "icon" | "toggle">("none");
   /** the canvas shows the "on" look while the on-row is being edited */
@@ -518,7 +522,7 @@ export function ButtonInspector({
     setShownOnState(false);
   }, [item.id]);
   /* the canvas shows the menu while this tab is open, and the button again when it is not */
-  const menuShown = tab === "behavior" && hasMenu(item);
+  const menuShown = tab === "behavior" && (hasMenu(item) || (item.kind === "splitButton" && seg === SPLIT_MENU_SLOT));
   useEffect(() => {
     onShowMenu?.(menuShown);
     return () => onShowMenu?.(false);
@@ -528,6 +532,9 @@ export function ButtonInspector({
   const fab = isFab(item.kind);
   /* a chip is as wide as its label makes it, and carries a selected look of its own */
   const chip = item.kind === "chip";
+  /* a split button is two segments: the label carries the part's own action, and the arrow
+   * beside it -- the one that opens the menu -- is sent somewhere of its own */
+  const split = item.kind === "splitButton";
   /* a FAB may be asked to open a menu: the entries are its, and each has its own destination */
   const isMenu = hasMenu(item);
   const isExtended = item.kind === "extendedFab";
@@ -574,7 +581,28 @@ export function ButtonInspector({
   /* a circle's one measure is its width; a button's is its height, and a width the author set
    * that is now narrower than the button is tall grows with it */
   const setHeight = (v: number) =>
-    onChange(isIcon || item.kind === "fab" ? { size: v } : isExtended || chip ? { size2: v } : item.size && item.size < v ? { size2: v, size: v } : { size2: v });
+    onChange(isIcon || item.kind === "fab" ? { size: v } : isExtended || chip || split ? { size2: v } : item.size && item.size < v ? { size2: v, size: v } : { size2: v });
+
+  /** what the segment being set up is sent to: the label segment is the part's own action,
+   *  the arrow segment one slot of its own */
+  const segAction: Action | undefined = seg === "main" ? item.action : item.actions?.[SPLIT_MENU_SLOT];
+  const setSegAction = (a: Action | undefined) => {
+    if (seg === "main") {
+      onChange({ action: a });
+      return;
+    }
+    const actions = { ...(item.actions ?? {}) };
+    if (a) actions[SPLIT_MENU_SLOT] = a;
+    else delete actions[SPLIT_MENU_SLOT];
+    onChange({ actions: Object.keys(actions).length ? actions : undefined });
+  };
+  /* the panel is setting up a menu: a FAB asked to open one, or a split button's arrow */
+  const menuEditor = isMenu || (split && seg === SPLIT_MENU_SLOT);
+  const pickSegAction = (k: string) => {
+    if (k === "none") return setSegAction(undefined);
+    if (k === LINK_TARGET) return setSegAction({ to: LINK_TARGET, transition: "none", url: segAction?.url });
+    setSegAction({ to: k, transition: segAction && segAction.to !== LINK_TARGET ? segAction.transition : "slide" });
+  };
 
   const iconBtn = (icon: string | null, faint: boolean, open: boolean, title: string, onClick: () => void) => (
     <button
@@ -696,7 +724,7 @@ export function ButtonInspector({
                 eye can tell which row belongs to which measure. An icon button is a circle: it
                 has one measure, and the row of M3 sizes is all it needs. */}
             <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-              {!isIcon && !fab && !chip && (
+              {!isIcon && !fab && !chip && !split && (
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                   <Slider icon="width" title={t("width", lang)} value={width} min={minW} max={frameW} step={size.step} onChange={(v) => onChange({ size: v })} p={p} />
                   <WidthRow value={item.size} onChange={(size) => onChange({ size })} frameW={frameW} p={p} />
@@ -742,17 +770,34 @@ export function ButtonInspector({
       {tab === "behavior" && (
         <Section id="btn-action" icon="ads_click" title={t("tapTo", lang)} p={p}>
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            <Select
-              options={actionOptionsOf(item, frame, allFrames, lang)}
-              value={isMenu ? MENU_TARGET : actionValue}
-              onChange={pickAction}
-              p={p}
-              label={t("tapTo", lang)}
-            />
-            {isMenu && (
+            {split && (
+              /* which half of the button is being set up: the one with the words, or the arrow */
+              <Segmented<string>
+                options={[
+                  { key: "main", icon: item.icon ?? undefined, label: item.icon ? undefined : item.label || t("splitMain", lang), title: t("splitMain", lang), dot: !!item.action },
+                  { key: SPLIT_MENU_SLOT, icon: "keyboard_arrow_down", title: t("splitMenu", lang), dot: actionSlotsOf(item).some((sl) => !!item.actions?.[sl.key]) },
+                ]}
+                value={seg}
+                onChange={setSeg}
+                p={p}
+                height={40}
+              />
+            )}
+            {/* the arrow is the menu itself, so there is no destination to pick for it */}
+            {!(split && seg === SPLIT_MENU_SLOT) && (
+              <Select
+                options={actionOptionsOf(item, frame, allFrames, lang)}
+                value={split ? (segAction?.to ?? "none") : isMenu ? MENU_TARGET : actionValue}
+                onChange={split ? pickSegAction : pickAction}
+                p={p}
+                label={t("tapTo", lang)}
+              />
+            )}
+            {menuEditor && (
               <>
                 <MenuItems item={item} onChange={onChange} p={p} />
                 {/* the entry being sent somewhere, then where it goes */}
+                {actionSlotsOf(item).length > 0 && (<>
                 <Segmented<string>
                   options={actionSlotsOf(item).map((sl) => ({ key: sl.key, icon: sl.value ?? undefined, label: sl.value ? undefined : sl.label, title: sl.label, dot: !!item.actions?.[sl.key] }))}
                   value={slot}
@@ -772,9 +817,17 @@ export function ButtonInspector({
                   p={p}
                   label={t("tapTo", lang)}
                 />
+                </>)}
               </>
             )}
-            {isMenu ? (
+            {split && seg === "main" ? (
+              segAction?.to === LINK_TARGET ? (
+                <LinkStage self={frame} selfRect={selfRect} action={segAction} onChange={setSegAction} p={p} />
+              ) : (
+                <TapStage frames={allFrames} self={frame} selfRect={selfRect} action={segAction} onChange={setSegAction} p={p} />
+              )
+            ) : menuEditor ? (
+              actionSlotsOf(item).length === 0 ? null : (
               <TapStage
                 frames={allFrames}
                 self={frame}
@@ -788,6 +841,7 @@ export function ButtonInspector({
                 }}
                 p={p}
               />
+              )
             ) : isToggle ? (
               <>
                 <ToggleStage item={item} shownOn={shownOn} onPick={setShownOn} p={p} />

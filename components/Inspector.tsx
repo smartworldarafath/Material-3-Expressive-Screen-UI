@@ -777,7 +777,7 @@ export function Inspector({
   }
 
   /* the parts a tap sends somewhere and that fuse into a run are edited in the button's panel */
-  if (item.kind === "button" || item.kind === "iconButton" || item.kind === "chip" || isFab(item.kind)) {
+  if (item.kind === "button" || item.kind === "iconButton" || item.kind === "chip" || item.kind === "splitButton" || isFab(item.kind)) {
     return <ButtonInspector ai={ai} item={item} palette={p} frame={frame ?? null} onChange={onChange} onDelete={onDelete} onDuplicate={onDuplicate} locked={locked} onToggleLock={onToggleLock} onPlace={onPlace} measured={widths?.[item.id]} selfRect={selfRect ?? null} allFrames={allFrames ?? frames} onShowOn={onShowOn} onShowMenu={onShowMenu} />;
   }
 
