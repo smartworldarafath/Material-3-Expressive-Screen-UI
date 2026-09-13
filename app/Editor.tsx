@@ -30,13 +30,13 @@ import {
   fabOpen,
   hasMenu,
   menuOpen,
-  menuRisesAt,
+  splitMenuRisesAt,
   menuUp,
   opensMenu,
   splitOpens,
   migrateCarousel,
   migrateFabMenu,
-  buttonMinWidth,
+  buttonHeightOf,
   explodeGroup,
   freeRadii,
   radiiOfRuns,
@@ -89,6 +89,7 @@ import {
   PHONE_W,
   PULL_EXP,
   Radii,
+  SETTLE_CSS_VARS,
   SETTLE_MS,
   sizeOf,
   toggleIcon,
@@ -113,7 +114,7 @@ import { PromptPanel } from "@/components/PromptPanel";
 import { GitHubLink, Mode, Toolbar } from "@/components/Toolbar";
 import { LangMenu } from "@/components/Menus";
 import { AiActionKey, AiPanel, aiErrorText } from "@/components/AiPanel";
-import { TidyState } from "@/components/ui";
+import { TidyState, PANEL_FADE_H } from "@/components/ui";
 import { AiSettings, DEFAULT_AI, hasKey, isSecureUrl, loadAiSettings, proposeBehavior, proposeDescription, pushHistory, saveAiSettings } from "@/lib/ai";
 import { barSlotOf, bodyRect, carryFrame, pullInto, tidyFrame } from "@/lib/tidy";
 import { constrainModalRails, modalRailOf, updateRail } from "@/lib/rail";
@@ -224,14 +225,14 @@ type Snapshot = { groups: Group[]; frames: Frame[]; meta?: DocMeta };
 
 /** The parts a lone one of can be resized on the canvas itself: the controls that carry a size,
  *  and the indicators, whose width is the thing an author reaches for most. */
-const HANDLED: Kind[] = ["button", "iconButton", "chip", "splitButton", "fab", "extendedFab", "linearProgress", "circularProgress", "loadingIndicator", "slider", "carousel"];
+const HANDLED = new Set<Kind>(["button", "iconButton", "chip", "splitButton", "fab", "extendedFab", "linearProgress", "circularProgress", "loadingIndicator", "slider", "carousel"]);
 /** parts held by the four points around them: a circle's diameter, a label's height */
-const ROUND: Kind[] = ["iconButton", "chip", "splitButton", "fab", "extendedFab", "circularProgress", "loadingIndicator"];
+const ROUND = new Set<Kind>(["iconButton", "chip", "splitButton", "fab", "extendedFab", "circularProgress", "loadingIndicator"]);
 /** these are held by their two ends; they have no height of their own to pull on */
-const WIDE: Kind[] = ["linearProgress", "slider"];
+const WIDE = new Set<Kind>(["linearProgress", "slider"]);
 const BAR_SIDES = ["left", "right"] as const;
 /** a carousel runs the width of the screen: only its height is pulled on */
-const TALL: Kind[] = ["carousel"];
+const TALL = new Set<Kind>(["carousel"]);
 const TALL_SIDES = ["top", "bottom"] as const;
 
 /** a screen changing size eases the way a settling part does */
@@ -259,11 +260,11 @@ const SEED_FRAMES: Frame[] = [{ id: "seedF1", name: "Home", x: 0, y: 0 }];
 function migrateGroups(groups: Group[], frames: Frame[]): Group[] {
   const oldNavH = KIND_SPEC.bottomNav.h - NAV_BAR_H;
   /* a menu used to be a part of its own; now it is something a FAB is asked to open */
-  groups = groups.map((g) => (g.items.some((it) => it.kind === "fabMenu") ? { ...g, items: g.items.map(migrateFabMenu) } : g));
+  let out = groups.map((g) => (g.items.some((it) => it.kind === "fabMenu") ? { ...g, items: g.items.map(migrateFabMenu) } : g));
   /* a carousel used to be one box with one caption and one destination; now every card has its own */
-  groups = groups.map((g) => (g.items.some((it) => it.kind === "carousel" && (it.label || it.action)) ? { ...g, items: g.items.map(migrateCarousel) } : g));
+  out = out.map((g) => (g.items.some((it) => it.kind === "carousel" && (it.label || it.action)) ? { ...g, items: g.items.map(migrateCarousel) } : g));
   /* a carousel is as wide as the screen it stands on, whatever size that screen is */
-  groups = groups.map((g) => {
+  out = out.map((g) => {
     if (!g.items.some((it) => it.kind === "carousel")) return g;
     const f = frames.find((fr) => {
       const r = frameRect(fr);
@@ -273,7 +274,7 @@ function migrateGroups(groups: Group[], frames: Frame[]): Group[] {
     if (g.items.every((it) => it.kind !== "carousel" || (it.size ?? KIND_SPEC.carousel.defSize) === w)) return g;
     return { ...g, items: g.items.map((it) => (it.kind === "carousel" ? { ...it, size: w } : it)) };
   });
-  return groups.map((g) => {
+  return out.map((g) => {
     if (g.items.length !== 1 || g.items[0].kind !== "bottomNav") return g;
     const f = frames.find((fr) => {
       const r = frameRect(fr);
@@ -1220,6 +1221,7 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
    *  already grown, and lets it go out in place */
   const [landed, setLanded] = useState<{ id: string; x: number; y: number } | null>(null);
   const landTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (landTimer.current) clearTimeout(landTimer.current); }, []);
   const lightLands = (id: string, x: number, y: number) => {
     setLanded({ id, x, y });
     if (landTimer.current) clearTimeout(landTimer.current);
@@ -1337,6 +1339,7 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
   /** a size drag from the panel's slider is in flight: the part follows the slider with no easing */
   const [sizeEditId, setSizeEditId] = useState<string | null>(null);
   const sizeEditTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (sizeEditTimer.current) clearTimeout(sizeEditTimer.current); }, []);
   const lastSizeEdit = useRef<{ id: string; t: number } | null>(null);
   const markSizeEdit = (id: string) => {
     const now = performance.now();
@@ -1369,14 +1372,13 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
     v: number;
     min: number;
     max: number;
+    /** the undo step for this drag has been taken: it is taken at the first change */
+    taken: boolean;
   } | null>(null);
-  const onWidthHandleDown = (e: React.PointerEvent, g: Group, item: Item, side: HandleSide) => {
-    if (e.button !== 0) return;
-    e.preventDefault();
-    e.stopPropagation();
-    flushPending();
-    const f = frameOfGroup(g, framesRef.current, widthsRef.current);
-    snapshot();
+  /** What a handle on this side of the part changes, and how far it may be pulled: the measure
+   *  it holds, and the bounds that measure has for this kind on this screen. A drag and a key
+   *  press read the same answer. */
+  const sizeDragSpec = (item: Item, side: HandleSide, f: Frame | null) => {
     const vertical = side === "top" || side === "bottom";
     /* a circle is pulled by a point on it: the drag reads along the diagonal and the one
      * measure it has -- its diameter -- follows, so it stays round the whole way */
@@ -1393,36 +1395,60 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
     const gaugeSpec = vertical ? KIND_SPEC[item.kind].size2 : KIND_SPEC[item.kind].size;
     /* only a button must stay at least as wide as it is tall: it is a circle at its narrowest */
     const grows = item.kind === "button";
-    widthDragRef.current = {
-      id: item.id,
-      gid: g.id,
-      side,
+    const screenW = f ? frameSizeOf(f).w : PHONE_W;
+    return {
       vertical,
       round,
       tall,
       grows,
-      startX: e.clientX,
-      startY: e.clientY,
-      start0: vertical ? e.clientY : e.clientX,
       startV,
-      v: startV,
-      /* a button is a circle at its narrowest, so its height says how narrow it may be drawn */
-      min: gauge ? gaugeSpec!.min : isFab(item.kind) ? (tall ? 56 : FAB_H_MIN) : item.kind === "chip" ? CHIP_H_MIN : vertical || round ? BUTTON_H_MIN : buttonMinWidth(item),
+      /* a button is a circle at its narrowest, so its height says how narrow it may be drawn; a
+       * kind handled without a spec for this measure is simply not pulled */
+      min: gauge ? (gaugeSpec?.min ?? startV) : isFab(item.kind) ? (tall ? KIND_SPEC.extendedFab.h : FAB_H_MIN) : item.kind === "chip" ? CHIP_H_MIN : vertical || round ? BUTTON_H_MIN : buttonHeightOf(item),
       max: gauge
-        ? !vertical && (WIDE.includes(item.kind) || item.kind === "carousel")
-          ? f
-            ? frameSizeOf(f).w
-            : PHONE_W
-          : gaugeSpec!.max
+        ? !vertical && (WIDE.has(item.kind) || item.kind === "carousel")
+          ? screenW
+          : (gaugeSpec?.max ?? startV)
         : isFab(item.kind)
           ? FAB_H_MAX
           : item.kind === "chip"
             ? CHIP_H_MAX
             : vertical || round
               ? BUTTON_H_MAX
-              : f
-                ? frameSizeOf(f).w
-                : PHONE_W,
+              : screenW,
+    };
+  };
+  /** the patch a new measure is: the height for a part held top and bottom or as wide as its
+   *  label, the width or diameter for the rest; a button set narrower than it is tall grows */
+  const sizePatch = (item: Item, d: { vertical: boolean; tall: boolean; grows: boolean }, v: number): Partial<Item> =>
+    d.vertical || d.tall ? { size2: v, ...(d.grows && item.size && item.size < v ? { size: v } : {}) } : { size: v };
+  /** a handle pulled by the keyboard: one 4dp step out or in, kept the way a panel change is */
+  const nudgeSize = (g: Group, item: Item, side: HandleSide, dir: 1 | -1) => {
+    const d = sizeDragSpec(item, side, frameOfGroup(g, framesRef.current, widthsRef.current) ?? null);
+    const v = clamp(Math.round(d.startV / 4) * 4 + dir * 4, d.min, d.max);
+    if (v === d.startV) return;
+    patchSelected(sizePatch(item, d, v));
+  };
+  /* a drag that outlives the editor leaves nothing listening behind it */
+  const widthDragEnd = useRef<(() => void) | null>(null);
+  useEffect(() => () => widthDragEnd.current?.(), []);
+  const onWidthHandleDown = (e: React.PointerEvent, g: Group, item: Item, side: HandleSide) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+    flushPending();
+    const f = frameOfGroup(g, framesRef.current, widthsRef.current);
+    const spec = sizeDragSpec(item, side, f ?? null);
+    widthDragRef.current = {
+      id: item.id,
+      gid: g.id,
+      side,
+      ...spec,
+      startX: e.clientX,
+      startY: e.clientY,
+      start0: spec.vertical ? e.clientY : e.clientX,
+      v: spec.startV,
+      taken: false,
     };
     setWidthDragId(item.id);
     const move = (ev: PointerEvent) => {
@@ -1442,6 +1468,11 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
       }
       const v = clamp(Math.round(raw / 4) * 4, d.min, d.max);
       if (v === d.v) return;
+      /* the undo step is taken at the first change, so a handle merely pressed leaves none */
+      if (!d.taken) {
+        snapshot();
+        d.taken = true;
+      }
       d.v = v;
       /* a FAB hangs off its own corner, so its run is drawn at an offset that changes with the
          size: it has to land with the pointer rather than ease after it */
@@ -1450,8 +1481,9 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
       const back = d.startV - v;
       if (d.side === "left") setWidthShift({ gid: d.gid, dx: back, dy: 0 });
       if (d.side === "top") setWidthShift({ gid: d.gid, dx: 0, dy: back });
+      /* a part as wide as its label makes it grows only in height, so its left side stays put */
       if (d.round && d.side !== "br") {
-        setWidthShift({ gid: d.gid, dx: d.side === "tl" || d.side === "bl" ? back : 0, dy: d.side === "tl" || d.side === "tr" ? back : 0 });
+        setWidthShift({ gid: d.gid, dx: !d.tall && (d.side === "tl" || d.side === "bl") ? back : 0, dy: d.side === "tl" || d.side === "tr" ? back : 0 });
       }
       setGroups((prev) =>
         prev.map((gr) =>
@@ -1459,14 +1491,7 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
             ? gr
             : {
                 ...gr,
-                items: gr.items.map((it) =>
-                  it.id !== d.id
-                    ? it
-                    : d.vertical || d.tall
-                      ? /* a width the author set that is now narrower than the button is tall grows with it */
-                        { ...it, size2: v, ...(d.grows && it.size && it.size < v ? { size: v } : {}) }
-                      : { ...it, size: v },
-                ),
+                items: gr.items.map((it) => (it.id !== d.id ? it : { ...it, ...sizePatch(it, d, v) })),
               },
         ),
       );
@@ -1477,7 +1502,7 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
       /* the drawn offset becomes the group's real position, in one step and with no easing */
       if (d && d.v !== d.startV && d.side !== "right" && d.side !== "bottom" && d.side !== "br") {
         const shift = d.startV - d.v;
-        const movesX = d.side === "left" || d.side === "tl" || d.side === "bl";
+        const movesX = !d.tall && (d.side === "left" || d.side === "tl" || d.side === "bl");
         const movesY = d.side === "top" || d.side === "tl" || d.side === "tr";
         instantRef.current.add(d.gid);
         setGroups((prev) =>
@@ -1490,7 +1515,9 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
       window.removeEventListener("pointercancel", up);
+      widthDragEnd.current = null;
     };
+    widthDragEnd.current = up;
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);
     window.addEventListener("pointercancel", up);
@@ -1637,6 +1664,7 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
               };
             });
           });
+          lightLands(item.id, d.offX, d.offY);
           setDrag(null);
         };
         const timer = window.setTimeout(() => {
@@ -1707,7 +1735,7 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
           ? prev
           : [...prev, ng],
       );
-      lightLands(item.id, d.baseOffX, d.baseOffY);
+      lightLands(item.id, d.offX, d.offY);
       setDrag(null);
     };
 
@@ -2045,13 +2073,18 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
     const resizes = "size" in patch || "size2" in patch || "railExpanded" in patch || "railModal" in patch;
     snapshotFor(id + ":" + Object.keys(patch).join(","));
     if ("size" in patch || "size2" in patch) markSizeEdit(id);
+    /* the shift is worked out here, once, from the groups as they stand: the updater below may
+     * be run more than once and must not be the one to remember a FAB's corner */
+    const home = groupsRef.current.find((g) => g.items.some((it) => it.id === id));
+    const was = home?.items.find((it) => it.id === id);
+    const shift = resizes && home && was ? resizeShift(home, was, { ...was, ...patch }) : { dx: 0, dy: 0 };
+    if (shift.dx || shift.dy) instantRef.current.add(home!.id);
     setGroups((prev) =>
       "railExpanded" in patch || "railModal" in patch ? updateRail(prev, framesRef.current, widthsRef.current, id, patch) : prev.map((g) => {
         const idx = g.items.findIndex((it) => it.id === id);
         if (idx < 0) return g;
         const next = { ...g.items[idx], ...patch };
-        const { dx, dy } = resizes ? resizeShift(g, g.items[idx], next) : { dx: 0, dy: 0 };
-        if (dx || dy) instantRef.current.add(g.id);
+        const { dx, dy } = g.id === home?.id ? shift : { dx: 0, dy: 0 };
         return {
           ...g,
           x: g.x + dx,
@@ -2620,7 +2653,12 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
   const [showOnId, setShowOnId] = useState<string | null>(null);
   /** the FAB whose menu the panel is showing open: it is open while its trigger tab is */
   const [menuId, setMenuId] = useState<string | null>(null);
-  useEffect(() => setShowOnId(null), [primaryId]);
+  useEffect(() => {
+    setShowOnId(null);
+    setMenuId(null);
+  }, [primaryId]);
+  const onShowOn = useCallback((on: boolean) => setShowOnId(on ? primaryId : null), [primaryId]);
+  const onShowMenu = useCallback((on: boolean) => setMenuId(on ? primaryId : null), [primaryId]);
   const onLook = (it: Item): Item => {
     /* a FAB and a split button show their menu while the panel is on the tab that sets it up */
     if (it.id === menuId && opensMenu(it)) return { ...it, [fabOpen]: true };
@@ -3267,7 +3305,6 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
   openPreviewRef.current = openPreview;
 
   /* ---------- render ---------- */
-  const dragSize = drag ? sizeOf(drag.item, widths) : { w: 0, h: 0 };
   /* The hole a run holds for a part: where it is, how big, and whether it is still wanted. It
    * outlives the drag by the moment it takes to close, and is the same element throughout, so
    * the closing is a transition rather than a part vanishing. */
@@ -3275,6 +3312,7 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
   const [gapOut, setGapOut] = useState<Gap | null>(null);
   const gapRef = useRef<Gap | null>(null);
   const gapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (gapTimer.current) clearTimeout(gapTimer.current); }, []);
   const setGap = useCallback((next: Gap | null) => {
     const cur = gapRef.current;
     if (cur === next) return;
@@ -3558,7 +3596,6 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
      * magnet, so a part arriving between two others is seen making room for itself. The run's own
      * offset travels on the same curve, so the parts behind the hole never drift. */
     const phMain = hole && hole.open ? (g.axis === "x" ? hole.w : hole.h) : 0;
-    const gapEase = !!hole;
     /* a hole at the front is taken off the run's own position, so the parts behind it stay put.
      * What it costs the run is its width plus the run's spacing, and a closed hole costs nothing:
      * it has already taken that spacing off its own margin. */
@@ -3583,7 +3620,7 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
     /* a split button's menu drops below the button or rises above it, whichever its screen has
      * room for; a rising one hangs the run from its own bottom, so the button never moves */
     const menuPart = g.items.length === 1 && g.items[0].id === menuId && splitOpens(g.items[0]) ? g.items[0] : null;
-    const rises = !!menuPart && menuRisesAt(menuPart, g.y, frameOfGroup(g, framesRef.current, widths) ?? null);
+    const rises = !!menuPart && splitMenuRisesAt(menuPart, g.y, frameOfGroup(g, framesRef.current, widths) ?? null);
     /* The corner is held by the run's own translate rather than by the offset it is animated to.
      * Both halves of it -- the size in pixels and the box's own 100% -- are then settled by the
      * browser in the frame React hands them over in, so a size being dragged cannot leave the
@@ -3602,7 +3639,7 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
           x: g.x - ox + (g.axis === "x" ? front : 0),
           y: g.y - oy + (g.axis === "y" ? front : 0),
         }}
-        transition={instant ? INSTANT : hole ? (gapEase ? GAP_TWEEN : INSTANT) : OPEN}
+        transition={instant ? INSTANT : hole ? GAP_TWEEN : OPEN}
         style={{
           zIndex: modalRail ? 2 : undefined,
           position: "absolute",
@@ -3722,6 +3759,8 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
         inert={editAccess !== "editable" || previewId !== null}
         aria-hidden={editAccess !== "editable" || previewId !== null}
         style={{
+          /* the settle time and curve the stylesheet eases with, from the one place they are set */
+          ...(SETTLE_CSS_VARS as React.CSSProperties),
           display: "flex",
           overflow: "hidden",
           background: p.surfaceContainer,
@@ -4152,7 +4191,7 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
                   four points around its circle: dragging one changes the part's size in place,
                   and whatever sits opposite stays where it is */}
               {/* a FAB showing its menu is being edited as a menu, not sized as a button */}
-              {!handMode && !drag && selectedIds.length === 1 && selected && selected.id !== menuId && HANDLED.includes(selected.kind) && (() => {
+              {!handMode && !drag && selectedIds.length === 1 && selected && selected.id !== menuId && HANDLED.has(selected.kind) && (() => {
                 const g = groups.find((x) => x.items.length === 1 && !x.free && !x.locked && x.items[0].id === selected.id);
                 if (!g) return null;
                 const b = groupBounds(g, widths);
@@ -4161,17 +4200,21 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
                 const sy = widthShift?.gid === g.id ? widthShift.dy : 0;
                 return (
                   <SizeHandles
+                    /* the handles belong to this one part: another part picked gets its own, in
+                     * place, rather than these flying across the canvas to it */
+                    key={selected.id}
                     /* one measure, so the part is held by the points around it rather than by
                      * its edges: a circle's diameter, a label's height */
-                    round={ROUND.includes(selected.kind)}
+                    round={ROUND.has(selected.kind)}
                     /* a bar and a slider have a width and nothing else: they are held by their two
                      * ends; a carousel is the other way about and is held by its top and bottom */
-                    sides={WIDE.includes(selected.kind) ? BAR_SIDES : TALL.includes(selected.kind) ? TALL_SIDES : undefined}
+                    sides={WIDE.has(selected.kind) ? BAR_SIDES : TALL.has(selected.kind) ? TALL_SIDES : undefined}
                     box={{ l: b.l + sx, t: b.t + sy, r: b.r + sx, b: b.b + sy }}
                     z={view.z}
                     instant={widthDragId === selected.id || sizeEditId === selected.id}
                     p={p}
                     onDown={(e, side) => onWidthHandleDown(e, g, selected, side)}
+                    onNudge={(side, dir) => nudgeSize(g, selected, side, dir)}
                   />
                 );
               })()}
@@ -4534,7 +4577,6 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
                 gap: 8,
                 /* the close button lands exactly where the button that reopens the panel sits */
                 padding: "20px 20px 8px 16px",
-                /* the band the tabs sit on dissolves into the panel below it */
                 /* the band is the panel's own colour; the strip below it carries the fade */
                 background: p.surface,
               }}
@@ -4570,7 +4612,7 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
                   top: 0,
                   left: 0,
                   right: 0,
-                  height: 28,
+                  height: PANEL_FADE_H,
                   zIndex: 3,
                   background: `linear-gradient(to bottom, ${p.surface}, ${p.surface}00)`,
                   pointerEvents: "none",
@@ -4619,8 +4661,8 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
                   widths={widths}
                   selfRect={selectedRect}
                   allFrames={frames}
-                  onShowOn={(on) => setShowOnId(on && selected ? selected.id : null)}
-                  onShowMenu={(on) => setMenuId(on && selected ? selected.id : null)}
+                  onShowOn={onShowOn}
+                  onShowMenu={onShowMenu}
                   multi={selectedIds.length}
                   grouped={!!selectedGroup}
                   onGroup={groupSelected}

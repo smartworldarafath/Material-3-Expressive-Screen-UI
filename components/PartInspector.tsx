@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   CAROUSEL_HEIGHTS,
   CAROUSEL_LAYOUTS,
@@ -13,10 +13,10 @@ import {
   KIND_SPEC,
   LOADING_SIZES,
   PHONE_W,
-  PROGRESS_KINDS,
+  PROGRESS_DEFAULT_VALUE,
   Palette,
-  ProgressKind,
   RING_SIZES,
+  SLIDER_DEFAULT_VALUE,
   TIME_LAYOUTS,
   TRACK_DEFAULT,
   TRACK_MAX,
@@ -42,9 +42,9 @@ import {
 import { Field, ImageRow, NamedSizes, PanelShell, Section, Segmented, Slider, Toggle } from "./ui";
 import { arcPath, wavePath } from "./Loading";
 
-import { Icon } from "./M3Node";
 import { AiHooks } from "./Inspector";
-import { AlignBox, NoteSection, PartHeader, PartTabs, PlaceFn, Tab, TriggerSection, hasTrigger } from "./PartPanel";
+import { AlignBox, NoTriggerNote, NoteSection, PartHeader, PartTabs, PlaceFn, Tab, TriggerSection, hasTrigger } from "./PartPanel";
+import { dateHeadline } from "./Pickers";
 import { t, useLang } from "@/lib/i18n";
 
 /* One panel for the parts that are surfaces rather than controls. It wears the button's chrome --
@@ -58,12 +58,6 @@ function WidthRow({ item, frame, onChange, p }: { item: Item; frame: Frame | nul
   const spec = KIND_SPEC[item.kind];
   const size = spec.size!;
   const frameW = frame ? frameSizeOf(frame).w : PHONE_W;
-  const [picked, setCard] = useState(0);
-  /** the carousel card the panel is about: its picture, and where a tap on it goes. A row that
-   *  has lost cards leaves the pick on the last one still there. */
-  const card = item.kind === "carousel" ? Math.min(picked, carouselCountOf(item) - 1) : picked;
-  /* a bar is measured across the screen; a ring is measured corner to corner */
-  const bar = item.kind === "linearProgress";
   const width = sizeOf(item, {}).w;
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -74,6 +68,7 @@ function WidthRow({ item, frame, onChange, p }: { item: Item; frame: Frame | nul
         onChange={(k) => onChange({ size: Number(k) })}
         p={p}
         height={36}
+        label={t("width", lang)}
       />
     </div>
   );
@@ -140,6 +135,7 @@ function ProgressTypePicker({ item, onChange, p }: { item: Item; onChange: (patc
       }}
       p={p}
       height={44}
+      label={t("partType", lang)}
     />
   );
 }
@@ -158,14 +154,15 @@ function ProgressValue({ item, onChange, p }: { item: Item; onChange: (patch: Pa
           { key: "percent", icon: "percent", title: t("progressPercent", lang) },
         ]}
         value={pct ? "percent" : "loop"}
-        onChange={(k) => onChange({ value: k === "percent" ? 60 : undefined })}
+        onChange={(k) => onChange({ value: k === "percent" ? PROGRESS_DEFAULT_VALUE : undefined })}
         p={p}
         grow={false}
+        label={t("state", lang)}
       />
       {pct && (
         <div style={{ flex: 1, minWidth: 0 }}>
           {/* the run beside it already says what this is measuring, so the slider carries no icon */}
-          <Slider iconNode={<></>} title={t("progressState", lang)} value={item.value ?? 60} min={0} max={100} step={1} onChange={(value) => onChange({ value })} p={p} unit="%" />
+          <Slider iconNode={<></>} title={t("progressState", lang)} value={item.value ?? PROGRESS_DEFAULT_VALUE} min={0} max={100} step={1} onChange={(value) => onChange({ value })} p={p} unit="%" />
         </div>
       )}
     </div>
@@ -195,13 +192,14 @@ function CarouselLayoutPicker({ item, onChange, p }: { item: Item; onChange: (pa
     <Segmented<CarouselLayout>
       options={CAROUSEL_LAYOUTS.map((l) => ({
         key: l.key,
-        title: t(`carousel${l.key[0].toUpperCase()}${l.key.slice(1)}` as "carouselHero", lang),
+        title: t(l.text, lang),
         node: <CarouselThumb layout={l.key} on={l.key === current} p={p} />,
       }))}
       value={current}
       onChange={(layout) => onChange({ layout })}
       p={p}
       height={44}
+      label={t("layout", lang)}
     />
   );
 }
@@ -210,6 +208,7 @@ function CarouselLayoutPicker({ item, onChange, p }: { item: Item; onChange: (pa
  *  its number while it has none, and the one picked out is the card the controls under it -- and
  *  the trigger tab -- are about. A card a tap is sent from wears the run's own mark. */
 function CardStrip({ item, selected, onSelect, p }: { item: Item; selected: number; onSelect: (i: number) => void; p: Palette }) {
+  const lang = useLang();
   const cards = carouselCardsOf(item);
   return (
     <Segmented<string>
@@ -233,6 +232,7 @@ function CardStrip({ item, selected, onSelect, p }: { item: Item; selected: numb
       p={p}
       height={44}
       tight
+      label={t("cards", lang)}
     />
   );
 }
@@ -270,9 +270,11 @@ export function PartInspector({
   const spec = KIND_SPEC[item.kind];
   const frameW = frame ? frameSizeOf(frame).w : PHONE_W;
   const [picked, setCard] = useState(0);
+  /* another part being picked starts the panel on its first card again */
+  useEffect(() => setCard(0), [item.id]);
   /** the carousel card the panel is about: its picture, and where a tap on it goes. A row that
    *  has lost cards leaves the pick on the last one still there. */
-  const card = item.kind === "carousel" ? Math.min(picked, carouselCountOf(item) - 1) : picked;
+  const card = item.kind === "carousel" ? Math.max(0, Math.min(picked, carouselCountOf(item) - 1)) : picked;
   /* a bar is measured across the screen; a ring is measured corner to corner */
   const bar = item.kind === "linearProgress";
 
@@ -320,10 +322,11 @@ export function PartInspector({
         <>
           <Section id="part-layout" icon="calendar_month" title={t("layout", lang)} p={p}>
             <Segmented<DateLayout>
-              options={DATE_LAYOUTS.map((l) => ({ key: l.key, icon: l.icon, title: t(`date${l.key[0].toUpperCase()}${l.key.slice(1)}` as "dateModal", lang) }))}
+              options={DATE_LAYOUTS.map((l) => ({ key: l.key, icon: l.icon, title: t(l.text, lang) }))}
               value={dateLayoutOf(item)}
               onChange={(layout) => onChange({ layout })}
               p={p}
+              label={t("layout", lang)}
             />
           </Section>
           {/* the calendar is the only place a day can be circled; typed in, only the text shows */}
@@ -334,7 +337,7 @@ export function PartInspector({
           )}
           {dateLayoutOf(item) !== "docked" && (
             <Section id="part-text" icon="short_text" title={t("text", lang)} p={p}>
-              <Field value={item.label} onChange={(label) => onChange({ label })} placeholder={t("dateExample", lang)} p={p} />
+              <Field value={item.label} onChange={(label) => onChange({ label })} placeholder={dateHeadline(dayOf(item), lang)} p={p} />
             </Section>
           )}
           <Section id="part-size" icon="straighten" title={t("size", lang)} p={p}>
@@ -347,10 +350,11 @@ export function PartInspector({
         <>
           <Section id="part-layout" icon="schedule" title={t("layout", lang)} p={p}>
             <Segmented<TimeLayout>
-              options={TIME_LAYOUTS.map((l) => ({ key: l.key, icon: l.icon, title: t(`time${l.key[0].toUpperCase()}${l.key.slice(1)}` as "timeDial", lang) }))}
+              options={TIME_LAYOUTS.map((l) => ({ key: l.key, icon: l.icon, title: t(l.text, lang) }))}
               value={timeLayoutOf(item)}
               onChange={(layout) => onChange({ layout })}
               p={p}
+              label={t("layout", lang)}
             />
           </Section>
           <Section id="part-time" icon="schedule" title={t("selectTime", lang)} p={p}>
@@ -412,7 +416,7 @@ export function PartInspector({
         <>
           {/* where its handle sits: the one thing a sketched slider says */}
           <Section id="part-state" icon="tune" title={t("state", lang)} p={p}>
-            <Slider icon="percent" title={t("progressState", lang)} value={item.value ?? 40} min={0} max={100} step={1} onChange={(value) => onChange({ value })} p={p} unit="%" />
+            <Slider icon="percent" title={t("progressState", lang)} value={item.value ?? SLIDER_DEFAULT_VALUE} min={0} max={100} step={1} onChange={(value) => onChange({ value })} p={p} unit="%" />
           </Section>
           <Section id="part-size" icon="straighten" title={t("size", lang)} p={p}>
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -457,7 +461,7 @@ export function PartInspector({
 
       {onPlace && (
         <Section id="part-align" icon="grid_on" title={t("align", lang)} p={p}>
-          <AlignBox onPlace={onPlace} p={p} />
+          <AlignBox key={item.id} onPlace={onPlace} p={p} />
         </Section>
       )}
     </>
@@ -473,9 +477,14 @@ export function PartInspector({
       }
       tabs={<PartTabs value={tab} onChange={setTab} p={p} />}
     >
-      {tab === "design" && design}
-      {tab === "behavior" &&
-        (item.kind === "carousel" ? (
+      {tab === "design" && (
+        <div role="tabpanel" id="part-panel-design" aria-labelledby="part-tab-design">
+          {design}
+        </div>
+      )}
+      {tab === "behavior" && (
+        <div role="tabpanel" id="part-panel-behavior" aria-labelledby="part-tab-behavior">
+        {item.kind === "carousel" ? (
           /* every card is a place of its own to be sent from: the row picks which one */
           <TriggerSection
             item={item}
@@ -490,13 +499,11 @@ export function PartInspector({
         ) : trigger ? (
           <TriggerSection item={item} frame={frame} allFrames={allFrames} selfRect={selfRect} onChange={onChange} p={p} />
         ) : (
-          /* nothing is opened by tapping this one: the tab says so and leaves the spec the room */
-          <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, lineHeight: 1.5, color: p.onSurfaceVariant, padding: "2px 6px 10px" }}>
-            <Icon name="block" size={18} />
-            <span>{t("noTrigger", lang)}</span>
-          </div>
-        ))}
-      {tab === "behavior" && <NoteSection item={item} ai={ai} onChange={onChange} p={p} />}
+          <NoTriggerNote p={p} />
+        )}
+        <NoteSection item={item} ai={ai} onChange={onChange} p={p} />
+        </div>
+      )}
     </PanelShell>
   );
 }

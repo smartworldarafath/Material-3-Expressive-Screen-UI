@@ -7,12 +7,12 @@ import { COLOR_TOKEN_TEXT, TEXT_TOKEN_TEXT, t, useLang } from "@/lib/i18n";
 import { Icon } from "./M3Node";
 import { onColorFor } from "@/lib/color";
 
-/** how the lock comes over the panel and goes away again: the blur first, then the switch and
- *  the line under it; on the way out the switch turns itself off before any of it fades */
 /** the row of tabs and the clear gap under it, and the band a panel with no tabs fades its top with */
 const PANEL_TABS_H = 48;
 const PANEL_TABS_GAP = 16;
-const PANEL_FADE_H = 28;
+export const PANEL_FADE_H = 28;
+/** how the lock comes over the panel and goes away again: the blur first, then the switch and
+ *  the line under it; on the way out the switch turns itself off before any of it fades */
 const VEIL_IN = 0.22;
 const BADGE_IN = 0.18;
 const SWITCH_OFF = 0.26;
@@ -187,8 +187,9 @@ function LockSwitch({ on, p, onOff }: { on: boolean; p: Palette; onOff?: () => v
     moved.current = Math.max(moved.current, Math.abs(dx));
     setDrag(clamp(TRAVEL + dx, 0, TRAVEL));
   };
-  const end = () => {
+  const end = (e: React.PointerEvent) => {
     if (drag === null) return;
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
     /* a tap turns it off; so does a drag that has taken the knob most of the way back */
     const off = moved.current < 4 || drag < TRAVEL / 2;
     setDrag(null);
@@ -200,17 +201,18 @@ function LockSwitch({ on, p, onOff }: { on: boolean; p: Palette; onOff?: () => v
       role="switch"
       aria-checked={on}
       aria-label={t(on ? "unlock" : "lock", lang)}
-      title={t("unlock", lang)}
+      title={t(on ? "unlock" : "lock", lang)}
       tabIndex={0}
       onPointerDown={start}
       onPointerMove={move}
       onPointerUp={end}
       onPointerCancel={end}
       onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          onOff?.();
-        }
+        if (e.key !== "Enter" && e.key !== " ") return;
+        /* the key is the switch's own: the canvas shortcuts behind the panel do not hear it */
+        e.preventDefault();
+        e.stopPropagation();
+        if (on) onOff?.();
       }}
       style={{
         position: "relative",
@@ -260,6 +262,8 @@ export function IconBtn({
   danger,
   disabled,
   fill,
+  hasPopup,
+  expanded,
 }: {
   icon: string;
   on?: boolean;
@@ -270,9 +274,14 @@ export function IconBtn({
   danger?: boolean;
   disabled?: boolean;
   fill?: boolean;
+  /** the button opens a menu or a list, and whether it is open now */
+  hasPopup?: "menu" | "listbox";
+  expanded?: boolean;
 }) {
   return (
     <button
+      aria-haspopup={hasPopup}
+      aria-expanded={expanded}
       onClick={onClick}
       title={title}
       aria-label={title}
@@ -302,9 +311,26 @@ export function IconBtn({
   );
 }
 
-export type SegOption<K extends string> = { key: K; icon?: string; label?: string; title?: string; /** a drawing of the choice, shown in place of an icon: a small picture of the thing itself */ node?: React.ReactNode; /** small marker: this option carries something */ dot?: boolean; /** this option alone takes the spare width */ grow?: boolean; /** an icon-only option that should not shrink to a square */ wide?: boolean };
+export type SegOption<K extends string> = {
+  key: K;
+  icon?: string;
+  label?: string;
+  title?: string;
+  /** a drawing of the choice, shown in place of an icon: a small picture of the thing itself */
+  node?: React.ReactNode;
+  /** small marker: this option carries something */
+  dot?: boolean;
+  /** this option alone takes the spare width */
+  grow?: boolean;
+  /** an icon-only option that should not shrink to a square */
+  wide?: boolean;
+  /** how this one cell is painted, over the run's own look: a cell that shows a style wears it */
+  style?: React.CSSProperties;
+};
 
-/** Connected-button group with the same fused corners as the canvas. */
+/** Connected-button group with the same fused corners as the canvas. It is one choice among a
+ *  few, so it is read as a radio group: the arrow keys walk the run, and only the chosen cell is
+ *  a tab stop. */
 export function Segmented<K extends string>({
   options,
   value,
@@ -313,6 +339,7 @@ export function Segmented<K extends string>({
   height = 40,
   grow = true,
   tight = false,
+  label,
 }: {
   options: SegOption<K>[];
   value: K;
@@ -322,9 +349,28 @@ export function Segmented<K extends string>({
   grow?: boolean;
   /** the cells may be narrower than they are tall: a long run still fits the panel */
   tight?: boolean;
+  /** what the run as a whole chooses, for a screen reader */
+  label?: string;
 }) {
+  const group = useRef<HTMLDivElement | null>(null);
+  const picked = Math.max(0, options.findIndex((o) => o.key === value));
+  const walk = (e: React.KeyboardEvent, d: 1 | -1) => {
+    e.preventDefault();
+    const next = options[(picked + d + options.length) % options.length];
+    onChange(next.key);
+    (group.current?.querySelector(`[data-key="${next.key}"]`) as HTMLElement | null)?.focus();
+  };
   return (
-    <div style={{ display: "flex", gap: 3 }}>
+    <div
+      ref={group}
+      role="radiogroup"
+      aria-label={label}
+      onKeyDown={(e) => {
+        if (e.key === "ArrowRight" || e.key === "ArrowDown") walk(e, 1);
+        else if (e.key === "ArrowLeft" || e.key === "ArrowUp") walk(e, -1);
+      }}
+      style={{ display: "flex", gap: 3 }}
+    >
       {options.map((o, i) => {
         const on = o.key === value;
         const first = i === 0;
@@ -333,6 +379,10 @@ export function Segmented<K extends string>({
         return (
           <button
             key={o.key}
+            data-key={o.key}
+            role="radio"
+            aria-checked={on}
+            tabIndex={i === picked ? 0 : -1}
             onClick={() => onChange(o.key)}
             title={o.title ?? o.label}
             aria-label={o.title ?? o.label}
@@ -358,6 +408,9 @@ export function Segmented<K extends string>({
               fontWeight: on ? 600 : 500,
               transition: "background 120ms, color 120ms, border-radius 160ms",
               position: "relative",
+              overflow: "hidden",
+              whiteSpace: "nowrap",
+              ...o.style,
             }}
           >
             {o.node ?? (o.icon && <Icon name={o.icon} size={Math.round(height * 0.5)} fill={on} />)}
@@ -402,9 +455,18 @@ export function Select({
 }) {
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLDivElement | null>(null);
+  const trigger = useRef<HTMLButtonElement | null>(null);
+  const list = useRef<HTMLDivElement | null>(null);
   const current = options.find((o) => o.key === value) ?? options[0];
+  /* the list closes back onto the button that opened it, so focus has somewhere to land */
+  const close = () => {
+    setOpen(false);
+    trigger.current?.focus();
+  };
   useEffect(() => {
     if (!open) return;
+    /* focus goes to the chosen entry, so the arrow keys start from where the list does */
+    (list.current?.querySelector('[aria-selected="true"]') as HTMLElement | null)?.focus();
     const onDown = (e: PointerEvent) => {
       if (!box.current?.contains(e.target as Node)) setOpen(false);
     };
@@ -412,6 +474,7 @@ export function Select({
       if (e.key === "Escape") {
         e.stopPropagation();
         setOpen(false);
+        trigger.current?.focus();
       }
     };
     window.addEventListener("pointerdown", onDown, true);
@@ -421,10 +484,31 @@ export function Select({
       window.removeEventListener("keydown", onKey, true);
     };
   }, [open]);
+  /* the arrow keys walk the entries, Home and End jump to either end */
+  const onListKey = (e: React.KeyboardEvent) => {
+    const items = Array.from(list.current?.querySelectorAll<HTMLElement>('[role="option"]') ?? []);
+    if (!items.length) return;
+    const at = items.indexOf(document.activeElement as HTMLElement);
+    let next = -1;
+    if (e.key === "ArrowDown") next = (at + 1) % items.length;
+    else if (e.key === "ArrowUp") next = (at - 1 + items.length) % items.length;
+    else if (e.key === "Home") next = 0;
+    else if (e.key === "End") next = items.length - 1;
+    if (next < 0) return;
+    e.preventDefault();
+    items[next].focus();
+  };
   return (
     <div ref={box} style={{ position: "relative" }}>
       <button
+        ref={trigger}
         onClick={() => setOpen((o) => !o)}
+        onKeyDown={(e) => {
+          if (!open && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
+            e.preventDefault();
+            setOpen(true);
+          }
+        }}
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-label={label}
@@ -453,8 +537,10 @@ export function Select({
       </button>
       {open && (
         <div
+          ref={list}
           role="listbox"
           aria-label={label}
+          onKeyDown={onListKey}
           className="no-scrollbar"
           style={{
             position: "absolute",
@@ -478,9 +564,10 @@ export function Select({
                 key={o.key}
                 role="option"
                 aria-selected={on}
+                tabIndex={-1}
                 onClick={() => {
                   onChange(o.key);
-                  setOpen(false);
+                  close();
                 }}
                 className="m3-press"
                 style={{
@@ -528,6 +615,8 @@ export function Field({
   action,
   maxHeight,
   aiBusy,
+  invalid,
+  describedBy,
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -548,6 +637,9 @@ export function Field({
    *  it wraps but never takes a line break, since the canvas wraps the text on its own */
   grow?: boolean;
   height?: number;
+  /** what is in the field is not accepted, and the id of the line under it that says why */
+  invalid?: boolean;
+  describedBy?: string;
 }) {
   const lang = useLang();
   const filled = value.length > 0;
@@ -571,10 +663,10 @@ export function Field({
       };
     }
     setRingOn(false);
-    if (!ring) return;
+    /* the ring is taken down once its fade has run; one that was never up simply stays down */
     const id = setTimeout(() => setRing(false), 320);
     return () => clearTimeout(id);
-  }, [aiBusy, ring]);
+  }, [aiBusy]);
 
   /* What the model wrote is already in the field, drawn exactly as the field will keep it.
    * Nothing is copied: the field is covered, grows to the height the text needs, and is then
@@ -707,6 +799,27 @@ export function Field({
       {child}
     </span>
   );
+  /* the one button that empties the field, wherever the field puts it */
+  const clearBtn = (
+    <button
+      onClick={() => onChange("")}
+      title={t("clear", lang)}
+      aria-label={t("clear", lang)}
+      style={{
+        width: 30,
+        height: 30,
+        borderRadius: 15,
+        border: "none",
+        background: "transparent",
+        color: p.onSurfaceVariant,
+        cursor: "pointer",
+        display: "grid",
+        placeItems: "center",
+      }}
+    >
+      <Icon name="close" size={16} />
+    </button>
+  );
   const base: React.CSSProperties = {
     /* a block: an inline field leaves a line box's descender under it, and a ring drawn around
      * that box would be thicker along the bottom than anywhere else */
@@ -779,7 +892,12 @@ export function Field({
           onChange={(e) => onChange(grow ? e.target.value.replace(/[\r\n]+/g, " ") : e.target.value)}
           onKeyDown={grow ? (e) => { if (e.key === "Enter") e.preventDefault(); } : undefined}
           placeholder={placeholder}
-          onFocus={() => setReveal(null)}
+          aria-invalid={invalid || undefined}
+          aria-describedby={describedBy}
+          onFocus={() => {
+            setReveal(null);
+            setLines(null);
+          }}
           style={{
             ...base,
             ...(grow ? { overflow: "hidden" } : null),
@@ -794,6 +912,8 @@ export function Field({
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}
+          aria-invalid={invalid || undefined}
+          aria-describedby={describedBy}
           style={{ ...base, height, position: "relative" }}
         />
       )}
@@ -814,54 +934,12 @@ export function Field({
             }}
           />
           <div style={{ position: "absolute", right: 6, bottom: 6, display: "flex", gap: 2 }}>
-            {filled && run(
-            <button
-              onClick={() => onChange("")}
-              title={t("clear", lang)}
-              aria-label={t("clear", lang)}
-              style={{
-                width: 30,
-                height: 30,
-                border: "none",
-                background: "transparent",
-                color: p.onSurfaceVariant,
-                cursor: "pointer",
-                display: "grid",
-                placeItems: "center",
-              }}
-            >
-              <Icon name="close" size={16} />
-            </button>,
-              true,
-              false,
-            )}
+            {filled && run(clearBtn, true, false)}
             {run(action, !filled, true)}
           </div>
         </>
       ) : (
-        filled && (
-          <button
-            onClick={() => onChange("")}
-            title={t("clear", lang)}
-            aria-label={t("clear", lang)}
-            style={{
-              position: "absolute",
-              right: 6,
-              top: multiline ? 8 : (height - 30) / 2,
-              width: 30,
-              height: 30,
-              borderRadius: 15,
-              border: "none",
-              background: "transparent",
-              color: p.onSurfaceVariant,
-              cursor: "pointer",
-              display: "grid",
-              placeItems: "center",
-            }}
-          >
-            <Icon name="close" size={16} />
-          </button>
-        )
+        filled && <span style={{ position: "absolute", right: 6, top: multiline ? 8 : (height - 30) / 2, display: "inline-flex" }}>{clearBtn}</span>
       )}
     </div>
   );
@@ -932,7 +1010,13 @@ export function Slider({
   const [shown, setShown] = useState(value);
   const shownRef = useRef(value);
   const mine = useRef(false);
-  const travelling = useRef(false);
+  /* whether the knob is on its way: read at render, so it is state rather than a ref */
+  const [travelling, setTravelling] = useState(false);
+  const travellingRef = useRef(false);
+  const travel = (on: boolean) => {
+    travellingRef.current = on;
+    setTravelling(on);
+  };
   useEffect(() => {
     const from = shownRef.current;
     const land = () => {
@@ -941,13 +1025,13 @@ export function Slider({
     };
     /* a value that keeps arriving is a part already on its way — a width that follows the text
      * inside it, say. Then the knob follows each value exactly instead of trailing its own easing. */
-    if (mine.current || reduced || travelling.current || from === value) {
+    if (mine.current || reduced || travellingRef.current || from === value) {
       mine.current = false;
-      travelling.current = false;
+      travel(false);
       land();
       return;
     }
-    travelling.current = true;
+    travel(true);
     const run = animate(from, value, {
       duration: SETTLE_MS / 1000,
       ease: [0.2, 0, 0, 1],
@@ -956,14 +1040,15 @@ export function Slider({
         setShown(v);
       },
       onComplete: () => {
-        travelling.current = false;
+        travel(false);
         land();
       },
     });
     return () => run.stop();
   }, [value, reduced]);
   const emit = (v: number) => {
-    mine.current = true;
+    /* a value the part already has never comes back through the effect, so it is not waited for */
+    mine.current = v !== value;
     shownRef.current = v;
     setShown(v);
     onChange(v);
@@ -981,7 +1066,7 @@ export function Slider({
         max={max}
         /* on its way the knob is free of the step, so it sweeps across instead of
            ticking from one stop to the next; the author's own drag keeps the step */
-        step={travelling.current ? "any" : step}
+        step={travelling ? "any" : step}
         value={shown}
         onChange={(e) => emit(clamp(Math.round(Number(e.target.value) / step) * step, min, max))}
         style={{ "--track": p.secondaryContainer, "--thumb": p.primary } as React.CSSProperties}
@@ -1050,6 +1135,9 @@ export function Slider({
   );
 }
 
+/** the look of a cell that carries a short word: room for five of them across a panel */
+export const RUN_CELL: React.CSSProperties = { minWidth: 0, padding: "0 4px", fontSize: 12, fontWeight: 600, textOverflow: "ellipsis" };
+
 /** The sizes a part is named at, as one connected run: S, M, L, the way Material names a size
  *  everywhere else. The letter is what the cell carries, and the dp it comes to is in the hover
  *  text, because a row of raw numbers tells an author nothing about which one to reach for. */
@@ -1058,55 +1146,25 @@ export function NamedSizes({
   value,
   onChange,
   p,
+  label,
 }: {
   steps: readonly { key: string; value: number }[];
   value: number;
   onChange: (v: number) => void;
   p: Palette;
+  /** what the run sizes, for a screen reader; the size itself when left out */
+  label?: string;
 }) {
-  const h = 40;
+  const lang = useLang();
   return (
-    <div role="radiogroup" style={{ display: "flex", gap: 3 }}>
-      {steps.map((s, i) => {
-        const on = value === s.value;
-        const first = i === 0;
-        const last = i === steps.length - 1;
-        const label = s.key.toUpperCase();
-        const title = `${label} · ${s.value}dp`;
-        return (
-          <button
-            key={s.key}
-            role="radio"
-            aria-checked={on}
-            title={title}
-            aria-label={title}
-            onClick={() => onChange(s.value)}
-            className="m3-press"
-            style={{
-              flex: 1,
-              minWidth: 0,
-              height: h,
-              border: "none",
-              padding: "0 4px",
-              cursor: "pointer",
-              borderTopLeftRadius: first ? h / 2 : R_INNER,
-              borderBottomLeftRadius: first ? h / 2 : R_INNER,
-              borderTopRightRadius: last ? h / 2 : R_INNER,
-              borderBottomRightRadius: last ? h / 2 : R_INNER,
-              background: on ? p.primary : p.surfaceContainerHigh,
-              color: on ? p.onPrimary : p.onSurfaceVariant,
-              fontSize: 12,
-              fontWeight: on ? 700 : 600,
-              overflow: "hidden",
-              whiteSpace: "nowrap",
-              transition: "background 120ms, color 120ms",
-            }}
-          >
-            {label}
-          </button>
-        );
-      })}
-    </div>
+    <Segmented<string>
+      options={steps.map((s) => ({ key: s.key, label: s.key.toUpperCase(), title: `${s.key.toUpperCase()} · ${s.value}dp`, style: RUN_CELL }))}
+      value={steps.find((s) => s.value === value)?.key ?? ""}
+      onChange={(k) => onChange(steps.find((s) => s.key === k)!.value)}
+      p={p}
+      label={label ?? t("size", lang)}
+      tight
+    />
   );
 }
 
@@ -1275,8 +1333,13 @@ export function readImage(file: File): Promise<string> {
       const c = document.createElement("canvas");
       c.width = Math.max(1, Math.round(img.width * s));
       c.height = Math.max(1, Math.round(img.height * s));
-      c.getContext("2d")!.drawImage(img, 0, 0, c.width, c.height);
+      const ctx = c.getContext("2d");
       URL.revokeObjectURL(url);
+      if (!ctx) {
+        reject(new Error("canvas"));
+        return;
+      }
+      ctx.drawImage(img, 0, 0, c.width, c.height);
       resolve(c.toDataURL("image/webp", 0.86));
     };
     img.onerror = () => {
@@ -1293,7 +1356,7 @@ export function UrlField({ value, onChange, placeholder, p }: { value: string; o
   const [text, setText] = useState(value);
   useEffect(() => setText(value), [value]);
   return (
-    <div onBlurCapture={() => setText(value)}>
+    <div>
       <Field
         value={text}
         onChange={(v) => {
@@ -1317,7 +1380,10 @@ export function UrlField({ value, onChange, placeholder, p }: { value: string; o
 export function ImageRow({ value, onChange, p }: { value?: string; onChange: (src: string | undefined) => void; p: Palette }) {
   const lang = useLang();
   const fileRef = useRef<HTMLInputElement>(null);
+  /* a file the browser could not read as a picture says so under the row, until the next pick */
+  const [failed, setFailed] = useState(false);
   return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
     <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
       <input
         ref={fileRef}
@@ -1330,7 +1396,10 @@ export function ImageRow({ value, onChange, p }: { value?: string; onChange: (sr
           if (!f) return;
           try {
             onChange(await readImage(f));
-          } catch {}
+            setFailed(false);
+          } catch {
+            setFailed(true);
+          }
         }}
       />
       {/* a picked file shows as data and is not editable here, so the box stays empty for it */}
@@ -1339,6 +1408,12 @@ export function ImageRow({ value, onChange, p }: { value?: string; onChange: (sr
       </div>
       <IconBtn icon="upload" p={p} size={44} on onClick={() => fileRef.current?.click()} title={t("pickImage", lang)} />
       {value && <IconBtn icon="close" p={p} size={44} onClick={() => onChange(undefined)} title={t("removeImage", lang)} />}
+    </div>
+    {failed && (
+      <div role="alert" style={{ fontSize: 12, lineHeight: 1.5, color: p.error, padding: "0 6px" }}>
+        {t("imageFailed", lang)}
+      </div>
+    )}
     </div>
   );
 }

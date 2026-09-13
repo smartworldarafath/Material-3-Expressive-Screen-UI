@@ -100,15 +100,21 @@ body {
    so a button with no set width reports its width as it eases. */
 .m3-size-ease,
 .m3-size-ease .msr {
-  transition: padding 340ms cubic-bezier(0.2, 0, 0, 1), gap 340ms cubic-bezier(0.2, 0, 0, 1),
-    font-size 340ms cubic-bezier(0.2, 0, 0, 1), height 340ms cubic-bezier(0.2, 0, 0, 1),
+  /* the time and the curve are the editor's own (SETTLE_MS in lib/tokens.ts), set on the root */
+  transition: padding var(--m3-settle, 340ms) var(--m3-ease, cubic-bezier(0.2, 0, 0, 1)),
+    gap var(--m3-settle, 340ms) var(--m3-ease, cubic-bezier(0.2, 0, 0, 1)),
+    font-size var(--m3-settle, 340ms) var(--m3-ease, cubic-bezier(0.2, 0, 0, 1)),
+    height var(--m3-settle, 340ms) var(--m3-ease, cubic-bezier(0.2, 0, 0, 1)),
     /* a segment that changes shape -- a split button's arrow while its menu is open -- rounds
        off over the shorter time a corner takes rather than the time a size does */
-    border-radius 220ms cubic-bezier(0.2, 0, 0, 1);
+    border-radius 220ms var(--m3-ease, cubic-bezier(0.2, 0, 0, 1));
 }
-/* while an edge or a slider is being dragged the part follows the pointer instead */
+/* while an edge or a slider is being dragged the part follows the pointer instead; a part that
+   is told to land at once (data-size-now) does the same on its own */
 .m3-size-now .m3-size-ease,
 .m3-size-now .m3-size-ease .msr,
+[data-size-now] .m3-size-ease,
+[data-size-now] .m3-size-ease .msr,
 /* the hidden copy the editor measures reports the size that was asked for, at once:
    the layout around the part is built from it, and only the drawn part eases */
 .m3-measure .m3-size-ease,
@@ -193,7 +199,9 @@ input.m3-number {
   .m3-press,
   .m3-tile,
   .m3-size-ease,
-  .m3-size-ease .msr {
+  .m3-size-ease .msr,
+  .m3e-boot,
+  .m3e-boot svg {
     transition: none;
   }
   .m3-spin,
@@ -280,9 +288,4 @@ input.m3-number {
 .m3e-boot[data-done] svg {
   transform: scale(0.85);
 }
-@media (prefers-reduced-motion: reduce) {
-  .m3e-boot,
-  .m3e-boot svg {
-    transition: none;
-  }
-}
+

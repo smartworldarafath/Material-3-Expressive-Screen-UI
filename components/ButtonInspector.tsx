@@ -4,7 +4,6 @@ import { useEffect, useRef, useState } from "react";
 import { Reorder, useDragControls } from "motion/react";
 import {
   Action,
-  BACK_TARGET,
   BUTTON_H_MAX,
   BUTTON_H_MIN,
   CHIP_H_MAX,
@@ -34,7 +33,6 @@ import {
   Variant,
   actionSlotsOf,
   buttonHeightOf,
-  buttonMinWidth,
   contentWidth,
   defaultTabsFor,
   extendedFabHeight,
@@ -42,7 +40,6 @@ import {
   frameSizeOf,
   halfWidth,
   isFab,
-  isPhoneFrame,
   removeTabPatch,
   reorderTabsPatch,
   toggleIcon,
@@ -50,10 +47,10 @@ import {
 } from "@/lib/tokens";
 import { IconPicker } from "./IconPicker";
 import { Icon, M3Static } from "./M3Node";
-import { Field, IconBtn, NamedSizes, PanelShell, Section, Segmented, Select, SelectOption, Slider, Toggle } from "./ui";
+import { Field, NamedSizes, PanelShell, RUN_CELL, Section, Segmented, Select, SelectOption, Slider, Toggle } from "./ui";
 import { AiHooks, variantsOf } from "./Inspector";
 import { LinkStage, TapStage } from "./TapStage";
-import { AiIconBtn, AlignBox, PartHeader, PartTabs, PlaceFn, Tab, actionOptionsOf } from "./PartPanel";
+import { AlignBox, NoteSection, PartHeader, PartTabs, PlaceFn, Tab, actionOptionsOf } from "./PartPanel";
 import { KIND_TEXT, t, useLang } from "@/lib/i18n";
 
 export type { PlaceFn };
@@ -61,53 +58,32 @@ export type { PlaceFn };
 /** the button styles as one connected run, each cell painted the way that style looks;
  *  the chosen one carries a check mark and nothing else is written on them */
 function VariantRow({ kind, value, onChange, p }: { kind: Item["kind"]; value: Variant; onChange: (v: Variant) => void; p: Palette }) {
+  const lang = useLang();
   const variants = variantsOf(kind);
-  const h = 40;
   return (
-    <div role="radiogroup" style={{ display: "flex", gap: 3 }}>
-      {variants.map((v, i) => {
-        const on = v.key === value;
+    <Segmented<Variant>
+      options={variants.map((v) => {
         const st = variantStyle(v.key, p);
-        const first = i === 0;
-        const last = i === variants.length - 1;
-        return (
-          <button
-            key={v.key}
-            role="radio"
-            aria-checked={on}
-            title={v.label}
-            aria-label={v.label}
-            onClick={() => onChange(v.key)}
-            className="m3-press"
-            style={{
-              flex: 1,
-              minWidth: 0,
-              height: h,
-              padding: "0 4px",
-              cursor: "pointer",
-              borderTopLeftRadius: first ? h / 2 : R_INNER,
-              borderBottomLeftRadius: first ? h / 2 : R_INNER,
-              borderTopRightRadius: last ? h / 2 : R_INNER,
-              borderBottomRightRadius: last ? h / 2 : R_INNER,
-              ...st,
-              /* a text button paints nothing, so its cell gets a faint edge to be found by */
-              border: v.key === "outlined" ? st.border : v.key === "text" ? `1px dashed ${p.outlineVariant}` : "none",
-              boxShadow: v.key === "elevated" ? "0 1px 3px rgba(0,0,0,0.2)" : "none",
-              fontSize: 11,
-              fontWeight: 600,
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 3,
-              overflow: "hidden",
-              whiteSpace: "nowrap",
-            }}
-          >
-            {on && <Icon name="check" size={20} />}
-          </button>
-        );
+        return {
+          key: v.key,
+          title: v.label,
+          node: v.key === value ? <Icon name="check" size={20} /> : <span />,
+          style: {
+            ...st,
+            /* a text button paints nothing, so its cell gets a faint edge to be found by */
+            border: v.key === "outlined" ? st.border : v.key === "text" ? `1px dashed ${p.outlineVariant}` : "none",
+            boxShadow: v.key === "elevated" ? "0 1px 3px rgba(0,0,0,0.2)" : "none",
+            minWidth: 0,
+            padding: "0 4px",
+          },
+        };
       })}
-    </div>
+      value={value}
+      onChange={onChange}
+      p={p}
+      label={t("style", lang)}
+      tight
+    />
   );
 }
 
@@ -121,62 +97,21 @@ function WidthRow({ value, onChange, frameW, p }: { value: number | undefined; o
     { key: "content", size: contentWidth(frameW), label: t("contentWidth", lang), hint: t("contentWidthHint", lang) },
     { key: "screen", size: frameW, label: t("screenWidth", lang), hint: t("screenWidthHint", lang) },
   ];
-  const h = 40;
   return (
-    <div role="radiogroup" style={{ display: "flex", gap: 3 }}>
-      {cells.map((c, i) => {
-        const on = value === c.size;
-        const first = i === 0;
-        const last = i === cells.length - 1;
-        /* the word says what the width is for, the number says what it comes to on this screen */
-        const title = `${c.label}${c.size ? ` · ${c.size}dp` : ""} — ${c.hint}`;
-        return (
-          <button
-            key={c.key}
-            role="radio"
-            aria-checked={on}
-            title={title}
-            aria-label={title}
-            onClick={() => onChange(c.size)}
-            className="m3-press"
-            style={{
-              flex: 1,
-              minWidth: 0,
-              height: h,
-              border: "none",
-              padding: "0 4px",
-              cursor: "pointer",
-              borderTopLeftRadius: first ? h / 2 : R_INNER,
-              borderBottomLeftRadius: first ? h / 2 : R_INNER,
-              borderTopRightRadius: last ? h / 2 : R_INNER,
-              borderBottomRightRadius: last ? h / 2 : R_INNER,
-              background: on ? p.primary : p.surfaceContainerHigh,
-              color: on ? p.onPrimary : p.onSurfaceVariant,
-              fontSize: 12,
-              fontWeight: on ? 700 : 600,
-              overflow: "hidden",
-              whiteSpace: "nowrap",
-              transition: "background 120ms, color 120ms",
-              textOverflow: "ellipsis",
-            }}
-          >
-            {c.label}
-          </button>
-        );
-      })}
-    </div>
+    <Segmented<string>
+      /* the word says what the width is for, the number says what it comes to on this screen */
+      options={cells.map((c) => ({ key: c.key, label: c.label, title: `${c.label}${c.size ? ` · ${c.size}dp` : ""} — ${c.hint}`, style: RUN_CELL }))}
+      value={cells.find((c) => c.size === value)?.key ?? ""}
+      onChange={(k) => onChange(cells.find((c) => c.key === k)?.size)}
+      p={p}
+      label={t("width", lang)}
+      tight
+    />
   );
 }
 
-/** the heights M3 names, as one connected run. Each cell carries its own name, because XS to XL
- *  (and S to L for a FAB) is what the size is called everywhere else in Material. */
-function HeightRow({ value, onChange, steps, p }: { value: number; onChange: (h: number) => void; steps?: { key: string; h: number }[]; p: Palette }) {
-  const cells = steps ?? BUTTON_SIZES.map((b) => ({ key: b.key, h: b.h }));
-  return <NamedSizes steps={cells.map((c) => ({ key: c.key, value: c.h }))} value={value} onChange={onChange} p={p} />;
-}
-
-/** the three shapes a FAB takes, as one connected run: the circle, the one with a label, and
- *  the one that opens a menu. Picking one turns the part into it, keeping what they share. */
+/** the two shapes a FAB takes, as one connected run: the circle and the one with a label.
+ *  Picking one turns the part into it, keeping what they share. */
 function FabTypeRow({ value, onChange, p }: { value: FabKind; onChange: (k: FabKind) => void; p: Palette }) {
   const lang = useLang();
   const words: Record<FabKind, string> = { fab: t("fabPlain", lang), extendedFab: t("fabExtended", lang) };
@@ -186,6 +121,7 @@ function FabTypeRow({ value, onChange, p }: { value: FabKind; onChange: (k: FabK
       value={value}
       onChange={onChange}
       p={p}
+      label={t("partType", lang)}
     />
   );
 }
@@ -195,16 +131,22 @@ function FabTypeRow({ value, onChange, p }: { value: FabKind; onChange: (k: FabK
  *  takes this one out, so there is nothing to delete with until something is being dragged. */
 function MenuItems({ item, onChange, p }: { item: Item; onChange: (patch: Partial<Item>) => void; p: Palette }) {
   const lang = useLang();
-  const [pick, setPick] = useState<number | null>(null);
+  /* the row whose icon is being picked, by the name the row keeps through a reorder */
+  const [pick, setPick] = useState<string | null>(null);
   const [dragging, setDragging] = useState<number | null>(null);
   const [overBin, setOverBin] = useState(false);
   const bin = useRef<HTMLButtonElement | null>(null);
   const tabs: NavTab[] = item.tabs ?? [];
-  /* a name per row that survives a reorder, so the list knows which row moved where */
-  const keys = useRef<string[]>([]);
-  if (keys.current.length !== tabs.length) {
-    keys.current = tabs.map((_, i) => keys.current[i] ?? `e${i}-${Math.random().toString(36).slice(2, 7)}`);
-  }
+  /* a name per row that survives a reorder, so the list knows which row moved where. Rows are
+   * named as they appear, never during render, and a list that came back a different length
+   * or from a different part starts its names over. */
+  const keys = useRef<{ id: string; names: string[] }>({ id: item.id, names: [] });
+  if (keys.current.id !== item.id) keys.current = { id: item.id, names: [] };
+  const named = useRef(0);
+  while (keys.current.names.length < tabs.length) keys.current.names.push(`e${named.current++}`);
+  if (keys.current.names.length > tabs.length) keys.current.names.length = tabs.length;
+  const names = keys.current.names;
+  const picked = pick === null ? -1 : names.indexOf(pick);
   const set = (i: number, patch: Partial<NavTab>) => onChange({ tabs: tabs.map((t, j) => (j === i ? { ...t, ...patch } : t)) });
   const onBin = (e: { clientX: number; clientY: number }) => {
     const r = bin.current?.getBoundingClientRect();
@@ -214,21 +156,21 @@ function MenuItems({ item, onChange, p }: { item: Item; onChange: (patch: Partia
     <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
       <Reorder.Group
         axis="y"
-        values={keys.current}
+        values={names}
         onReorder={(next: string[]) => {
-          const order = next.map((k) => keys.current.indexOf(k));
-          keys.current = next;
+          const order = next.map((k) => names.indexOf(k));
+          keys.current.names = next;
           onChange(reorderTabsPatch(item, order));
         }}
         style={{ display: "flex", flexDirection: "column", gap: 6, padding: 0, margin: 0 }}
       >
         {tabs.map((tab, i) => (
           <MenuRow
-            key={keys.current[i]}
-            id={keys.current[i]}
+            key={names[i]}
+            id={names[i]}
             tab={tab}
-            open={pick === i}
-            onPick={() => setPick(pick === i ? null : i)}
+            open={pick === names[i]}
+            onPick={() => setPick(pick === names[i] ? null : names[i])}
             onLabel={(label) => set(i, { label })}
             onDragStart={() => setDragging(i)}
             onDrag={(e) => setOverBin(onBin(e))}
@@ -236,14 +178,18 @@ function MenuItems({ item, onChange, p }: { item: Item; onChange: (patch: Partia
               const drop = onBin(e);
               setDragging(null);
               setOverBin(false);
-              if (drop && tabs.length > 1) onChange(removeTabPatch(item, i));
+              if (drop && tabs.length > 1) {
+                if (pick === names[i]) setPick(null);
+                keys.current.names = names.filter((_, j) => j !== i);
+                onChange(removeTabPatch(item, i));
+              }
             }}
             p={p}
           />
         ))}
       </Reorder.Group>
-      {pick !== null && tabs[pick] && (
-        <IconPicker value={tabs[pick].icon} onChange={(icon) => set(pick, { icon: icon ?? "" })} onClose={() => setPick(null)} palette={p} />
+      {picked >= 0 && tabs[picked] && (
+        <IconPicker value={tabs[picked].icon} onChange={(icon) => set(picked, { icon: icon ?? "" })} onClose={() => setPick(null)} palette={p} />
       )}
       <button
         ref={bin}
@@ -361,7 +307,7 @@ function StateMark({ on, p, title }: { on: boolean; p: Palette; title: string })
 
 /** the toggle button itself on a small stage: tapping it flips between its two looks, and the
  *  corner says which one is showing */
-function ToggleStage({ item, shownOn, onPick, p }: { item: Item; shownOn: boolean; onPick: (on: boolean) => void; p: Palette }) {
+function ToggleStage({ item, shownOn, onPick, p, measured }: { item: Item; shownOn: boolean; onPick: (on: boolean) => void; p: Palette; measured?: number }) {
   const lang = useLang();
   /* the stage keeps the width the button was given; a button wider than the panel is drawn to scale */
   const look: Item = shownOn
@@ -378,7 +324,8 @@ function ToggleStage({ item, shownOn, onPick, p }: { item: Item; shownOn: boolea
     return () => ro.disconnect();
   }, []);
   /* a button wider than the stage is zoomed out until it fits, and stays centred either way */
-  const k = item.size && avail ? Math.min(1, (avail - 32) / item.size) : 1;
+  const wide = item.size ?? measured;
+  const k = wide && avail ? Math.min(1, (avail - 32) / wide) : 1;
   return (
     <div
       ref={stage}
@@ -474,16 +421,25 @@ export function ButtonInspector({
     setShownOnState(on);
     onShowOn?.(on);
   };
+  /* the canvas draws the on look only while this panel asks for it, so another part being
+   * picked takes the ask back with it */
+  const showOn = useRef(onShowOn);
+  showOn.current = onShowOn;
   useEffect(() => {
     setPicker("none");
     setShownOnState(false);
+    showOn.current?.(false);
   }, [item.id]);
-  /* the canvas shows the menu while this tab is open, and the button again when it is not */
+  /* the canvas shows the menu while this tab is open, and the button again when it is not. The
+   * callback is read through a ref: a parent that hands over a new one each render must not
+   * take the menu down and put it back up every time. */
   const menuShown = tab === "behavior" && (hasMenu(item) || (item.kind === "splitButton" && seg === SPLIT_MENU_SLOT));
+  const showMenu = useRef(onShowMenu);
+  showMenu.current = onShowMenu;
   useEffect(() => {
-    onShowMenu?.(menuShown);
-    return () => onShowMenu?.(false);
-  }, [menuShown, onShowMenu]);
+    showMenu.current?.(menuShown);
+    return () => showMenu.current?.(false);
+  }, [menuShown]);
 
   const isIcon = item.kind === "iconButton";
   const fab = isFab(item.kind);
@@ -528,13 +484,13 @@ export function ButtonInspector({
   };
 
   const frameW = frame ? frameSizeOf(frame).w : PHONE_W;
-  const size = spec.size ?? spec.size2 ?? { min: 40, max: PHONE_W, step: 4, icon: "width" };
+  const step = (spec.size ?? spec.size2)?.step ?? 4;
   /* what the slider shows is the width on the canvas, even while the text sets it */
   const width = item.size ?? measured ?? spec.w;
   /* the one measure each shape is given: a circle's diameter, a label's height, a button's height */
-  const height = chip ? chipHeightOf(item) : isExtended ? extendedFabHeight(item) : item.kind === "fab" ? (item.size ?? 56) : buttonHeightOf(item);
+  const height = chip ? chipHeightOf(item) : isExtended ? extendedFabHeight(item) : item.kind === "fab" ? (item.size ?? KIND_SPEC.fab.w) : buttonHeightOf(item);
   /* a button is a circle at its narrowest, so how short it is says how narrow it can be */
-  const minW = Math.min(buttonMinWidth(item), width);
+  const minW = Math.min(buttonHeightOf(item), width);
   /* a circle's one measure is its width; a button's is its height, and a width the author set
    * that is now narrower than the button is tall grows with it */
   const setHeight = (v: number) =>
@@ -579,11 +535,9 @@ export function ButtonInspector({
         cursor: "pointer",
         display: "grid",
         placeItems: "center",
-        fontSize: 11,
-        fontWeight: 700,
       }}
     >
-      {icon ? <Icon name={icon} size={22} /> : "N/A"}
+      {icon ? <Icon name={icon} size={22} /> : <Icon name="add" size={20} />}
     </button>
   );
   const onIcon = toggleIcon(item);
@@ -597,9 +551,9 @@ export function ButtonInspector({
       tabs={<PartTabs value={tab} onChange={setTab} p={p} />}
     >
       {tab === "design" && (
-        <>
+        <div role="tabpanel" id="part-panel-design" aria-labelledby="part-tab-design">
           {fab && (
-            <Section id="fab-type" icon="add_circle" title={t("fabType", lang)} p={p}>
+            <Section id="fab-type" icon="add_circle" title={t("partType", lang)} p={p}>
               <FabTypeRow value={item.kind as FabKind} onChange={(k) => onChange(fabTypePatch(item, k))} p={p} />
             </Section>
           )}
@@ -683,48 +637,49 @@ export function ButtonInspector({
             <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
               {!isIcon && !fab && !chip && !split && (
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                  <Slider icon="width" title={t("width", lang)} value={width} min={minW} max={frameW} step={size.step} onChange={(v) => onChange({ size: v })} p={p} />
+                  <Slider icon="width" title={t("width", lang)} value={width} min={minW} max={frameW} step={step} onChange={(v) => onChange({ size: v })} p={p} />
                   <WidthRow value={item.size} onChange={(size) => onChange({ size })} frameW={frameW} p={p} />
                 </div>
               )}
-              {true && (
-                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                   <Slider
                     /* a part with one measure is sized corner to corner, and says so */
                     icon={isIcon || fab ? "open_in_full" : "height"}
                     title={t(isIcon || fab ? "size" : "height", lang)}
                     value={height}
-                    min={chip ? CHIP_H_MIN : fab ? (isExtended ? 56 : FAB_H_MIN) : BUTTON_H_MIN}
+                    min={chip ? CHIP_H_MIN : fab ? (isExtended ? KIND_SPEC.extendedFab.h : FAB_H_MIN) : BUTTON_H_MIN}
                     max={chip ? CHIP_H_MAX : fab ? FAB_H_MAX : BUTTON_H_MAX}
-                    step={size.step}
+                    step={step}
                     onChange={setHeight}
                     p={p}
                   />
-                  <HeightRow
-                    value={height}
-                    onChange={setHeight}
+                  {/* the heights M3 names, each cell carrying its own name: XS to XL, and S to L for a FAB */}
+                  <NamedSizes
                     steps={
                       chip
-                        ? CHIP_SIZES.map((c) => ({ key: c.key, h: c.h }))
+                        ? CHIP_SIZES.map((c) => ({ key: c.key, value: c.h }))
                         : fab
-                          ? FAB_SIZES.map((f) => ({ key: f.key, h: isExtended ? f.h : f.d }))
-                          : undefined
+                          ? FAB_SIZES.map((f) => ({ key: f.key, value: isExtended ? f.h : f.d }))
+                          : BUTTON_SIZES.map((b) => ({ key: b.key, value: b.h }))
                     }
+                    value={height}
+                    onChange={setHeight}
                     p={p}
+                    label={t(isIcon || fab ? "size" : "height", lang)}
                   />
                 </div>
-              )}
             </div>
           </Section>
           {onPlace && (
             <Section id="btn-align" icon="grid_on" title={t("align", lang)} p={p}>
-              <AlignBox onPlace={onPlace} p={p} />
+              <AlignBox key={item.id} onPlace={onPlace} p={p} />
             </Section>
           )}
-        </>
+        </div>
       )}
 
       {tab === "behavior" && (
+        <div role="tabpanel" id="part-panel-behavior" aria-labelledby="part-tab-behavior">
         <Section id="btn-action" icon="ads_click" title={t("tapTo", lang)} p={p}>
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {split && (
@@ -743,7 +698,7 @@ export function ButtonInspector({
             {/* the arrow is the menu itself, so there is no destination to pick for it */}
             {!(split && seg === SPLIT_MENU_SLOT) && (
               <Select
-                options={actionOptionsOf(item, frame, allFrames, lang)}
+                options={actionOptions}
                 value={split ? (segAction?.to ?? "none") : isMenu ? MENU_TARGET : actionValue}
                 onChange={split ? pickSegAction : pickAction}
                 p={p}
@@ -763,7 +718,7 @@ export function ButtonInspector({
                   height={40}
                 />
                 <Select
-                  options={actionOptionsOf(item, frame, allFrames, lang).filter((o) => o.key !== "toggle")}
+                  options={actionOptions.filter((o) => o.key !== "toggle")}
                   value={item.actions?.[slot]?.to ?? "none"}
                   onChange={(k) => {
                     const actions = { ...(item.actions ?? {}) };
@@ -801,7 +756,7 @@ export function ButtonInspector({
               )
             ) : isToggle ? (
               <>
-                <ToggleStage item={item} shownOn={shownOn} onPick={setShownOn} p={p} />
+                <ToggleStage item={item} shownOn={shownOn} onPick={setShownOn} p={p} measured={measured} />
                 <div style={{ fontSize: 12, lineHeight: 1.5, color: p.onSurfaceVariant, padding: "0 4px" }}>{t("toggleLookHint", lang)}</div>
               </>
             ) : isLink ? (
@@ -811,22 +766,8 @@ export function ButtonInspector({
             )}
           </div>
         </Section>
-      )}
-      {tab === "behavior" && (
-        <Section id="btn-note" icon="short_text" title={t(item.kind === "button" ? "noteDialog" : "partSpec", lang)} p={p}>
-          <Field
-            value={item.note ?? ""}
-            onChange={(note) => onChange({ note })}
-            placeholder={t("whenPressedExample", lang)}
-            p={p}
-            multiline
-            grow
-            rows={2}
-            maxHeight={200}
-            aiBusy={ai.busy}
-            action={<AiIconBtn ai={ai} p={p} />}
-          />
-        </Section>
+        <NoteSection item={item} ai={ai} onChange={onChange} p={p} />
+        </div>
       )}
     </PanelShell>
   );

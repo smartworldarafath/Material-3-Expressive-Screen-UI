@@ -92,7 +92,7 @@ export const FAB_H_MIN = 40;
 export const FAB_H_MAX = 96;
 
 /** The sizes a ring, a loading indicator and a progress bar are offered at. They are asked for by
- *  the letter Material names every other size by -- S, M, L -- and the dp each comes to rides in
+ *  the letters Material names every other size by -- S, M, L, XL -- and the dp each comes to rides in
  *  the hover text, because a row of raw numbers says nothing about which one to reach for. */
 export const RING_SIZES = [
   { key: "s", value: 24 },
@@ -125,6 +125,10 @@ export const SNAP_CROSS = 24;
 export const PULL_EXP = 2.2;
 /** ms allowed for the landing animation before the item is committed */
 export const SETTLE_MS = 340;
+/** the same time and curve, as the CSS custom properties the stylesheet eases with */
+export const SETTLE_CSS_VARS = { "--m3-settle": `${SETTLE_MS}ms`, "--m3-ease": "cubic-bezier(0.2, 0, 0, 1)" } as const;
+/** the size handles stand above everything on the canvas but the panels */
+export const SIZE_HANDLE_Z = 55;
 
 /** phone screen used by the "phone" canvas mode (Pixel-like, dp) */
 /* Pixel-class phone, 412 dp wide; kept at 892 dp tall so the whole screen fits the canvas */
@@ -598,24 +602,24 @@ export type Kind =
 
 /** how a carousel arranges its items: M3's four layouts */
 export type CarouselLayout = "multiBrowse" | "uncontained" | "hero" | "fullScreen";
-export const CAROUSEL_LAYOUTS: { key: CarouselLayout; icon: string }[] = [
-  { key: "multiBrowse", icon: "view_carousel" },
-  { key: "uncontained", icon: "view_week" },
-  { key: "hero", icon: "view_sidebar" },
-  { key: "fullScreen", icon: "crop_din" },
+export const CAROUSEL_LAYOUTS: { key: CarouselLayout; icon: string; text: "carouselMultiBrowse" | "carouselUncontained" | "carouselHero" | "carouselFullScreen" }[] = [
+  { key: "multiBrowse", icon: "view_carousel", text: "carouselMultiBrowse" },
+  { key: "uncontained", icon: "view_week", text: "carouselUncontained" },
+  { key: "hero", icon: "view_sidebar", text: "carouselHero" },
+  { key: "fullScreen", icon: "crop_din", text: "carouselFullScreen" },
 ];
 /** a date picker is a dialog, a calendar hanging off a field, or the field on its own */
 export type DateLayout = "modal" | "docked" | "input";
-export const DATE_LAYOUTS: { key: DateLayout; icon: string }[] = [
-  { key: "modal", icon: "calendar_month" },
-  { key: "docked", icon: "event" },
-  { key: "input", icon: "keyboard" },
+export const DATE_LAYOUTS: { key: DateLayout; icon: string; text: "dateModal" | "dateDocked" | "dateInput" }[] = [
+  { key: "modal", icon: "calendar_month", text: "dateModal" },
+  { key: "docked", icon: "event", text: "dateDocked" },
+  { key: "input", icon: "keyboard", text: "dateInput" },
 ];
 /** a time picker is read off a dial or typed in */
 export type TimeLayout = "dial" | "input";
-export const TIME_LAYOUTS: { key: TimeLayout; icon: string }[] = [
-  { key: "dial", icon: "schedule" },
-  { key: "input", icon: "keyboard" },
+export const TIME_LAYOUTS: { key: TimeLayout; icon: string; text: "timeDial" | "dateInput" }[] = [
+  { key: "dial", icon: "schedule", text: "timeDial" },
+  { key: "input", icon: "keyboard", text: "dateInput" },
 ];
 export type PartLayout = CarouselLayout | DateLayout | TimeLayout;
 export const carouselLayoutOf = (it: Item): CarouselLayout =>
@@ -623,6 +627,10 @@ export const carouselLayoutOf = (it: Item): CarouselLayout =>
 export const dateLayoutOf = (it: Item): DateLayout =>
   DATE_LAYOUTS.some((l) => l.key === it.layout) ? (it.layout as DateLayout) : "modal";
 export const timeLayoutOf = (it: Item): TimeLayout => (it.layout === "input" ? "input" : "dial");
+/** the share a progress indicator counts up to when it is first asked for one, and where a
+ *  slider's handle first sits */
+export const PROGRESS_DEFAULT_VALUE = 60;
+export const SLIDER_DEFAULT_VALUE = 40;
 /** the day a date picker has circled, and the time a clock's hands are set to */
 export const dayOf = (it: Item) => clamp(Math.round(it.day ?? 17), 1, 31);
 export const hourOf = (it: Item) => clamp(Math.round(it.hour ?? 10), 0, 23);
@@ -682,7 +690,7 @@ export function cardWidths(layout: string, width: number, count: number): number
 }
 
 /** an edge-to-edge carousel keeps the screen's margin at its start, an inset one sits flush */
-export const carouselInset = (width: number) => (width >= PHONE_W ? 16 : 0);
+export const carouselInset = (width: number) => (width >= PHONE_W ? PHONE_MARGIN : 0);
 
 /** how far the row of cards runs at rest, which on some layouts is past the part's own box */
 export function carouselRowWidth(it: Item, width: number): number {
@@ -1686,9 +1694,6 @@ export type Action = { to: string; transition: Transition; /** the address a `LI
  *  only the one measure -- it is a circle -- so its diameter is its height. */
 export const buttonHeightOf = (it: Item) =>
   clamp(Math.round(it.kind === "iconButton" ? (it.size ?? H) : (it.size2 ?? H)), BUTTON_H_MIN, BUTTON_H_MAX);
-/** a button is at its narrowest a circle, so how short it is sets how narrow it can be */
-export const buttonMinWidth = (it: Item) => buttonHeightOf(it);
-
 /** the height a chip is drawn at: the M3 32dp one unless the author set another */
 export const chipHeightOf = (it: Item) => clamp(Math.round(it.size2 ?? CHIP_H_MIN), CHIP_H_MIN, CHIP_H_MAX);
 
@@ -1760,10 +1765,11 @@ export const menuOpen = (it: Item) => opensMenu(it) && it[fabOpen] === true;
 export const splitMenuHeight = (it: Item) => (it.tabs?.length ?? 0) * SPLIT_MENU_ITEM_H + SPLIT_MENU_PAD * 2;
 /** the menu is drawn above the button rather than below it */
 export const menuRises = (it: Item) => it[menuUp] === true;
-/** Which way the menu unrolls: down while the sheet fits under the button, and up when it does
- *  not and there is more room above -- so a button near the foot of a screen opens upwards and
- *  one near its head opens down. A part on no screen at all drops, the way a menu usually does. */
-export function menuRisesAt(it: Item, top: number, frame: Frame | null): boolean {
+/** Which way a split button's menu unrolls: down while the sheet fits under the button, and up
+ *  when it does not and there is more room above -- so a button near the foot of a screen opens
+ *  upwards and one near its head opens down. A part on no screen at all drops, the way a menu
+ *  usually does. A FAB's menu always stacks above the FAB, so it never asks. */
+export function splitMenuRisesAt(it: Item, top: number, frame: Frame | null): boolean {
   if (!frame || !splitOpens(it)) return false;
   const y = top - frame.y;
   const below = frameSizeOf(frame).h - (y + buttonHeightOf(it));
@@ -1852,11 +1858,11 @@ export function actionsOf(it: Item): { slot: string; action: Action }[] {
   return out;
 }
 
-/** kinds a user can tap in the preview */
 /** The parts a press lights up from inside: the button family, each in its own shape. A bar, a
  *  slider, an indicator is not something a finger presses, so it is left as it was drawn. */
 export const RIPPLE_KINDS: Kind[] = ["button", "iconButton", "chip", "fab", "extendedFab", "splitButton"];
 
+/** kinds a user can tap in the preview */
 export const TAPPABLE: Kind[] = ["button", "iconButton", "fab", "extendedFab", "chip", "listItem", "card", "image", "text", "splitButton", "radio", "datePicker", "timePicker"];
 
 /** palette roles a user may pick as a background */

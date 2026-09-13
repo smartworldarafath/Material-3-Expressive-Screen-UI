@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Action, BACK_TARGET, Frame, Item, KIND_SPEC, LINK_TARGET, MENU_TARGET, Palette, TAPPABLE, TOGGLEABLE, isFab, isPhoneFrame } from "@/lib/tokens";
+import { Lang } from "@/lib/i18n";
 import { Icon } from "./M3Node";
 import { Field, IconBtn, Section, Select, SelectOption } from "./ui";
 import { AiHooks } from "./Inspector";
@@ -31,27 +32,42 @@ function AlignGlyph({ c, r, color }: { c: Col; r: Row3; color: string }) {
   );
 }
 
-/** two M3 primary tabs with the underline indicator */
 /** how tall the row of tabs is; the panel keeps that much room for it above what scrolls */
 export const TABS_H = 48;
 
+/** Two M3 primary tabs with the underline indicator. The panel under them is one of two, named
+ *  by the tab that opens it, and the arrow keys move between the two. */
 export function PartTabs({ value, onChange, p }: { value: Tab; onChange: (t: Tab) => void; p: Palette }) {
   const lang = useLang();
   const tabs: { key: Tab; icon: string; label: string }[] = [
     { key: "design", icon: "palette", label: t("design", lang) },
     { key: "behavior", icon: "bolt", label: t("trigger", lang) },
   ];
+  const walk = (e: React.KeyboardEvent, d: 1 | -1) => {
+    e.preventDefault();
+    const at = tabs.findIndex((tab) => tab.key === value);
+    const next = tabs[(at + d + tabs.length) % tabs.length].key;
+    onChange(next);
+    (e.currentTarget as HTMLElement).parentElement?.querySelector<HTMLElement>(`#part-tab-${next}`)?.focus();
+  };
   return (
     /* no rule under the row: the panel's own fade is what the two are told apart by, and the
        chosen tab keeps the line under its own label */
-    <div role="tablist" style={{ display: "flex", height: TABS_H }}>
+    <div role="tablist" aria-label={t("edit", lang)} style={{ display: "flex", height: TABS_H }}>
       {tabs.map((tab) => {
         const on = tab.key === value;
         return (
           <button
             key={tab.key}
+            id={`part-tab-${tab.key}`}
             role="tab"
             aria-selected={on}
+            aria-controls={`part-panel-${tab.key}`}
+            tabIndex={on ? 0 : -1}
+            onKeyDown={(e) => {
+              if (e.key === "ArrowRight" || e.key === "ArrowDown") walk(e, 1);
+              else if (e.key === "ArrowLeft" || e.key === "ArrowUp") walk(e, -1);
+            }}
             onClick={() => onChange(tab.key)}
             className="m3-press"
             style={{
@@ -155,8 +171,15 @@ function PartMenu({
   const lang = useLang();
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLDivElement | null>(null);
+  const menu = useRef<HTMLDivElement | null>(null);
+  /* the menu closes back onto the button that opened it, so focus has somewhere to land */
+  const close = () => {
+    setOpen(false);
+    box.current?.querySelector<HTMLElement>("button")?.focus();
+  };
   useEffect(() => {
     if (!open) return;
+    menu.current?.querySelector<HTMLElement>('[role="menuitem"]')?.focus();
     const onDown = (e: PointerEvent) => {
       if (!box.current?.contains(e.target as Node)) setOpen(false);
     };
@@ -164,6 +187,7 @@ function PartMenu({
       if (e.key === "Escape") {
         e.stopPropagation();
         setOpen(false);
+        box.current?.querySelector<HTMLElement>("button")?.focus();
       }
     };
     window.addEventListener("pointerdown", onDown, true);
@@ -173,17 +197,32 @@ function PartMenu({
       window.removeEventListener("keydown", onKey, true);
     };
   }, [open]);
-  const rows: { icon: string; label: string; danger?: boolean; onClick: () => void }[] = [
-    { icon: "content_copy", label: t("duplicate", lang), onClick: onDuplicate },
-    ...(onToggleLock ? [{ icon: locked ? "lock_open" : "lock", label: t(locked ? "unlock" : "lock", lang), onClick: onToggleLock }] : []),
-    { icon: "delete", label: t("delete", lang), danger: true, onClick: onDelete },
+  /* the arrow keys walk the entries, Home and End jump to either end */
+  const onMenuKey = (e: React.KeyboardEvent) => {
+    const items = Array.from(menu.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? []);
+    const at = items.indexOf(document.activeElement as HTMLElement);
+    let next = -1;
+    if (e.key === "ArrowDown") next = (at + 1) % items.length;
+    else if (e.key === "ArrowUp") next = (at - 1 + items.length) % items.length;
+    else if (e.key === "Home") next = 0;
+    else if (e.key === "End") next = items.length - 1;
+    if (next < 0) return;
+    e.preventDefault();
+    items[next]?.focus();
+  };
+  const rows: { key: string; icon: string; label: string; title?: string; danger?: boolean; onClick: () => void }[] = [
+    { key: "duplicate", icon: "content_copy", label: t("duplicate", lang), title: t("duplicateKey", lang), onClick: onDuplicate },
+    ...(onToggleLock ? [{ key: "lock", icon: locked ? "lock_open" : "lock", label: t(locked ? "unlock" : "lock", lang), onClick: onToggleLock }] : []),
+    { key: "delete", icon: "delete", label: t("delete", lang), title: t("deleteKey", lang), danger: true, onClick: onDelete },
   ];
   return (
     <div ref={box} style={{ position: "relative", flex: "0 0 auto" }}>
-      <IconBtn icon="more_vert" p={p} on={open} onClick={() => setOpen((o) => !o)} title={t("more", lang)} size={32} />
+      <IconBtn icon="more_vert" p={p} on={open} onClick={() => setOpen((o) => !o)} title={t("more", lang)} size={32} hasPopup="menu" expanded={open} />
       {open && (
         <div
+          ref={menu}
           role="menu"
+          onKeyDown={onMenuKey}
           style={{
             position: "absolute",
             right: 0,
@@ -198,10 +237,12 @@ function PartMenu({
         >
           {rows.map((r) => (
             <button
-              key={r.icon}
+              key={r.key}
               role="menuitem"
+              title={r.title}
+              tabIndex={-1}
               onClick={() => {
-                setOpen(false);
+                close();
                 r.onClick();
               }}
               className="m3-press"
@@ -292,7 +333,7 @@ export function PartHeader({
 }
 
 /** what a tap can be sent to: nothing, the screen it came from, a web page, or another screen */
-export function actionOptionsOf(item: Item, frame: Frame | null, frames: Frame[], lang: Parameters<typeof t>[1]): SelectOption[] {
+export function actionOptionsOf(item: Item, frame: Frame | null, frames: Frame[], lang: Lang): SelectOption[] {
   return [
     { key: "none", label: t("none", lang), icon: "block" },
     /* a FAB opens a menu where another part would flip its own look */
@@ -386,6 +427,17 @@ export function NoteSection({ item, ai, onChange, p }: { item: Item; ai: AiHooks
         action={<AiIconBtn ai={ai} p={p} />}
       />
     </Section>
+  );
+}
+
+/** nothing is opened by tapping this part: the tab says so and leaves the spec the room */
+export function NoTriggerNote({ p }: { p: Palette }) {
+  const lang = useLang();
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, lineHeight: 1.5, color: p.onSurfaceVariant, padding: "2px 6px 10px" }}>
+      <Icon name="block" size={18} />
+      <span>{t("noTrigger", lang)}</span>
+    </div>
   );
 }
 

@@ -47,7 +47,7 @@ const APART_GAP_Y = JOIN_GAP_Y + 8;
 const LIST_KINDS = new Set(["listItem", "textField", "select", "checkbox", "radio", "switch", "chip", "divider", "card"]);
 
 /** one movable unit: a group plus everything nested inside or overlapping it */
-type Unit = { ids: string[]; bb: Rect; kind: string; checked?: boolean; /** the first part, for family checks */ probe: Item };
+type Unit = { ids: string[]; bb: Rect; kind: Kind; checked?: boolean; /** the first part, for family checks */ probe: Item };
 
 const overlap = (a: Rect, b: Rect) => Math.min(a.r, b.r) > Math.max(a.l, b.l) && Math.min(a.b, b.b) > Math.max(a.t, b.t);
 const union = (a: Rect, b: Rect): Rect => ({ l: Math.min(a.l, b.l), t: Math.min(a.t, b.t), r: Math.max(a.r, b.r), b: Math.max(a.b, b.b) });
@@ -515,6 +515,12 @@ export function tidyFrame(groups: Group[], frame: Frame, frames: Frame[], widths
     const yy = spreading ? start + Math.round(even * (index + 1)) + stacked : rowY + offset;
     stacked += rowH;
     const inner = frameW - PHONE_MARGIN * 2;
+    /* a part that spans the screen -- a carousel, a bar laid in the flow -- is edge to edge, and
+     * the margin is not its to keep, whatever else shares its line */
+    const isFull = (u: Unit) => FULL_WIDTH.includes(u.kind) && u.bb.r - u.bb.l >= frameW - 1;
+    for (const u of row) if (isFull(u)) target.set(u, { l: fr.l, t: yy });
+    row = row.filter((u) => !isFull(u));
+    if (row.length === 0) return;
     if (row.length === 1) {
       const u = row[0];
       const w = u.bb.r - u.bb.l;
@@ -522,10 +528,7 @@ export function tidyFrame(groups: Group[], frame: Frame, frames: Frame[], widths
       /* a run nearly as wide as the content (a button row, a chip row) sits on the left margin,
        * so its edge lines up with the cards and lists above and below it */
       const wide = w >= inner * 0.7;
-      /* a part that spans the screen -- a carousel, a bar laid in the flow -- is edge to edge,
-       * and the margin is not its to keep */
-      const full = FULL_WIDTH.includes(u.kind as Kind) && w >= frameW - 1;
-      const l = full ? fr.l : wide || a === "left" ? fr.l + PHONE_MARGIN : a === "right" ? fr.r - PHONE_MARGIN - w : fr.l + Math.round((frameW - w) / 2);
+      const l = wide || a === "left" ? fr.l + PHONE_MARGIN : a === "right" ? fr.r - PHONE_MARGIN - w : fr.l + Math.round((frameW - w) / 2);
       target.set(u, { l, t: yy });
     } else if (row.length === 2 && row.some(isLabel) && row.some(isControl)) {
       /* a label with its control: the label on the left margin, the control on the right, like a settings row */

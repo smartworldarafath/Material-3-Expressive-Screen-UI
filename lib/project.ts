@@ -1,4 +1,4 @@
-import { Doc, KIND_ORDER, Kind, VARIANTS, isCardAlign, isCardImagePos, isPlace, isTextToken, isPlatform, isTrackThickness } from "./tokens";
+import { CAROUSEL_LAYOUTS, DATE_LAYOUTS, Doc, KIND_ORDER, Kind, TIME_LAYOUTS, VARIANTS, isCardAlign, isCardImagePos, isPlace, isTextToken, isPlatform, isTrackThickness } from "./tokens";
 
 /* A project file is the Doc as JSON, nothing more. Reading one back only checks
  * the shape the editor relies on; the same migrations that run on a saved
@@ -12,6 +12,10 @@ const validTabs = (tabs: unknown) =>
   tabs === undefined || (Array.isArray(tabs) && tabs.every((tab) => isRecord(tab) && typeof tab.label === "string" && (typeof tab.icon === "string" || tab.icon === null || tab.icon === undefined) && (tab.src === undefined || typeof tab.src === "string")));
 
 const validCorners = (c: unknown) => c === undefined || (isRecord(c) && ["tl", "tr", "bl", "br"].every((k) => Number.isFinite(c[k])));
+
+/** the layouts a carousel and the two pickers may be saved with */
+const LAYOUTS = new Set<string>([...CAROUSEL_LAYOUTS, ...DATE_LAYOUTS, ...TIME_LAYOUTS].map((l) => l.key));
+const optionalNumber = (v: unknown) => v === undefined || Number.isFinite(v);
 
 const validItem = (item: unknown) =>
   isRecord(item) &&
@@ -32,6 +36,11 @@ const validItem = (item: unknown) =>
   (item.supporting === undefined || typeof item.supporting === "string") &&
   (item.selected === undefined || Number.isFinite(item.selected)) &&
   (item.note === undefined || typeof item.note === "string") &&
+  (item.layout === undefined || (typeof item.layout === "string" && LAYOUTS.has(item.layout))) &&
+  optionalNumber(item.count) &&
+  optionalNumber(item.day) &&
+  optionalNumber(item.hour) &&
+  optionalNumber(item.minute) &&
   validTabs(item.tabs);
 
 const validGroup = (group: unknown) =>

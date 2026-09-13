@@ -15,12 +15,26 @@ import {
   sizeOf,
   timeLayoutOf,
 } from "@/lib/tokens";
-import { t, useLang } from "@/lib/i18n";
+import { Lang, t, useLang } from "@/lib/i18n";
 import { Icon } from "./M3Node";
 
 /* The three parts drawn here are wide surfaces rather than controls: a carousel's row of
  * cards, a calendar, a clock. They take their whole box and read their numbers off the item,
  * so a sketch shows a date and a time an author chose rather than today's. */
+
+/** The month every calendar in a sketch shows: one fixed month, so a saved sketch reads the same
+ *  on any day it is opened. The day circled on it is the author's; the weekday and the headline
+ *  are read off the real calendar for that month. */
+const PICKER_YEAR = 2026;
+const PICKER_MONTH = 2;
+const DAYS_IN_MONTH = new Date(PICKER_YEAR, PICKER_MONTH + 1, 0).getDate();
+const FIRST_WEEKDAY = new Date(PICKER_YEAR, PICKER_MONTH, 1).getDay();
+const LOCALE: Record<Lang, string> = { ja: "ja-JP", en: "en-US", zh: "zh-CN", ko: "ko-KR" };
+/** the day a picker has circled, written the way the sketch's language writes a date */
+export const dateHeadline = (day: number, lang: Lang) =>
+  new Intl.DateTimeFormat(LOCALE[lang], { weekday: "short", month: "short", day: "numeric" }).format(new Date(PICKER_YEAR, PICKER_MONTH, Math.min(day, DAYS_IN_MONTH)));
+/** the month the calendar shows, over its grid */
+export const monthHeadline = (lang: Lang) => new Intl.DateTimeFormat(LOCALE[lang], { year: "numeric", month: "long" }).format(new Date(PICKER_YEAR, PICKER_MONTH, 1));
 
 export function CarouselBody({ item, p, scroll = 0 }: { item: Item; p: Palette; scroll?: number }) {
   const { w, h } = sizeOf(item, {});
@@ -47,7 +61,7 @@ export function CarouselBody({ item, p, scroll = 0 }: { item: Item; p: Palette; 
               width: cw,
               height: "100%",
               borderRadius: r,
-              background: src ? p.surfaceContainerHighest : i === 0 ? p.primaryContainer : p.surfaceContainerHighest,
+              background: !src && i === 0 ? p.primaryContainer : p.surfaceContainerHighest,
               color: i === 0 ? p.onPrimaryContainer : p.onSurfaceVariant,
               display: "grid",
               placeItems: "center",
@@ -61,9 +75,11 @@ export function CarouselBody({ item, p, scroll = 0 }: { item: Item; p: Palette; 
             ) : (
               cw > 56 && !words && <Icon name="image" size={Math.min(32, Math.round(Math.min(cw, h) * 0.28))} />
             )}
-            {/* every card stands on the same scrim a card's own words stand on: it fades in from
-              * the foot of the card, so the row reads as one whatever the pictures are */}
-            <div style={{ position: "absolute", inset: 0, background: cardScrimOf("#ffffff", "end"), pointerEvents: "none" }} />
+            {/* a picture stands under the same scrim a card's own words stand on: it fades in from
+              * the foot of the card, so the row reads as one whatever the pictures are. The words
+              * over a picture are white whatever the theme, so the scrim is the one white ink asks
+              * for; a card with no picture is its own colour and needs none. */}
+            {src && <div style={{ position: "absolute", inset: 0, background: cardScrimOf("#ffffff", "end"), pointerEvents: "none" }} />}
             {/* only the card in the large keyline says anything: it fades in as it grows into it */}
             {cw > 72 && words && lead > 0 && (
               <span
@@ -78,7 +94,7 @@ export function CarouselBody({ item, p, scroll = 0 }: { item: Item; p: Palette; 
                   /* what the author typed, line breaks and all */
                   whiteSpace: "pre-line",
                   overflow: "hidden",
-                  color: "#fff",
+                  color: src ? "#fff" : "inherit",
                   opacity: lead,
                 }}
               >
@@ -97,7 +113,7 @@ function PickerActions({ p }: { p: Palette }) {
   const lang = useLang();
   return (
     <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, padding: "0 12px 12px" }}>
-      {[t("cancel", lang), "OK"].map((label) => (
+      {[t("cancel", lang), t("ok", lang)].map((label) => (
         <span key={label} style={{ height: 40, padding: "0 12px", borderRadius: 20, color: p.primary, fontSize: 14, fontWeight: 600, display: "inline-flex", alignItems: "center" }}>
           {label}
         </span>
@@ -114,13 +130,13 @@ const WEEKDAYS: Record<string, string[]> = {
   ko: ["일", "월", "화", "수", "목", "금", "토"],
 };
 
-/** a month as a grid: 31 days from a fixed weekday, with the chosen one on a filled circle */
+/** a month as a grid: its days from the weekday the month starts on, with the chosen one on a
+ *  filled circle */
 function Month({ item, p, cell }: { item: Item; p: Palette; cell: number }) {
   const lang = useLang();
   const day = dayOf(item);
-  /* the first of the month sits on the third column, so the grid reads like a real one */
-  const offset = 3;
-  const cells = Array.from({ length: 42 }, (_, i) => (i < offset || i - offset >= 31 ? null : i - offset + 1));
+  const offset = FIRST_WEEKDAY;
+  const cells = Array.from({ length: 42 }, (_, i) => (i < offset || i - offset >= DAYS_IN_MONTH ? null : i - offset + 1));
   return (
     <div style={{ padding: "0 24px" }}>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)" }}>
@@ -143,8 +159,6 @@ function Month({ item, p, cell }: { item: Item; p: Palette; cell: number }) {
                   fontWeight: d === day ? 700 : 500,
                   background: d === day ? p.primary : "transparent",
                   color: d === day ? p.onPrimary : p.onSurface,
-                  border: d === day - 1 ? `1px solid ${p.primary}` : "none",
-                  boxSizing: "border-box",
                 }}
               >
                 {d}
@@ -177,7 +191,7 @@ function DateField({ item, p }: { item: Item; p: Palette }) {
         }}
       >
         <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-          {item.label.trim() || t("dateExample", lang)}
+          {item.label.trim() || dateHeadline(dayOf(item), lang)}
         </span>
         <Icon name="calendar_month" size={22} />
       </div>
@@ -197,13 +211,13 @@ export function DatePickerBody({ item, p }: { item: Item; p: Palette }) {
         <div style={{ padding: "16px 24px 0" }}>
           <div style={{ fontSize: 12, color: p.onSurfaceVariant }}>{t("selectDate", lang)}</div>
           <div style={{ fontSize: 28, fontWeight: 500, color: p.onSurface, marginTop: 8, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-            {item.label.trim() || t("dateExample", lang)}
+            {item.label.trim() || dateHeadline(dayOf(item), lang)}
           </div>
         </div>
       )}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 16px 0 24px", color: p.onSurfaceVariant }}>
         <span style={{ fontSize: 14, fontWeight: 600, color: p.onSurface, display: "inline-flex", alignItems: "center", gap: 4 }}>
-          {t("monthExample", lang)}
+          {monthHeadline(lang)}
           <Icon name="arrow_drop_down" size={20} />
         </span>
         <span style={{ display: "inline-flex", gap: 12 }}>
@@ -244,6 +258,7 @@ function TimeBox({ text, on, p, wide }: { text: string; on: boolean; p: Palette;
 
 /** the clock face: the hours around it and a hand reaching the chosen one */
 function Dial({ item, p, size }: { item: Item; p: Palette; size: number }) {
+  /* the hour on a twelve-hour face: twelve stands at the top, where a zero would */
   const hour = hourOf(item) % 12 || 12;
   const R = size / 2;
   const ring = R - 20;
@@ -293,7 +308,7 @@ export function TimePickerBody({ item, p }: { item: Item; p: Palette }) {
   const hh = String(hour24 % 12 || 12).padStart(2, "0");
   const mm = String(minuteOf(item)).padStart(2, "0");
   const pm = hour24 >= 12;
-  const plate = Math.min(96, Math.round((w - CARD_PADDING * 2 - 60) / 2));
+  const plate = Math.max(0, Math.min(96, Math.round((w - CARD_PADDING * 2 - 60) / 2)));
   const dial = Math.min(256, w - 48);
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>

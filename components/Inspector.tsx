@@ -58,7 +58,7 @@ import {
 import { IconPicker } from "./IconPicker";
 import { ButtonInspector } from "./ButtonInspector";
 import { PartInspector } from "./PartInspector";
-import { PartTabs, Tab, hasTrigger } from "./PartPanel";
+import { NoTriggerNote, PartTabs, Tab, hasTrigger } from "./PartPanel";
 import { Icon } from "./M3Node";
 import { ButtonRun, CardLayoutPicker, CornerIcon, Field, IconBtn, ImageRow, PanelShell, Section, Segmented, SizePresets, Slider, TextTokenChips, TidyButton, TidyState, Toggle, TokenChips } from "./ui";
 import { AiWriteBtn } from "./AiPanel";
@@ -195,7 +195,6 @@ export function FrameSizePicker({
   );
 }
 
-/** Downscale a picked file so the document stays small enough for localStorage. */
 function FrameChips({
   frames,
   value,
@@ -1400,13 +1399,7 @@ export function Inspector({
 
       </>)}
 
-      {tab === "behavior" && !hasTrigger(item.kind) && actionSlots.length === 0 && (
-        /* nothing is opened by tapping this one: the tab says so and leaves the spec the room */
-        <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, lineHeight: 1.5, color: p.onSurfaceVariant, padding: "2px 6px 10px" }}>
-          <Icon name="block" size={18} />
-          <span>{t("noTrigger", lang)}</span>
-        </div>
-      )}
+      {tab === "behavior" && !hasTrigger(item.kind) && actionSlots.length === 0 && <NoTriggerNote p={p} />}
 
       {tab === "behavior" && (<>
       {(TAPPABLE.includes(item.kind) || actionSlots.length > 0) && frames.length > 0 && !editOn && (

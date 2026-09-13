@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { motion } from "motion/react";
+import { motion, useReducedMotion } from "motion/react";
 import { Action, BACK_TARGET, Frame, LINK_TARGET, Palette, Transition, frameSizeOf, linkHostOf, linkUrlOf } from "@/lib/tokens";
 import { Icon } from "./M3Node";
 import { TransitionPicker } from "./Inspector";
@@ -36,8 +36,34 @@ function entryOf(tr: Transition, w: number, h: number): { x?: number; y?: number
 }
 
 const LOOP = { duration: 0.6, ease: [0.2, 0, 0, 1] as const, repeat: Infinity, repeatDelay: 1.2 };
+/** someone who asked for less motion sees the box land once, and then stay */
+const ONCE = { duration: 0 };
 
-type Rect = { w: number; h: number; k: number };
+type Rect = { w: number; h: number };
+
+/** how wide the stage is on screen, so both screens can be scaled down together to fit it */
+function useAvailWidth(): [React.RefObject<HTMLDivElement | null>, number] {
+  const stage = useRef<HTMLDivElement | null>(null);
+  const [avail, setAvail] = useState(0);
+  useEffect(() => {
+    const el = stage.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => setAvail(el.clientWidth));
+    ro.observe(el);
+    setAvail(el.clientWidth);
+    return () => ro.disconnect();
+  }, []);
+  return [stage, avail];
+}
+
+/** the arrow between the screen a tap leaves and what it opens; decoration, so it says nothing */
+function StageArrow({ p, flip }: { p: Palette; flip?: boolean }) {
+  return (
+    <svg aria-hidden width={ARROW_W} height={16} viewBox="0 0 28 16" style={{ flex: "0 0 auto", transform: flip ? "scaleX(-1)" : undefined, marginTop: LABEL_H }}>
+      <path d="M2 8 H22 M16 2 L23 8 L16 14" fill="none" stroke={p.primary} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
 
 /** a screen drawn small: a rounded outline with the screen name above it. The box inside stands
  *  for what the screen shows, and it is the box that moves when a transition plays. */
@@ -135,25 +161,18 @@ export function TapStage({
   self: Frame | null;
   selfRect: { x: number; y: number; w: number; h: number } | null;
   action: Action | undefined;
-  onChange: (a: Action | undefined) => void;
+  onChange: (a: Action) => void;
   p: Palette;
 }) {
   const lang = useLang();
+  const reduced = useReducedMotion();
+  const loop = reduced ? ONCE : LOOP;
   const to = action?.to ?? null;
   const target = to && to !== BACK_TARGET ? (frames.find((f) => f.id === to) ?? null) : null;
   const back = to === BACK_TARGET;
 
   /* the stage scales both screens down together, so a desktop screen next to a phone one still fits */
-  const stage = useRef<HTMLDivElement | null>(null);
-  const [avail, setAvail] = useState(0);
-  useEffect(() => {
-    const el = stage.current;
-    if (!el) return;
-    const ro = new ResizeObserver(() => setAvail(el.clientWidth));
-    ro.observe(el);
-    setAvail(el.clientWidth);
-    return () => ro.disconnect();
-  }, []);
+  const [stage, avail] = useAvailWidth();
 
   const selfSize = self ? frameSizeOf(self) : { w: 412, h: 892 };
   const otherSize = target ? frameSizeOf(target) : back ? selfSize : null;
@@ -161,20 +180,16 @@ export function TapStage({
   const hint = !target && !back && frames.filter((f) => f.id !== self?.id).length === 0;
   const maxH = STAGE_H - STAGE_PAD * 2 - LABEL_H - (hint ? 34 : 0);
   const wBudget = Math.max(80, (avail || 260) - STAGE_PAD * 2 - (otherSize ? ARROW_W + GAP * 2 : 0));
-  const dpW = selfSize.w + (otherSize?.w ?? 0);
-  const dpH = Math.max(selfSize.h, otherSize?.h ?? 0);
+  const dpW = Math.max(1, selfSize.w + (otherSize?.w ?? 0));
+  const dpH = Math.max(1, selfSize.h, otherSize?.h ?? 0);
   const k = Math.min(maxH / dpH, wBudget / dpW);
-  const rectOf = (s: { w: number; h: number }): Rect => ({ w: Math.round(s.w * k), h: Math.round(s.h * k), k });
+  const rectOf = (s: { w: number; h: number }): Rect => ({ w: Math.round(s.w * k), h: Math.round(s.h * k) });
   const fromRect = rectOf(selfSize);
   const toRect = rectOf(otherSize ?? selfSize);
   const dot = selfRect && self ? { x: (selfRect.x + selfRect.w / 2 - self.x) * k, y: (selfRect.y + selfRect.h / 2 - self.y) * k } : null;
 
   const screen = t("screen", lang);
-  const arrow = (flip: boolean) => (
-    <svg key="arrow" width={ARROW_W} height={16} viewBox="0 0 28 16" style={{ flex: "0 0 auto", transform: flip ? "scaleX(-1)" : undefined, marginTop: LABEL_H }}>
-      <path d="M2 8 H22 M16 2 L23 8 L16 14" fill="none" stroke={p.primary} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
+  const arrow = (flip: boolean) => <StageArrow key="arrow" p={p} flip={flip} />;
 
   /* the screen the button sits on; going back, its box is the one that leaves */
   const fromFrame = (
@@ -191,7 +206,7 @@ export function TapStage({
             key={`out-${action?.transition}`}
             initial={{ x: 0, opacity: 1 }}
             animate={{ x: fromRect.w, opacity: 0 }}
-            transition={LOOP}
+            transition={loop}
             style={{ position: "absolute", inset: 0 }}
           >
             <ContentBox rect={fromRect} p={p} on={false} />
@@ -217,7 +232,7 @@ export function TapStage({
           key={`in-${action?.transition}-${to}`}
           initial={back ? { x: -toRect.w, opacity: 0 } : entryOf(action?.transition ?? "slide", toRect.w, toRect.h)}
           animate={{ x: 0, y: 0, opacity: 1, scale: 1 }}
-          transition={LOOP}
+          transition={loop}
           style={{ position: "absolute", inset: 0 }}
         >
           <ContentBox rect={toRect} p={p} on>
@@ -290,6 +305,7 @@ function MiniBrowser({ host, rect, p }: { host: string | null; rect: Rect; p: Pa
         </div>
         <div style={{ flex: 1, minWidth: 0, display: "grid", placeItems: "center", padding: "0 6px", gap: 2 }}>
           <Icon name="language" size={Math.max(14, Math.round(rect.w * 0.16))} />
+          {/* with no address yet the page shows the scheme one starts with: a fragment of a URL, the same in every language */}
           <span style={{ fontSize: 9, fontWeight: 600, color: p.onSurfaceVariant, maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{host ?? "https://"}</span>
         </div>
       </div>
@@ -313,16 +329,7 @@ export function LinkStage({
   p: Palette;
 }) {
   const lang = useLang();
-  const stage = useRef<HTMLDivElement | null>(null);
-  const [avail, setAvail] = useState(0);
-  useEffect(() => {
-    const el = stage.current;
-    if (!el) return;
-    const ro = new ResizeObserver(() => setAvail(el.clientWidth));
-    ro.observe(el);
-    setAvail(el.clientWidth);
-    return () => ro.disconnect();
-  }, []);
+  const [stage, avail] = useAvailWidth();
 
   const typed = action?.url ?? "";
   const host = linkHostOf(action);
@@ -333,8 +340,8 @@ export function LinkStage({
   const winSize = { w: Math.round(selfSize.w * 1.4), h: Math.round(selfSize.w * 0.95) };
   const maxH = STAGE_H - STAGE_PAD * 2 - LABEL_H;
   const wBudget = Math.max(80, (avail || 260) - STAGE_PAD * 2 - ARROW_W - GAP * 2);
-  const k = Math.min(maxH / Math.max(selfSize.h, winSize.h), wBudget / (selfSize.w + winSize.w));
-  const rectOf = (s: { w: number; h: number }): Rect => ({ w: Math.round(s.w * k), h: Math.round(s.h * k), k });
+  const k = Math.min(maxH / Math.max(1, selfSize.h, winSize.h), wBudget / Math.max(1, selfSize.w + winSize.w));
+  const rectOf = (s: { w: number; h: number }): Rect => ({ w: Math.round(s.w * k), h: Math.round(s.h * k) });
   const fromRect = rectOf(selfSize);
   const dot = selfRect && self ? { x: (selfRect.x + selfRect.w / 2 - self.x) * k, y: (selfRect.y + selfRect.h / 2 - self.y) * k } : null;
 
@@ -359,9 +366,7 @@ export function LinkStage({
         }}
       >
         <MiniFrame name={self ? self.name || t("screen", lang) : ""} p={p} on={false} dot={dot} rect={fromRect} box={<ContentBox rect={fromRect} p={p} on={false} />} />
-        <svg width={ARROW_W} height={16} viewBox="0 0 28 16" style={{ flex: "0 0 auto", marginTop: LABEL_H }}>
-          <path d="M2 8 H22 M16 2 L23 8 L16 14" fill="none" stroke={p.primary} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
+        <StageArrow p={p} />
         <MiniBrowser host={host} rect={rectOf(winSize)} p={p} />
       </div>
       <Field
@@ -370,8 +375,14 @@ export function LinkStage({
         placeholder="https://example.com"
         icon="link"
         p={p}
+        invalid={bad}
+        describedBy={bad ? "link-invalid" : undefined}
       />
-      {bad && <div style={{ fontSize: 12, lineHeight: 1.5, color: p.error, padding: "0 4px" }}>{t("linkInvalid", lang)}</div>}
+      {bad && (
+        <div id="link-invalid" role="alert" style={{ fontSize: 12, lineHeight: 1.5, color: p.error, padding: "0 4px" }}>
+          {t("linkInvalid", lang)}
+        </div>
+      )}
     </div>
   );
 }

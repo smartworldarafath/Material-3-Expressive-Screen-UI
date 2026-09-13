@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useRef, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import {
   FAB_MENU_CLOSE,
@@ -109,6 +109,8 @@ export function Icon({
 export type Ripple = {
   id: number;
   part: string | null;
+  /** the finger or pointer that made it, so lifting one finger leaves another's light alone */
+  pointer?: number;
   x: number;
   y: number;
   d: number;
@@ -141,7 +143,7 @@ export function Ripples({ list, color }: { list: Ripple[]; color: string }) {
           aria-hidden
           initial={{ opacity: 0.16, scale: r.from ?? 0 }}
           animate={{ opacity: 0.12, scale: 1 }}
-          exit={{ opacity: 0, scale: 1 }}
+          exit={{ opacity: 0 }}
           transition={reducedMotion ? { duration: 0 } : { scale: { duration: r.dur ?? RIPPLE_GROW, ease: MENU_EASE }, opacity: { duration: 0.3, ease: MENU_EASE } }}
           style={{
             position: "absolute",
@@ -187,6 +189,8 @@ function useRipples(on: boolean) {
   };
   const add = (e: React.PointerEvent) => {
     if (!on) return;
+    /* only the main button of a mouse is a press: a right or a middle click opens nothing here */
+    if (e.pointerType === "mouse" && e.button !== 0) return;
     /* a part made of more than one shape says which one was touched */
     const seg = (e.target as HTMLElement | null)?.closest?.("[data-part-shape]") as HTMLElement | null;
     const el = seg ?? (e.currentTarget as HTMLElement);
@@ -421,6 +425,7 @@ function TextContent({ item, p }: { item: Item; p: Palette }) {
  *  corners, so the box around them stays plain. */
 function SplitButtonContent({ item, p, open }: { item: Item; p: Palette; open?: boolean }) {
   const w = useWeight();
+  const reducedMotion = useReducedMotion();
   const st = variantStyle(item.variant, p);
   const h = buttonHeightOf(item);
   const m = splitMetrics(h);
@@ -484,13 +489,31 @@ function SplitButtonContent({ item, p, open }: { item: Item; p: Palette; open?: 
         }}
       >
         {/* the arrow turns over while the menu it opened is showing */}
-        <span style={{ display: "inline-flex", transform: open ? "rotate(180deg)" : "none", transition: "transform 200ms cubic-bezier(0.2, 0, 0, 1)" }}>
+        <span style={{ display: "inline-flex", transform: open ? "rotate(180deg)" : "none", transition: reducedMotion ? "none" : "transform 200ms cubic-bezier(0.2, 0, 0, 1)" }}>
           <Icon name="keyboard_arrow_down" size={m.icon} />
         </span>
         <RippleShape part={SPLIT_MENU_SLOT} />
       </span>
     </span>
   );
+}
+
+/** Whether a menu is drawn open, on its way out, or not yet. The preview draws its screens
+ *  inside an AnimatePresence that blocks animations on mount, so a menu is drawn shut for one
+ *  frame and told to open on the next, where nothing blocks it. A menu that has never been open
+ *  starts rolled up; one on its way out only gives way a little, because what carries it off is
+ *  the fade. */
+function useOpenPhase(shown: boolean): "shut" | "open" | "closing" {
+  const [phase, setPhase] = useState<"shut" | "open" | "closing">("shut");
+  useEffect(() => {
+    if (!shown) {
+      setPhase((was) => (was === "shut" ? "shut" : "closing"));
+      return;
+    }
+    const id = requestAnimationFrame(() => setPhase("open"));
+    return () => cancelAnimationFrame(id);
+  }, [shown]);
+  return phase;
 }
 
 /** A split button with its menu open: the button where the author put it, and the sheet of
@@ -501,17 +524,7 @@ function SplitMenuContent({ item, p, shown = true }: { item: Item; p: Palette; s
   const reducedMotion = useReducedMotion();
   const up = menuRises(item);
   const tabs = item.tabs ?? [];
-  /* the preview draws its screens inside an AnimatePresence that blocks animations on mount, so
-     the sheet is drawn shut for one frame and told to open on the next */
-  const [phase, setPhase] = useState<"shut" | "open" | "closing">("shut");
-  useEffect(() => {
-    if (!shown) {
-      setPhase((was) => (was === "shut" ? "shut" : "closing"));
-      return;
-    }
-    const id = requestAnimationFrame(() => setPhase("open"));
-    return () => cancelAnimationFrame(id);
-  }, [shown]);
+  const phase = useOpenPhase(shown);
   const open = phase === "open";
   const sheet = (
     <motion.div
@@ -674,6 +687,8 @@ const MENU_BUTTON_ROLL = 0.16;
 /** shutting is not the unrolling backwards: the entries give way a little and fade, from the far
  *  end down, so the menu is gone long before a full reverse run would have finished */
 const MENU_SHUT = 0.16;
+/** the one frame the drawing is swapped on, held long enough for the box not to ease across it */
+const MENU_SNAP_MS = 60;
 const MENU_SHUT_FADE = 0.1;
 const MENU_SHUT_STAGGER = 0.025;
 const MENU_SHUT_SCALE = 0.72;
@@ -701,24 +716,28 @@ const menuEntriesWait = (it: Item) => (overTall(it) ? MENU_BUTTON_ROLL : 0);
 function useMenuPhase(item: Item) {
   const open = menuOpen(item);
   const [drawn, setDrawn] = useState(open);
+  /* read by the effect without restarting it: only the menu opening or closing may do that */
+  const drawnRef = useRef(open);
   /** the frame the drawing is swapped on: the box must not ease its height across the swap */
   const [snap, setSnap] = useState(false);
   const shutMs = menuShutMs(item);
   useEffect(() => {
     if (open) {
+      drawnRef.current = true;
       setDrawn(true);
       return;
     }
-    if (!drawn) return;
+    if (!drawnRef.current) return;
     const id = setTimeout(() => {
+      drawnRef.current = false;
       setDrawn(false);
       setSnap(true);
     }, shutMs);
     return () => clearTimeout(id);
-  }, [open, drawn, shutMs]);
+  }, [open, shutMs]);
   useEffect(() => {
     if (!snap) return;
-    const id = setTimeout(() => setSnap(false), 60);
+    const id = setTimeout(() => setSnap(false), MENU_SNAP_MS);
     return () => clearTimeout(id);
   }, [snap]);
   return { drawn, open, snap };
@@ -744,19 +763,7 @@ function FabMenuContent({ item, p, shown = true }: { item: Item; p: Palette; sho
   const wait = menuEntriesWait(item);
   const after = (i: number) => wait + (tabs.length - 1 - i) * MENU_STAGGER;
   const before = (i: number) => i * MENU_SHUT_STAGGER;
-  /* the preview draws its screens inside an AnimatePresence that blocks animations on mount, so
-     the menu is drawn shut for one frame and told to open on the next, where nothing blocks it.
-     A menu that has never been open starts rolled up; one on its way out only gives way a little,
-     because what carries it off is the fade. */
-  const [phase, setPhase] = useState<"shut" | "open" | "closing">("shut");
-  useEffect(() => {
-    if (!shown) {
-      setPhase((was) => (was === "shut" ? "shut" : "closing"));
-      return;
-    }
-    const id = requestAnimationFrame(() => setPhase("open"));
-    return () => cancelAnimationFrame(id);
-  }, [shown]);
+  const phase = useOpenPhase(shown);
   const open = phase === "open";
   const closing = phase === "closing";
   const roll = (i: number) =>
@@ -927,7 +934,6 @@ function Body({ item, p, tabScroll, menuShown }: { item: Item; p: Palette; tabSc
       );
 
     case "fab": {
-      if (menuOpen(item)) return <FabMenuContent item={item} p={p} shown={menuShown} />;
       const s = item.size ?? 56;
       return (
         <div style={{ display: "grid", placeItems: "center", height: "100%" }}>
@@ -1684,8 +1690,7 @@ function Body({ item, p, tabScroll, menuShown }: { item: Item; p: Palette; tabSc
  *  takes: white over a filled button, the text's own colour over a pale surface. A split button
  *  paints no box of its own, so its two segments answer for it. */
 export function contentColor(item: Item, p: Palette): string {
-  if (item.kind === "splitButton") return variantStyle(item.variant, p).color as string;
-  const c = boxStyle(item, p).color;
+  const c = item.kind === "splitButton" ? variantStyle(item.variant, p).color : boxStyle(item, p).color;
   return typeof c === "string" ? c : p.onSurface;
 }
 
@@ -1844,13 +1849,13 @@ export function M3Node({
   const litPart =
     carried && item.kind === "splitButton" ? (carried.x > size.w - splitMetrics(buttonHeightOf(item)).trailW ? SPLIT_MENU_SLOT : SPLIT_MAIN_SLOT) : null;
   /* how far the light had already spread where it came from: read once, when it arrives, so the
-   * circle picks up where the other drawing left off and keeps going at the same pace */
-  const litSpread = useRef<{ from: number; dur: number } | null>(null);
-  if (!carried) litSpread.current = null;
-  else if (!litSpread.current) {
+   * circle picks up where the other drawing left off and keeps going at the same pace. It is read
+   * off the clock only when a new light arrives, never on a render that merely repeats. */
+  const litSpread = useMemo(() => {
+    if (!carried) return null;
     const gone = carried.grown ? RIPPLE_GROW : carried.at ? Math.max(0, (performance.now() - carried.at) / 1000) : 0;
-    litSpread.current = { from: Math.min(1, gone / RIPPLE_GROW), dur: Math.max(0, RIPPLE_GROW - gone) };
-  }
+    return { from: Math.min(1, gone / RIPPLE_GROW), dur: Math.max(0, RIPPLE_GROW - gone) };
+  }, [carried]);
   const shown: Ripple[] = carried
     ? [
         ...ripples.list,
@@ -1860,8 +1865,8 @@ export function M3Node({
           x: carried.x,
           y: carried.y,
           d: rippleSize({ width: size.w, height: size.h }, carried.x, carried.y),
-          from: litSpread.current?.from,
-          dur: litSpread.current?.dur,
+          from: litSpread?.from,
+          dur: litSpread?.dur,
         },
       ]
     : ripples.list;

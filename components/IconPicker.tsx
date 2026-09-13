@@ -9,6 +9,7 @@ type IconMeta = { n: string; p: number; t: string };
 const FONT = '24px "Material Symbols Rounded"';
 /** module-level so validation survives re-mounts of the panel */
 let cache: IconMeta[] | null = null;
+/** what has been measured so far, by name; a panel reads it into state when it opens */
 const glyphOk = new Map<string, boolean>();
 
 /** Candidates measured per pass. A real Material Symbols glyph is exactly 1em
@@ -33,9 +34,11 @@ export function IconPicker({
   const [icons, setIcons] = useState<IconMeta[] | null>(cache);
   const [q, setQ] = useState("");
   const [fontReady, setFontReady] = useState(false);
-  /* bumped after each measuring pass; the visible list depends on it because
-   * glyphOk is a plain map, not React state */
-  const [tick, bump] = useState(0);
+  /* the measured names, as state, so what is shown follows each measuring pass */
+  const [known, setKnown] = useState<ReadonlyMap<string, boolean>>(() => new Map(glyphOk));
+  /* the icon the arrow keys have reached in the grid */
+  const [cursor, setCursor] = useState(0);
+  const grid = useRef<HTMLDivElement>(null);
 
   const refEl = useRef<HTMLSpanElement>(null);
   const probeEls = useRef<Map<string, HTMLElement>>(new Map());
@@ -53,13 +56,23 @@ export function IconPicker({
 
   useEffect(() => {
     if (cache) return;
-    fetch(`${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/material-symbols.json`)
+    /* a panel closed mid-flight asks for nothing more; a list that failed to arrive is not kept,
+     * so the next opening asks again */
+    const ctl = new AbortController();
+    let alive = true;
+    fetch(`${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/material-symbols.json`, { signal: ctl.signal })
       .then((r) => r.json())
       .then((d: IconMeta[]) => {
         cache = d;
-        setIcons(d);
+        if (alive) setIcons(d);
       })
-      .catch(() => setIcons([]));
+      .catch(() => {
+        if (alive) setIcons([]);
+      });
+    return () => {
+      alive = false;
+      ctl.abort();
+    };
   }, []);
 
   useEffect(() => {
@@ -90,7 +103,7 @@ export function IconPicker({
     return [...starts, ...rest].slice(0, BATCH);
   }, [icons, q]);
 
-  const unknown = useMemo(() => candidates.filter((c) => !glyphOk.has(c.n)), [candidates]);
+  const unknown = useMemo(() => candidates.filter((c) => !known.has(c.n)), [candidates, known]);
 
   useLayoutEffect(() => {
     if (!fontReady || unknown.length === 0) return;
@@ -104,14 +117,29 @@ export function IconPicker({
       glyphOk.set(c.n, Math.abs(w - ref) < 0.75);
       learned = true;
     }
-    if (learned) bump((v) => v + 1);
+    if (learned) setKnown(new Map(glyphOk));
   }, [fontReady, unknown]);
 
-  const visible = useMemo(
-    () => candidates.filter((c) => glyphOk.get(c.n) === true).slice(0, SHOWN),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [candidates, fontReady, tick],
-  );
+  const visible = useMemo(() => candidates.filter((c) => known.get(c.n) === true).slice(0, SHOWN), [candidates, known]);
+  const at = Math.min(cursor, Math.max(0, visible.length - 1));
+  /* the arrow keys walk the grid: a row at a time up and down, read off how many tiles share a line */
+  const onGridKey = (e: React.KeyboardEvent) => {
+    const tiles = Array.from(grid.current?.querySelectorAll<HTMLElement>("[data-icon]") ?? []);
+    if (!tiles.length) return;
+    const top = tiles[0].offsetTop;
+    const cols = Math.max(1, tiles.findIndex((el) => el.offsetTop !== top)) || tiles.length;
+    let next = -1;
+    if (e.key === "ArrowRight") next = Math.min(at + 1, tiles.length - 1);
+    else if (e.key === "ArrowLeft") next = Math.max(at - 1, 0);
+    else if (e.key === "ArrowDown") next = Math.min(at + cols, tiles.length - 1);
+    else if (e.key === "ArrowUp") next = Math.max(at - cols, 0);
+    else if (e.key === "Home") next = 0;
+    else if (e.key === "End") next = tiles.length - 1;
+    if (next < 0) return;
+    e.preventDefault();
+    setCursor(next);
+    tiles[next].focus();
+  };
 
   const loading = !icons || !fontReady;
 
@@ -179,9 +207,13 @@ export function IconPicker({
           />
           <input
             aria-label={t("searchIcons", lang)}
+            autoFocus
             value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder={icons ? t("searchIcons", lang) : "…"}
+            onChange={(e) => {
+              setQ(e.target.value);
+              setCursor(0);
+            }}
+            placeholder={icons ? t("searchIcons", lang) : t("loading", lang)}
             style={{
               flex: 1,
               minWidth: 0,
@@ -196,6 +228,8 @@ export function IconPicker({
           />
         </div>
         <div
+          ref={grid}
+          onKeyDown={onGridKey}
           style={{
             display: "grid",
             gridTemplateColumns: "repeat(auto-fill, minmax(42px, 1fr))",
@@ -230,12 +264,15 @@ export function IconPicker({
               </svg>
             </button>
           )}
-          {visible.map((i) => (
+          {visible.map((i, idx) => (
             <button
               key={i.n}
+              data-icon={i.n}
               title={i.n}
               aria-label={i.n}
               aria-pressed={value === i.n}
+              tabIndex={idx === at ? 0 : -1}
+              onFocus={() => setCursor(idx)}
               onClick={() => onChange(i.n)}
               style={{
                 aspectRatio: "1",
@@ -255,13 +292,15 @@ export function IconPicker({
             </button>
           ))}
           {!loading && visible.length === 0 && (
-            <div style={{ gridColumn: "1 / -1", padding: 16, fontSize: 13, color: palette.outline }}>
-              <span className="msr" style={{ fontSize: 24 }}>search_off</span>
+            <div role="status" style={{ gridColumn: "1 / -1", padding: 16, fontSize: 13, color: palette.outline, display: "flex", alignItems: "center", gap: 8 }}>
+              <span className="msr" aria-hidden style={{ fontSize: 24 }}>search_off</span>
+              {t("noIcons", lang)}
             </div>
           )}
           {loading && (
-            <div style={{ gridColumn: "1 / -1", padding: 16, fontSize: 13, color: palette.outline }}>
-              <span className="msr" style={{ fontSize: 24 }}>hourglass_top</span>
+            <div role="status" style={{ gridColumn: "1 / -1", padding: 16, fontSize: 13, color: palette.outline, display: "flex", alignItems: "center", gap: 8 }}>
+              <span className="msr" aria-hidden style={{ fontSize: 24 }}>hourglass_top</span>
+              {t("loading", lang)}
             </div>
           )}
         </div>

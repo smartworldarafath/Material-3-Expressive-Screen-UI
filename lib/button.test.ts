@@ -23,7 +23,6 @@ import {
   LINK_TARGET,
   buttonHeightOf,
   buttonMetrics,
-  buttonMinWidth,
   buttonSizeKeyOf,
   baseRadii,
   linkHostOf,
@@ -32,6 +31,13 @@ import {
   matchRunSize,
   runSizePatch,
   sizeOf,
+  splitMetrics,
+  splitOpens,
+  splitMenuHeight,
+  splitMenuRisesAt,
+  reorderTabsPatch,
+  SPLIT_MENU_ITEM_H,
+  SPLIT_MENU_PAD,
 } from "./tokens";
 
 const button = (patch: Partial<Item> = {}): Item => ({ ...makeItem("button"), ...patch });
@@ -63,8 +69,8 @@ describe("the button's M3 size scale", () => {
     expect(sizeOf(tall, {})).toEqual({ w: 200, h: 96 });
     expect(baseRadii(tall)).toEqual({ tl: 48, tr: 48, bl: 48, br: 48 });
     /* at its narrowest the button is a circle, so a taller one cannot be as narrow */
-    expect(buttonMinWidth(tall)).toBe(96);
-    expect(buttonMinWidth(button())).toBe(H);
+    expect(buttonHeightOf(tall)).toBe(96);
+    expect(buttonHeightOf(button())).toBe(H);
   });
 });
 
@@ -186,5 +192,43 @@ describe("a run of chips shares one measure", () => {
     const run = [chip({ id: "a" }), chip({ id: "b" })];
     const next = runSizePatch(run, "a", { size2: 56 });
     expect(next.map((it) => it.size2)).toEqual([56, 56]);
+  });
+});
+
+describe("a split button and its menu", () => {
+  const split = (patch: Partial<Item> = {}): Item => ({ ...makeItem("splitButton"), id: "s", ...patch });
+
+  it("is made of what a button of its height is made of, with a tighter arrow segment", () => {
+    const m = splitMetrics(H);
+    expect(m.trailPadX).toBe(Math.round(buttonMetrics(H).padX * 0.6));
+    expect(m.trailW).toBe(m.icon + m.trailPadX * 2);
+  });
+
+  it("opens a menu only while it has entries to show", () => {
+    expect(splitOpens(split({ tabs: [] }))).toBe(false);
+    const withMenu = split({ tabs: [{ icon: "", label: "A" }, { icon: "", label: "B" }] });
+    expect(splitOpens(withMenu)).toBe(true);
+    expect(splitMenuHeight(withMenu)).toBe(2 * SPLIT_MENU_ITEM_H + SPLIT_MENU_PAD * 2);
+  });
+
+  it("drops its menu below the button where there is room, and raises it near the foot of a screen", () => {
+    const it = split({ tabs: [{ icon: "", label: "A" }, { icon: "", label: "B" }, { icon: "", label: "C" }] });
+    const frame = { id: "f", name: "Home", x: 0, y: 0 };
+    expect(splitMenuRisesAt(it, 100, frame)).toBe(false);
+    expect(splitMenuRisesAt(it, 800, frame)).toBe(true);
+    /* off any screen, a menu drops the way a menu usually does */
+    expect(splitMenuRisesAt(it, 800, null)).toBe(false);
+  });
+
+  it("keeps each entry's destination and the chosen one when the entries are reordered", () => {
+    const it = split({
+      tabs: [{ icon: "", label: "A" }, { icon: "", label: "B" }, { icon: "", label: "C" }],
+      selected: 2,
+      actions: { "tab:0": { to: "f1", transition: "slide" }, "tab:2": { to: "f3", transition: "fade" } },
+    });
+    const next = reorderTabsPatch(it, [2, 0, 1]);
+    expect(next.tabs?.map((t) => t.label)).toEqual(["C", "A", "B"]);
+    expect(next.selected).toBe(0);
+    expect(next.actions).toEqual({ "tab:1": { to: "f1", transition: "slide" }, "tab:0": { to: "f3", transition: "fade" } });
   });
 });

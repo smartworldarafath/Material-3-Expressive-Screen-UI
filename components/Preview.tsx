@@ -39,7 +39,7 @@ import {
   buttonHeightOf,
   connectSpecOf,
   menuRises,
-  menuRisesAt,
+  splitMenuRisesAt,
   menuUp,
   opensMenu,
   splitMenuHeight,
@@ -69,7 +69,6 @@ import {
 import { Icon, M3Node, Ripples, contentColor, menuShutMs, rippleSize } from "./M3Node";
 import type { Ripple } from "./M3Node";
 import { IconBtn } from "./ui";
-
 import { t, useLang } from "@/lib/i18n";
 import { constrainModalRails, modalRailOf, updateRail } from "@/lib/rail";
 import { railMotionTargets } from "@/lib/railView";
@@ -174,6 +173,17 @@ function flippedLook(it: Item): Item {
  *  indicator, a slider, a picture is not something that is pressed, so it stays as it is drawn.
  *  A destination inside a bar has its own hit area, and lights up through that. */
 const TAP_LIT: Kind[] = [...RIPPLE_KINDS, "listItem", "select", "checkbox", "radio", "switch"];
+/** about how long a browser's smooth scroll takes to come to rest */
+const SMOOTH_SCROLL_MS = 420;
+type Shape = { key: string; style: React.CSSProperties };
+/** the same shapes, read off the same drawing: nothing to redraw */
+function sameShapes(a: Shape[], b: Shape[]): boolean {
+  if (a.length !== b.length) return false;
+  return a.every((s, i) => {
+    const o = b[i];
+    return s.key === o.key && s.style.left === o.style.left && s.style.top === o.style.top && s.style.width === o.style.width && s.style.height === o.style.height && s.style.borderRadius === o.style.borderRadius;
+  });
+}
 
 /** A part in the preview: a ripple spreads out of the point touched while the pointer is on it,
  *  then it fires its action on release, like a real widget. */
@@ -213,14 +223,41 @@ function Tappable({
   /* the touches still lighting the part up; each fades once the finger is off it */
   const [ripples, setRipples] = useState<Ripple[]>([]);
   const nextRipple = useRef(0);
+  /* each light goes out when its own pointer lifts, wherever that happens: on the part, off it,
+   * or on a part that has gone; the listeners waiting for that are dropped with the part */
+  const lifts = useRef(new Map<number, () => void>());
+  useEffect(() => () => lifts.current.forEach((off) => off()), []);
+  const endRipple = (pointer: number) => {
+    lifts.current.get(pointer)?.();
+    setRipples((rs) => (rs.some((r) => r.pointer === pointer) ? rs.filter((r) => r.pointer !== pointer) : rs));
+  };
   const addRipple = (e: React.PointerEvent, slot: string | null) => {
+    if (e.pointerType === "mouse" && e.button !== 0) return;
     const el = e.currentTarget as HTMLElement;
     const r = el.getBoundingClientRect();
     const x = e.clientX - r.left;
     const y = e.clientY - r.top;
-    setRipples((rs) => [...rs, { id: ++nextRipple.current, part: slot, x, y, d: rippleSize(r, x, y) }]);
+    const pointer = e.pointerId;
+    setRipples((rs) => [...rs, { id: ++nextRipple.current, part: slot, pointer, x, y, d: rippleSize(r, x, y) }]);
+    const lift = (ev: PointerEvent) => {
+      if (ev.pointerId !== pointer) return;
+      endRipple(pointer);
+    };
+    lifts.current.get(pointer)?.();
+    const off = () => {
+      lifts.current.delete(pointer);
+      window.removeEventListener("pointerup", lift);
+      window.removeEventListener("pointercancel", lift);
+    };
+    lifts.current.set(pointer, off);
+    window.addEventListener("pointerup", lift);
+    window.addEventListener("pointercancel", lift);
   };
-  const endRipples = () => setRipples((rs) => (rs.length ? [] : rs));
+  /** every light at once: a row that turned out to be a drag was never a tap */
+  const endRipples = () => {
+    lifts.current.forEach((off) => off());
+    setRipples((rs) => (rs.length ? [] : rs));
+  };
   const menu = !!menuOpen;
   /* a tab row with more tabs than fit scrolls: by wheel, touch, or dragging the row; a chosen tab is brought into view */
   const scrollTabs = isScrollableTabs(item);
@@ -249,6 +286,9 @@ function Tappable({
   const dragging = useRef(false);
   const settling = useRef(false);
   const settleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const settlingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** the drag of the row in flight, so a part taken off the screen mid-drag lets go of the page */
+  const rowDragEnd = useRef<(() => void) | null>(null);
   const settleRow = (el: HTMLDivElement, from?: number) => {
     if (!scrollCards) return;
     const stops = carouselStops(item, rowW);
@@ -272,7 +312,10 @@ function Tappable({
     if (Math.abs(to - el.scrollLeft) < 1) return;
     settling.current = true;
     el.scrollTo({ left: to, behavior: "smooth" });
-    window.setTimeout(() => (settling.current = false), 420);
+    /* the browser's smooth scroll says nothing when it is done, so the row is taken to have
+     * settled after about the time one takes; the wait is dropped with the part */
+    if (settlingTimer.current) clearTimeout(settlingTimer.current);
+    settlingTimer.current = setTimeout(() => (settling.current = false), SMOOTH_SCROLL_MS);
   };
   /** the row has been let alone for a moment: it settles on the card nearest its head */
   const restRow = (el: HTMLDivElement) => {
@@ -282,6 +325,8 @@ function Tappable({
   };
   useEffect(() => () => {
     if (settleTimer.current) clearTimeout(settleTimer.current);
+    if (settlingTimer.current) clearTimeout(settlingTimer.current);
+    rowDragEnd.current?.();
   }, []);
 
   /** A row of cards travels slower than the hand that carries it: its cards are large, and each
@@ -310,6 +355,7 @@ function Tappable({
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", end);
       window.removeEventListener("pointercancel", end);
+      rowDragEnd.current = null;
       dragging.current = false;
       document.body.style.userSelect = selectable;
       if (moved) window.getSelection()?.removeAllRanges();
@@ -318,6 +364,7 @@ function Tappable({
       /* a row the finger dragged was never a tap: the light it took goes out with the drag */
       if (moved) endRipples();
     };
+    rowDragEnd.current = end;
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", end);
     window.addEventListener("pointercancel", end);
@@ -327,17 +374,24 @@ function Tappable({
      screen the entries stand in, so the pills and the button are left to speak for themselves.
      The menu keeps that corner while it rolls back in, so the layer stays away until it is gone. */
   const openMenu = fabMenuOpen(item);
-  const shutMs = menuShutMs(item);
   const [menuCorner, setMenuCorner] = useState(openMenu);
+  /* read by the effect without restarting it: only the menu opening or closing may do that */
+  const cornerRef = useRef(openMenu);
+  /* only a part with a menu on the way in or out has a close to wait for */
+  const shutMs = openMenu || menuCorner ? menuShutMs(item) : 0;
   useEffect(() => {
     if (openMenu) {
+      cornerRef.current = true;
       setMenuCorner(true);
       return;
     }
-    if (!menuCorner) return;
-    const id = setTimeout(() => setMenuCorner(false), shutMs);
+    if (!cornerRef.current) return;
+    const id = setTimeout(() => {
+      cornerRef.current = false;
+      setMenuCorner(false);
+    }, shutMs);
     return () => clearTimeout(id);
-  }, [openMenu, menuCorner, shutMs]);
+  }, [openMenu, shutMs]);
   /* the live reading leads the held one: the box widens to the menu on the very frame the tap
      lands, and a layer still cut to the old one would flash across the whole width of it */
   const boxless = openMenu || menuCorner || item.kind === "fabMenu";
@@ -377,8 +431,9 @@ function Tappable({
         });
       }
     }
-    setShapes((was) => (JSON.stringify(was) === JSON.stringify(found) ? was : found));
-  });
+    setShapes((was) => (sameShapes(was, found) ? was : found));
+    /* the shapes move only when what is drawn does: the part's own measures, or its menu */
+  }, [item.kind, item.variant, item.label, item.icon, item.size, item.size2, item.tabs?.length, openMenu]);
 
   /* the open menu closes on a tap anywhere else or on Escape */
   useEffect(() => {
@@ -397,12 +452,41 @@ function Tappable({
     };
   }, [menu, onMenu]);
 
+  /* a wheel over a row that only runs sideways moves it sideways, whichever way it is turned,
+   * and the page under it stays put whenever the row itself could move; the listener is the
+   * element's own, so it may say so (React's wheel handler is passive) */
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el || !scrollRow) return;
+    const onWheel = (e: WheelEvent) => {
+      const d = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+      const canMove = d < 0 ? el.scrollLeft > 0 : el.scrollLeft < el.scrollWidth - el.clientWidth - 1;
+      if (canMove) e.preventDefault();
+      el.scrollLeft += d * GAIN;
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, [scrollRow, GAIN]);
+
   const dragValue = (e: React.PointerEvent) => {
     const r = ref.current?.getBoundingClientRect();
     if (!r || !onValue) return;
     onValue(Math.round(Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * 100));
   };
 
+  /* a card is a place of its own to tap: the hit areas follow the very shapes the row is drawn
+     with, so each one covers the card the finger is looking at however far it has been carried.
+     They ride inside the scrolling layer, so their own scroll is added back. Worked out again
+     only when the row moves, since it moves on every frame of a drag. */
+  const cardSlots = useMemo(() => {
+    if (!onSlot || item.kind !== "carousel") return [];
+    const out: { key: string; style: React.CSSProperties }[] = [];
+    carouselShapes(item, rowW, tabScroll).forEach(({ x, w: cw }, i) => {
+      if (cw < 8) return;
+      out.push({ key: `tab:${i}`, style: { left: tabScroll + x, width: cw, top: 0, bottom: 0, borderRadius: 16 } });
+    });
+    return out;
+  }, [onSlot, item, rowW, tabScroll]);
   /** hit areas for the icons on a top app bar and the destinations on a navigation bar */
   const slots: { key: string; style: React.CSSProperties }[] = [];
   if (onSlot && item.kind === "topAppBar") {
@@ -427,16 +511,7 @@ function Tappable({
     for (let i = 0; i < n; i++)
       slots.push({ key: `tab:${i}`, style: { left: rail.inset, width: rail.width - 2 * rail.inset, top: rail.top + i * (rail.itemHeight + rail.gap), height: rail.itemHeight, borderRadius: item.railExpanded ? 28 : 16 } });
   }
-  if (onSlot && item.kind === "carousel") {
-    /* a card is a place of its own to tap: the hit areas follow the very shapes the row is drawn
-       with, so each one covers the card the finger is looking at however far it has been carried.
-       They ride inside the scrolling layer, so their own scroll is added back. */
-    const { w } = sizeOf(item, widths);
-    carouselShapes(item, w, tabScroll).forEach(({ x, w: cw }, i) => {
-      if (cw < 8) return;
-      slots.push({ key: `tab:${i}`, style: { left: tabScroll + x, width: cw, top: 0, bottom: 0, borderRadius: 16 } });
-    });
-  }
+  if (onSlot && item.kind === "carousel") slots.push(...cardSlots);
   if (onSlot && item.kind === "toolbar") {
     const n = item.tabs?.length ?? 0;
     for (let i = 0; i < n; i++) slots.push({ key: `tab:${i}`, style: { left: 8 + i * 52, width: 48, top: 8, height: 48, borderRadius: 24 } });
@@ -481,23 +556,23 @@ function Tappable({
       onPointerMove={(e) => {
         if (onValue && pressed) dragValue(e);
       }}
-      onPointerUp={() => {
+      onPointerUp={(e) => {
         setPressed(false);
-        endRipples();
+        endRipple(e.pointerId);
       }}
-      onPointerCancel={() => {
+      onPointerCancel={(e) => {
         setPressed(false);
-        endRipples();
+        endRipple(e.pointerId);
       }}
-      onPointerLeave={() => {
+      onPointerLeave={(e) => {
         if (!onValue) setPressed(false);
-        endRipples();
+        endRipple(e.pointerId);
       }}
       onClick={onPick ? () => onMenu?.(!menu) : onTap}
       style={{ cursor: live || onValue ? "pointer" : "default", display: "flex", position: "relative", touchAction: scrollRow ? "pan-x" : "none" }}
     >
       <M3Node item={item} palette={p} widths={widths} radii={radii} interactive={false} pressed={pressed && !onValue && !boxless} tabScroll={scrollRow ? tabScroll : undefined} />
-      {live && !boxless && !segmented && (
+      {live && !boxless && !segmented && TAP_LIT.includes(item.kind) && (
         <div
           aria-hidden
           style={{
@@ -517,13 +592,24 @@ function Tappable({
       )}
       {(() => {
       const slotNodes = slots.map((s) => {
-        const Slot = onRailToggle ? "button" : "div";
-        return <Slot
+        /* a place a tap is sent from is a button: reachable from the keyboard, named for a reader */
+        const tab = s.key.startsWith("tab:") ? Number(s.key.slice(4)) : -1;
+        const name =
+          s.key === "railToggle"
+            ? t(item.railExpanded ? "collapseNavigation" : "expandNavigation", lang)
+            : tab >= 0
+              ? item.tabs?.[tab]?.label || `${tab + 1}`
+              : s.key === "icon"
+                ? (item.icon ?? s.key)
+                : s.key === "icon2"
+                  ? (item.icon2 ?? s.key)
+                  : s.key;
+        return <button
           key={s.key}
-          type={onRailToggle ? "button" : undefined}
+          type="button"
           className={onRailToggle ? "m3-rail-hit" : undefined}
           data-rail-toggle={s.key === "railToggle" ? item.id : undefined}
-          aria-label={onRailToggle ? (s.key === "railToggle" ? t(item.railExpanded ? "collapseNavigation" : "expandNavigation", lang) : item.tabs?.[Number(s.key.slice(4))]?.label) : undefined}
+          aria-label={name}
           aria-expanded={s.key === "railToggle" ? !!item.railExpanded : undefined}
           aria-current={onRailToggle && s.key === `tab:${item.selected ?? 0}` ? "page" : undefined}
           onPointerDown={(e) => {
@@ -531,9 +617,9 @@ function Tappable({
             /* a destination lights up under the finger; a picture on a carousel card does not */
             if (item.kind !== "carousel") addRipple(e, s.key);
           }}
-          onPointerUp={endRipples}
-          onPointerCancel={endRipples}
-          onPointerLeave={endRipples}
+          onPointerUp={(e) => endRipple(e.pointerId)}
+          onPointerCancel={(e) => endRipple(e.pointerId)}
+          onPointerLeave={(e) => endRipple(e.pointerId)}
           onClick={(e) => {
             e.stopPropagation();
             if (s.key === "railToggle") onRailToggle?.(e.detail !== 0);
@@ -548,11 +634,12 @@ function Tappable({
             cursor: "pointer",
             background: "transparent",
             overflow: "hidden",
+            font: "inherit",
             ...s.style,
           }}
         >
           {rippleNodes(s.key)}
-        </Slot>;
+        </button>;
       });
       if (!scrollRow) return slotNodes;
       const n = item.tabs?.length ?? 0;
@@ -564,11 +651,6 @@ function Tappable({
           onScroll={(e) => {
             setTabScroll(e.currentTarget.scrollLeft);
             restRow(e.currentTarget);
-          }}
-          /* a wheel over a row that only runs sideways moves it sideways, whichever way it is turned */
-          onWheel={(e) => {
-            const d = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
-            e.currentTarget.scrollLeft += d * GAIN;
           }}
           onPointerDownCapture={dragRow}
           /* a card is a picture, but it is not one to be dragged out of the row */
@@ -803,7 +885,7 @@ function Screen({
         const fabCorner = g.items.length === 1 && hasMenu(g.items[0]) ? sizeOf({ ...g.items[0], [fabOpen]: undefined }, widths) : null;
         /* a split button whose menu rises hangs from its own bottom edge, so the button itself
            stays where the author put it and the sheet grows into the room above */
-        const rising = g.items.length === 1 && splitOpens(g.items[0]) && flipped.has(g.items[0].id) && menuRisesAt(g.items[0], g.y, frame);
+        const rising = g.items.length === 1 && splitOpens(g.items[0]) && flipped.has(g.items[0].id) && splitMenuRisesAt(g.items[0], g.y, frame);
         const riseH = rising ? sizeOf({ ...g.items[0], [fabOpen]: undefined }, widths).h : 0;
         return (
         <div
@@ -854,7 +936,7 @@ function Screen({
             const act = it.action;
             let shown = flipped.has(it.id) ? flippedLook(it) : it;
             /* the menu drops below the button, or rises above it where the screen runs out */
-            if (splitOpens(shown) && flipped.has(it.id)) shown = { ...shown, [menuUp]: menuRisesAt(it, g.y, frame) };
+            if (splitOpens(shown) && flipped.has(it.id)) shown = { ...shown, [menuUp]: splitMenuRisesAt(it, g.y, frame) };
             if (it.kind === "slider" && values[it.id] !== undefined) shown = { ...shown, value: values[it.id] };
             if (it.kind === "select" && values[it.id] !== undefined) shown = { ...shown, selected: values[it.id] };
             const navKind = it.kind === "bottomNav" || it.kind === "navRail" || it.kind === "tabs";

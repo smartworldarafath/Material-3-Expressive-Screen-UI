@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { animate } from "motion/react";
-import { Palette, SETTLE_MS, clamp, lerp } from "@/lib/tokens";
+import { Palette, SETTLE_MS, SIZE_HANDLE_Z, clamp, lerp } from "@/lib/tokens";
 import { t, useLang } from "@/lib/i18n";
 
 /** which edge a button is held by, or which point around an icon button's circle */
@@ -17,6 +17,7 @@ export type Box = { l: number; t: number; r: number; b: number };
 export const CORNER_GAIN = 1 + Math.SQRT1_2;
 
 const same = (a: Box, c: Box) => a.l === c.l && a.t === c.t && a.r === c.r && a.b === c.b;
+const ALL_SIDES: readonly HandleSide[] = ["left", "right", "top", "bottom"];
 const mix = (a: Box, c: Box, k: number): Box => ({ l: lerp(a.l, c.l, k), t: lerp(a.t, c.t, k), r: lerp(a.r, c.r, k), b: lerp(a.b, c.b, k) });
 
 /** The handles a lone button is resized by: one on each edge, or four points around a circle.
@@ -30,6 +31,7 @@ export function SizeHandles({
   instant,
   p,
   onDown,
+  onNudge,
 }: {
   /** the part is a circle: it is held by four points on it rather than by its edges */
   round: boolean;
@@ -42,17 +44,22 @@ export function SizeHandles({
   instant: boolean;
   p: Palette;
   onDown: (e: React.PointerEvent, side: HandleSide) => void;
+  /** the keyboard's way of pulling a handle: one step out or in on the side it holds */
+  onNudge: (side: HandleSide, dir: 1 | -1) => void;
 }) {
   const lang = useLang();
   const [shown, setShown] = useState(box);
   const at = useRef(box);
+  /* the box is read as its four edges, so a new box -- and only a new box -- starts the easing */
+  const { l, t: top, r, b } = box;
   useEffect(() => {
     const from = at.current;
+    const next: Box = { l, t: top, r, b };
     const land = () => {
-      at.current = box;
-      setShown(box);
+      at.current = next;
+      setShown(next);
     };
-    if (instant || same(from, box)) {
+    if (instant || same(from, next)) {
       land();
       return;
     }
@@ -60,15 +67,14 @@ export function SizeHandles({
       duration: SETTLE_MS / 1000,
       ease: [0.2, 0, 0, 1],
       onUpdate: (k) => {
-        const cur = mix(from, box, k);
+        const cur = mix(from, next, k);
         at.current = cur;
         setShown(cur);
       },
       onComplete: land,
     });
     return () => run.stop();
-    /* the easing runs off its own clock: only a new box may start it over */
-  }, [box.l, box.t, box.r, box.b, instant]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [l, top, r, b, instant]);
 
   const w = shown.r - shown.l;
   const h = shown.b - shown.t;
@@ -81,21 +87,49 @@ export function SizeHandles({
   /* the drawn handle keeps its size; what the finger may land on is a little wider all round */
   const PAD = 7 / z;
 
+  /* which key pulls a handle outward: the one pointing away from the part on the side it holds */
+  const outward = (side: HandleSide, key: string): 1 | -1 | 0 => {
+    const right = side === "right" || side === "tr" || side === "br";
+    const left = side === "left" || side === "tl" || side === "bl";
+    const down = side === "bottom" || side === "bl" || side === "br";
+    const up = side === "top" || side === "tl" || side === "tr";
+    if (key === "ArrowRight") return right ? 1 : left ? -1 : 0;
+    if (key === "ArrowLeft") return left ? 1 : right ? -1 : 0;
+    if (key === "ArrowDown") return down ? 1 : up ? -1 : 0;
+    if (key === "ArrowUp") return up ? 1 : down ? -1 : 0;
+    return 0;
+  };
   const handle = (side: HandleSide, x: number, y: number, dw: number, dh: number, cursor: string, title: string) => (
-    <div
+    <button
       key={side}
-      onPointerDown={(e) => onDown(e, side)}
+      type="button"
+      /* the canvas behind the handle hears nothing of the press: the drag is the handle's own */
+      onPointerDown={(e) => {
+        e.stopPropagation();
+        onDown(e, side);
+      }}
+      onKeyDown={(e) => {
+        const dir = outward(side, e.key);
+        if (!dir) return;
+        e.preventDefault();
+        e.stopPropagation();
+        onNudge(side, dir);
+      }}
       title={title}
+      aria-label={title}
       style={{
         position: "absolute",
         left: x - dw / 2 - PAD,
         top: y - dh / 2 - PAD,
         width: dw + PAD * 2,
         height: dh + PAD * 2,
+        padding: 0,
+        border: "none",
+        background: "transparent",
         display: "grid",
         placeItems: "center",
         cursor,
-        zIndex: 55,
+        zIndex: SIZE_HANDLE_Z,
         touchAction: "none",
       }}
     >
@@ -109,7 +143,7 @@ export function SizeHandles({
           boxSizing: "border-box",
         }}
       />
-    </div>
+    </button>
   );
 
   if (round) {
@@ -143,7 +177,7 @@ export function SizeHandles({
   const vw = Math.min(hh, w * 0.55);
   return (
     <>
-      {(sides ?? (["left", "right", "top", "bottom"] as const)).map((side) => {
+      {(sides ?? ALL_SIDES).map((side) => {
         const vertical = side === "top" || side === "bottom";
         return handle(
           side,
