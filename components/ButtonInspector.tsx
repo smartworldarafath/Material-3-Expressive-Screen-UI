@@ -50,7 +50,7 @@ import {
 } from "@/lib/tokens";
 import { IconPicker } from "./IconPicker";
 import { Icon, M3Static } from "./M3Node";
-import { Field, IconBtn, PanelShell, Section, Segmented, Select, SelectOption, Slider, Toggle } from "./ui";
+import { Field, IconBtn, NamedSizes, PanelShell, Section, Segmented, Select, SelectOption, Slider, Toggle } from "./ui";
 import { AiHooks, variantsOf } from "./Inspector";
 import { LinkStage, TapStage } from "./TapStage";
 import { AiIconBtn, AlignBox, PartHeader, PartTabs, PlaceFn, Tab, actionOptionsOf } from "./PartPanel";
@@ -171,51 +171,8 @@ function WidthRow({ value, onChange, frameW, p }: { value: number | undefined; o
 /** the heights M3 names, as one connected run. Each cell carries its own name, because XS to XL
  *  (and S to L for a FAB) is what the size is called everywhere else in Material. */
 function HeightRow({ value, onChange, steps, p }: { value: number; onChange: (h: number) => void; steps?: { key: string; h: number }[]; p: Palette }) {
-  const h = 40;
   const cells = steps ?? BUTTON_SIZES.map((b) => ({ key: b.key, h: b.h }));
-  return (
-    <div role="radiogroup" style={{ display: "flex", gap: 3 }}>
-      {cells.map((c, i) => {
-        const on = value === c.h;
-        const first = i === 0;
-        const last = i === cells.length - 1;
-        const label = c.key.toUpperCase();
-        const title = `${label} · ${c.h}dp`;
-        return (
-          <button
-            key={c.key}
-            role="radio"
-            aria-checked={on}
-            title={title}
-            aria-label={title}
-            onClick={() => onChange(c.h)}
-            className="m3-press"
-            style={{
-              flex: 1,
-              minWidth: 0,
-              height: h,
-              border: "none",
-              padding: "0 4px",
-              cursor: "pointer",
-              borderTopLeftRadius: first ? h / 2 : R_INNER,
-              borderBottomLeftRadius: first ? h / 2 : R_INNER,
-              borderTopRightRadius: last ? h / 2 : R_INNER,
-              borderBottomRightRadius: last ? h / 2 : R_INNER,
-              background: on ? p.primary : p.surfaceContainerHigh,
-              color: on ? p.onPrimary : p.onSurfaceVariant,
-              fontSize: 12,
-              fontWeight: on ? 700 : 600,
-              overflow: "hidden",
-              whiteSpace: "nowrap",
-              transition: "background 120ms, color 120ms",
-            }}
-          >
-            {label}
-          </button>
-        );
-      })}
-    </div>
-  );
+  return <NamedSizes steps={cells.map((c) => ({ key: c.key, value: c.h }))} value={value} onChange={onChange} p={p} />;
 }
 
 /** the three shapes a FAB takes, as one connected run: the circle, the one with a label, and

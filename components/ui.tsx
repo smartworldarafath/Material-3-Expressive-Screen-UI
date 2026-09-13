@@ -302,7 +302,7 @@ export function IconBtn({
   );
 }
 
-export type SegOption<K extends string> = { key: K; icon?: string; label?: string; title?: string; /** small marker: this option carries something */ dot?: boolean; /** this option alone takes the spare width */ grow?: boolean; /** an icon-only option that should not shrink to a square */ wide?: boolean };
+export type SegOption<K extends string> = { key: K; icon?: string; label?: string; title?: string; /** a drawing of the choice, shown in place of an icon: a small picture of the thing itself */ node?: React.ReactNode; /** small marker: this option carries something */ dot?: boolean; /** this option alone takes the spare width */ grow?: boolean; /** an icon-only option that should not shrink to a square */ wide?: boolean };
 
 /** Connected-button group with the same fused corners as the canvas. */
 export function Segmented<K extends string>({
@@ -357,7 +357,7 @@ export function Segmented<K extends string>({
               position: "relative",
             }}
           >
-            {o.icon && <Icon name={o.icon} size={Math.round(height * 0.5)} fill={on} />}
+            {o.node ?? (o.icon && <Icon name={o.icon} size={Math.round(height * 0.5)} fill={on} />)}
             {o.label && <span>{o.label}</span>}
             {o.dot && (
               <span
@@ -1043,6 +1043,66 @@ export function Slider({
           </span>
         )}
       </span>
+    </div>
+  );
+}
+
+/** The sizes a part is named at, as one connected run: S, M, L, the way Material names a size
+ *  everywhere else. The letter is what the cell carries, and the dp it comes to is in the hover
+ *  text, because a row of raw numbers tells an author nothing about which one to reach for. */
+export function NamedSizes({
+  steps,
+  value,
+  onChange,
+  p,
+}: {
+  steps: readonly { key: string; value: number }[];
+  value: number;
+  onChange: (v: number) => void;
+  p: Palette;
+}) {
+  const h = 40;
+  return (
+    <div role="radiogroup" style={{ display: "flex", gap: 3 }}>
+      {steps.map((s, i) => {
+        const on = value === s.value;
+        const first = i === 0;
+        const last = i === steps.length - 1;
+        const label = s.key.toUpperCase();
+        const title = `${label} · ${s.value}dp`;
+        return (
+          <button
+            key={s.key}
+            role="radio"
+            aria-checked={on}
+            title={title}
+            aria-label={title}
+            onClick={() => onChange(s.value)}
+            className="m3-press"
+            style={{
+              flex: 1,
+              minWidth: 0,
+              height: h,
+              border: "none",
+              padding: "0 4px",
+              cursor: "pointer",
+              borderTopLeftRadius: first ? h / 2 : R_INNER,
+              borderBottomLeftRadius: first ? h / 2 : R_INNER,
+              borderTopRightRadius: last ? h / 2 : R_INNER,
+              borderBottomRightRadius: last ? h / 2 : R_INNER,
+              background: on ? p.primary : p.surfaceContainerHigh,
+              color: on ? p.onPrimary : p.onSurfaceVariant,
+              fontSize: 12,
+              fontWeight: on ? 700 : 600,
+              overflow: "hidden",
+              whiteSpace: "nowrap",
+              transition: "background 120ms, color 120ms",
+            }}
+          >
+            {label}
+          </button>
+        );
+      })}
     </div>
   );
 }

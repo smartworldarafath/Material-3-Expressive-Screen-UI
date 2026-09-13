@@ -25,6 +25,7 @@ import {
   FAB_H_MAX,
   FAB_H_MIN,
   isFab,
+  isProgress,
   isMeasured,
   fabOpen,
   hasMenu,
@@ -219,6 +220,12 @@ type Gesture =
 type DocMeta = Omit<Doc, "groups" | "frames">;
 /** an undo step: the screens and parts, plus the rest of the document for steps that replaced it all */
 type Snapshot = { groups: Group[]; frames: Frame[]; meta?: DocMeta };
+
+/** The parts a lone one of can be resized on the canvas itself: the controls that carry a size,
+ *  and the indicators, whose width is the thing an author reaches for most. */
+const HANDLED: Kind[] = ["button", "iconButton", "chip", "splitButton", "fab", "extendedFab", "linearProgress", "circularProgress", "loadingIndicator"];
+/** a bar is held by its two ends; it has no height of its own to pull on */
+const BAR_SIDES = ["left", "right"] as const;
 
 /** a screen changing size eases the way a settling part does */
 const SIZE_TRANSITION = `width ${SETTLE_MS}ms cubic-bezier(0.2, 0, 0, 1), height ${SETTLE_MS}ms cubic-bezier(0.2, 0, 0, 1), border-radius ${SETTLE_MS}ms cubic-bezier(0.2, 0, 0, 1)`;
@@ -1357,6 +1364,10 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
     const tall = item.kind === "extendedFab" || item.kind === "chip" || item.kind === "splitButton";
     const box = sizeOf(item, widthsRef.current);
     const startV = vertical || tall ? box.h : box.w;
+    /* an indicator is sized the way its panel sizes it: between the bounds its kind is given,
+     * and a bar as wide as the screen it sits on */
+    const gauge = isProgress(item.kind) || item.kind === "loadingIndicator";
+    const gaugeSpec = KIND_SPEC[item.kind].size;
     widthDragRef.current = {
       id: item.id,
       gid: g.id,
@@ -1370,8 +1381,22 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
       startV,
       v: startV,
       /* a button is a circle at its narrowest, so its height says how narrow it may be drawn */
-      min: isFab(item.kind) ? (tall ? 56 : FAB_H_MIN) : item.kind === "chip" ? CHIP_H_MIN : vertical || round ? BUTTON_H_MIN : buttonMinWidth(item),
-      max: isFab(item.kind) ? FAB_H_MAX : item.kind === "chip" ? CHIP_H_MAX : vertical || round ? BUTTON_H_MAX : f ? frameSizeOf(f).w : PHONE_W,
+      min: gauge ? gaugeSpec!.min : isFab(item.kind) ? (tall ? 56 : FAB_H_MIN) : item.kind === "chip" ? CHIP_H_MIN : vertical || round ? BUTTON_H_MIN : buttonMinWidth(item),
+      max: gauge
+        ? item.kind === "linearProgress"
+          ? f
+            ? frameSizeOf(f).w
+            : PHONE_W
+          : gaugeSpec!.max
+        : isFab(item.kind)
+          ? FAB_H_MAX
+          : item.kind === "chip"
+            ? CHIP_H_MAX
+            : vertical || round
+              ? BUTTON_H_MAX
+              : f
+                ? frameSizeOf(f).w
+                : PHONE_W,
     };
     setWidthDragId(item.id);
     const move = (ev: PointerEvent) => {
@@ -4103,7 +4128,7 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
                   four points around its circle: dragging one changes the part's size in place,
                   and whatever sits opposite stays where it is */}
               {/* a FAB showing its menu is being edited as a menu, not sized as a button */}
-              {!handMode && !drag && selectedIds.length === 1 && selected?.id !== menuId && (selected?.kind === "button" || selected?.kind === "iconButton" || selected?.kind === "chip" || selected?.kind === "splitButton" || selected?.kind === "fab" || selected?.kind === "extendedFab") && (() => {
+              {!handMode && !drag && selectedIds.length === 1 && selected && selected.id !== menuId && HANDLED.includes(selected.kind) && (() => {
                 const g = groups.find((x) => x.items.length === 1 && !x.free && !x.locked && x.items[0].id === selected.id);
                 if (!g) return null;
                 const b = groupBounds(g, widths);
@@ -4114,7 +4139,9 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
                   <SizeHandles
                     /* one measure, so the part is held by the points around it rather than by
                      * its edges: a circle's diameter, a label's height */
-                    round={selected.kind !== "button"}
+                    round={selected.kind !== "button" && selected.kind !== "linearProgress"}
+                    /* a bar has a width and nothing else: it is held by its two ends */
+                    sides={selected.kind === "linearProgress" ? BAR_SIDES : undefined}
                     box={{ l: b.l + sx, t: b.t + sy, r: b.r + sx, b: b.b + sy }}
                     z={view.z}
                     instant={widthDragId === selected.id || sizeEditId === selected.id}

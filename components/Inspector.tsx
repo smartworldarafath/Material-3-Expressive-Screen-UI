@@ -25,11 +25,7 @@ import {
   Variant,
   actionSlotsOf,
   isFab,
-  TRACK_DEFAULT,
-  TRACK_MAX,
-  TRACK_MIN,
-  maxRingThickness,
-  progressThickness,
+  isProgress,
   contentWidth,
   defaultTabsFor,
   framePresetOf,
@@ -62,6 +58,7 @@ import {
 import { IconPicker } from "./IconPicker";
 import { ButtonInspector } from "./ButtonInspector";
 import { PartInspector } from "./PartInspector";
+import { PartTabs, Tab, hasTrigger } from "./PartPanel";
 import { Icon } from "./M3Node";
 import { ButtonRun, CardLayoutPicker, CornerIcon, Field, IconBtn, PanelShell, Section, Segmented, SizePresets, Slider, TextTokenChips, TidyButton, TidyState, Toggle, TokenChips } from "./ui";
 import { AiWriteBtn } from "./AiPanel";
@@ -678,6 +675,8 @@ export function Inspector({
   const [actionSlot, setActionSlot] = useState("");
   /** editing the "on" look of a toggle button instead of its normal look */
   const [onTab, setOnTab] = useState(false);
+  /** every part's panel is read the same way: what it looks like, then what it does */
+  const [tab, setTab] = useState<Tab>("design");
 
   useEffect(() => {
     setSlotKey(item ? (iconSlotsOf(item)[0]?.key ?? "icon") : "icon");
@@ -757,7 +756,7 @@ export function Inspector({
   }
 
   /* the parts that are surfaces rather than controls share one panel, built from the button's own */
-  if (item.kind === "carousel" || item.kind === "datePicker" || item.kind === "timePicker") {
+  if (item.kind === "carousel" || item.kind === "datePicker" || item.kind === "timePicker" || item.kind === "loadingIndicator" || isProgress(item.kind)) {
     return (
       <PartInspector
         ai={ai}
@@ -898,7 +897,9 @@ export function Inspector({
           <IconBtn icon="delete" p={p} danger onClick={onDelete} title={t("deleteKey", lang)} size={32} />
         </div>
       }
+      tabs={<PartTabs value={tab} onChange={setTab} p={p} />}
     >
+      {tab === "design" && (<>
       {TOGGLEABLE.includes(item.kind) && (
         <div style={{ display: "flex", flexDirection: "column", gap: 10, padding: "10px 4px 12px", marginBottom: 12 }}>
           <Toggle
@@ -1244,7 +1245,7 @@ export function Inspector({
         </Section>
       )}
 
-      {(spec.hasChecked || spec.hasValue || spec.hasWavy || spec.hasContained || item.kind === "listItem") && !editOn && (
+      {(spec.hasChecked || spec.hasValue || item.kind === "listItem") && !editOn && (
         <Section id="state" icon="tune" title={t("state", lang)} p={p}>
           <div style={{ display: "flex", flexDirection: "column", gap: 14, padding: "2px 0" }}>
             {item.kind === "listItem" && (
@@ -1267,30 +1268,7 @@ export function Inspector({
             {item.kind === "switch" && (
               <Toggle on={!item.noCheck} onChange={(on) => onChange({ noCheck: on ? undefined : true })} p={p} icon="check" label={t("thumbCheck", lang)} grow />
             )}
-            {spec.hasContained && (
-              <Toggle
-                on={!!item.contained}
-                onChange={(contained) => onChange({ contained })}
-                p={p}
-                icon="circle"
-                label={t("container", lang)}
-                grow
-              />
-            )}
-            {spec.hasWavy && (
-              <Toggle on={!!item.wavy} onChange={(wavy) => onChange({ wavy })} p={p} icon="airwave" label={t("wavy", lang)} grow />
-            )}
-            {spec.hasValue && item.kind !== "slider" && (
-              <Toggle
-                on={item.value !== undefined}
-                onChange={(on) => onChange({ value: on ? 60 : undefined })}
-                p={p}
-                icon="percent"
-                label={t("determinate", lang)}
-                grow
-              />
-            )}
-            {spec.hasValue && (item.kind === "slider" || item.value !== undefined) && (
+            {spec.hasValue && (
               <Slider
                 icon="percent"
                 value={item.value ?? 40}
@@ -1352,18 +1330,6 @@ export function Inspector({
       {(spec.size || hasRadius) && !editOn && (
         <Section id="size" icon="straighten" title={t("size", lang)} p={p}>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {spec.hasWavy && (
-              <Slider
-                icon="line_weight"
-                title={t("trackThickness", lang)}
-                value={progressThickness(item)}
-                min={TRACK_MIN}
-                max={item.kind === "circularProgress" ? maxRingThickness(item.size ?? spec.w) : TRACK_MAX}
-                step={1}
-                onChange={(trackThickness) => onChange({ trackThickness: trackThickness === TRACK_DEFAULT ? undefined : trackThickness })}
-                p={p}
-              />
-            )}
             {spec.size && (
               <>
                 <Slider
@@ -1538,6 +1504,17 @@ export function Inspector({
         </Section>
       )}
 
+      </>)}
+
+      {tab === "behavior" && !hasTrigger(item.kind) && actionSlots.length === 0 && (
+        /* nothing is opened by tapping this one: the tab says so and leaves the spec the room */
+        <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, lineHeight: 1.5, color: p.onSurfaceVariant, padding: "2px 6px 10px" }}>
+          <Icon name="block" size={18} />
+          <span>{t("noTrigger", lang)}</span>
+        </div>
+      )}
+
+      {tab === "behavior" && (<>
       {(TAPPABLE.includes(item.kind) || actionSlots.length > 0) && frames.length > 0 && !editOn && (
         <Section id="action" icon="ads_click" title={t("tapTo", lang)} p={p}>
           {actionSlots.length > 0 ? (
@@ -1621,6 +1598,7 @@ export function Inspector({
         />
       </Section>
       )}
+      </>)}
     </PanelShell>
   );
 }

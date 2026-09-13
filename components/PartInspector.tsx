@@ -9,21 +9,35 @@ import {
   Frame,
   Item,
   KIND_SPEC,
+  LOADING_SIZES,
   PHONE_W,
+  PROGRESS_KINDS,
   Palette,
+  ProgressKind,
+  RING_SIZES,
   TIME_LAYOUTS,
+  TRACK_DEFAULT,
+  TRACK_MAX,
+  TRACK_MIN,
   TimeLayout,
+  barWidths,
   carouselCountOf,
   carouselLayoutOf,
   dateLayoutOf,
   dayOf,
   frameSizeOf,
   hourOf,
+  isProgress,
+  maxRingThickness,
   minuteOf,
+  progressThickness,
+  progressTypePatch,
   sizeOf,
   timeLayoutOf,
 } from "@/lib/tokens";
-import { Field, PanelShell, Section, Segmented, Slider } from "./ui";
+import { Field, NamedSizes, PanelShell, Section, Segmented, Slider, Toggle } from "./ui";
+import { arcPath, wavePath } from "./Loading";
+import { Icon } from "./M3Node";
 import { AiHooks } from "./Inspector";
 import { AlignBox, NoteSection, PartHeader, PartTabs, PlaceFn, Tab, TriggerSection, hasTrigger } from "./PartPanel";
 import { t, useLang } from "@/lib/i18n";
@@ -39,6 +53,8 @@ function WidthRow({ item, frame, onChange, p }: { item: Item; frame: Frame | nul
   const spec = KIND_SPEC[item.kind];
   const size = spec.size!;
   const frameW = frame ? frameSizeOf(frame).w : PHONE_W;
+  /* a bar is measured across the screen; a ring is measured corner to corner */
+  const bar = item.kind === "linearProgress";
   const width = sizeOf(item, {}).w;
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -50,6 +66,99 @@ function WidthRow({ item, frame, onChange, p }: { item: Item; frame: Frame | nul
         p={p}
         height={36}
       />
+    </div>
+  );
+}
+
+/** The four shapes an indicator can take, drawn small with the very geometry the part itself is
+ *  drawn with: a straight track or one travelling in a wave, laid out or bent into a ring. A
+ *  picture says which is which faster than the words "linear" and "wavy" ever did, and picking
+ *  one sets both the shape and the wave in a single tap. */
+const PROGRESS_LOOKS = [
+  { key: "bar", kind: "linearProgress", wavy: false, label: "progressBar" },
+  { key: "wavyBar", kind: "linearProgress", wavy: true, label: "progressWavyBar" },
+  { key: "ring", kind: "circularProgress", wavy: false, label: "progressRing" },
+  { key: "wavyRing", kind: "circularProgress", wavy: true, label: "progressWavyRing" },
+] as const;
+type ProgressLook = (typeof PROGRESS_LOOKS)[number];
+
+/* the thumbnail is a part 44dp wide: the same wave, the same gap before the track, a quarter of
+ * the size the real one is drawn at */
+const THUMB_W = 44;
+const THUMB_H = 28;
+/** the wave is shortened for the picture, so a thumbnail this small still reads as a wave */
+const THUMB_WAVELENGTH = 13;
+
+function ProgressThumb({ look, on, p }: { look: ProgressLook; on: boolean; p: Palette }) {
+  const ink = on ? p.onPrimary : p.onSurfaceVariant;
+  const track = on ? p.onPrimary : p.outlineVariant;
+  const stroke = { fill: "none", strokeWidth: 2.8, strokeLinecap: "round" as const };
+  const mid = THUMB_H / 2;
+  const bar = look.kind === "linearProgress";
+  return (
+    <svg width={THUMB_W} height={THUMB_H} viewBox={`0 0 ${THUMB_W} ${THUMB_H}`} aria-hidden>
+      {bar ? (
+        <>
+          <path d={wavePath(4, 26, mid, look.wavy ? 3 : 0, 0, THUMB_WAVELENGTH)} stroke={ink} {...stroke} />
+          <path d={wavePath(31, 40, mid, 0, 0, 1)} stroke={track} opacity={on ? 0.4 : 0.7} {...stroke} />
+        </>
+      ) : (
+        <>
+          <path d={arcPath(THUMB_W / 2, mid, 10, -90, 150, look.wavy ? 0.7 : 0, 7, 0)} stroke={ink} {...stroke} />
+          <path d={arcPath(THUMB_W / 2, mid, 10, 180, 255, 0, 7, 0)} stroke={track} opacity={on ? 0.4 : 0.7} {...stroke} />
+        </>
+      )}
+    </svg>
+  );
+}
+
+/** Those four as one connected run, each cell a picture of what it makes and nothing else: the
+ *  drawing is the label. Picking one sets the shape and the wave together. */
+function ProgressTypePicker({ item, onChange, p }: { item: Item; onChange: (patch: Partial<Item>) => void; p: Palette }) {
+  const lang = useLang();
+  const current = PROGRESS_LOOKS.find((l) => l.kind === item.kind && l.wavy === !!item.wavy) ?? PROGRESS_LOOKS[0];
+  return (
+    <Segmented<ProgressLook["key"]>
+      options={PROGRESS_LOOKS.map((look) => ({
+        key: look.key,
+        title: t(look.label, lang),
+        node: <ProgressThumb look={look} on={look.key === current.key} p={p} />,
+      }))}
+      value={current.key}
+      onChange={(k) => {
+        const look = PROGRESS_LOOKS.find((l) => l.key === k)!;
+        onChange({ ...progressTypePatch(item, look.kind), wavy: look.wavy || undefined });
+      }}
+      p={p}
+      height={44}
+    />
+  );
+}
+
+/** What the indicator is saying, as two icons standing on their own at the start of the row: the
+ *  loop it circles in with no end in sight, or the share it counts up to -- and that share is the
+ *  slider that fills the rest of the row, which is there only when there is a share to set. */
+function ProgressValue({ item, onChange, p }: { item: Item; onChange: (patch: Partial<Item>) => void; p: Palette }) {
+  const lang = useLang();
+  const pct = item.value !== undefined;
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+      <Segmented<"loop" | "percent">
+        options={[
+          { key: "loop", icon: "autorenew", title: t("progressLoop", lang) },
+          { key: "percent", icon: "percent", title: t("progressPercent", lang) },
+        ]}
+        value={pct ? "percent" : "loop"}
+        onChange={(k) => onChange({ value: k === "percent" ? 60 : undefined })}
+        p={p}
+        grow={false}
+      />
+      {pct && (
+        <div style={{ flex: 1, minWidth: 0 }}>
+          {/* the run beside it already says what this is measuring, so the slider carries no icon */}
+          <Slider iconNode={<></>} title={t("progressState", lang)} value={item.value ?? 60} min={0} max={100} step={1} onChange={(value) => onChange({ value })} p={p} unit="%" />
+        </div>
+      )}
     </div>
   );
 }
@@ -85,6 +194,9 @@ export function PartInspector({
   const [tab, setTab] = useState<Tab>("design");
   const trigger = hasTrigger(item.kind);
   const spec = KIND_SPEC[item.kind];
+  const frameW = frame ? frameSizeOf(frame).w : PHONE_W;
+  /* a bar is measured across the screen; a ring is measured corner to corner */
+  const bar = item.kind === "linearProgress";
 
   const design = (
     <>
@@ -168,6 +280,72 @@ export function PartInspector({
         </>
       )}
 
+      {isProgress(item.kind) && (
+        <>
+          {/* which shape it takes, and whether its track travels in a wave: one picture each */}
+          <Section id="part-type" icon="progress_activity" title={t("partType", lang)} p={p}>
+            <ProgressTypePicker item={item} onChange={onChange} p={p} />
+          </Section>
+          {/* what it is saying: a wait with no end, or a share counted up to */}
+          <Section id="part-state" icon="tune" title={t("state", lang)} p={p}>
+            <ProgressValue item={item} onChange={onChange} p={p} />
+          </Section>
+          <Section id="part-size" icon="straighten" title={t("size", lang)} p={p}>
+            {/* the two measures are each a slider over its named sizes, with room between them so
+                the eye can tell which row belongs to which -- the same as a button's panel. How
+                thick the track is comes first: a ring can only be so thick before its gap eats it. */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+              <Slider
+                icon="line_weight"
+                title={t("trackThickness", lang)}
+                value={progressThickness(item)}
+                min={TRACK_MIN}
+                max={item.kind === "circularProgress" ? maxRingThickness(item.size ?? spec.w) : TRACK_MAX}
+                step={1}
+                onChange={(v) => onChange({ trackThickness: v === TRACK_DEFAULT ? undefined : v })}
+                p={p}
+              />
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                <Slider
+                  icon={bar ? "width" : "open_in_full"}
+                  title={t(bar ? "width" : "size", lang)}
+                  value={item.size ?? spec.w}
+                  min={Math.min(spec.size!.min, item.size ?? spec.w)}
+                  max={bar ? Math.max(frameW, spec.size!.max) : spec.size!.max}
+                  step={spec.size!.step}
+                  onChange={(size) => onChange({ size })}
+                  p={p}
+                />
+                <NamedSizes steps={bar ? barWidths(frameW) : RING_SIZES} value={item.size ?? spec.w} onChange={(size) => onChange({ size })} p={p} />
+              </div>
+            </div>
+          </Section>
+        </>
+      )}
+
+      {item.kind === "loadingIndicator" && (
+        <>
+          <Section id="part-state" icon="tune" title={t("state", lang)} p={p}>
+            <Toggle on={!!item.contained} onChange={(contained) => onChange({ contained })} p={p} icon="circle" label={t("container", lang)} grow />
+          </Section>
+          <Section id="part-size" icon="straighten" title={t("size", lang)} p={p}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              <Slider
+                icon="open_in_full"
+                title={t("size", lang)}
+                value={item.size ?? spec.w}
+                min={spec.size!.min}
+                max={spec.size!.max}
+                step={spec.size!.step}
+                onChange={(size) => onChange({ size })}
+                p={p}
+              />
+              <NamedSizes steps={LOADING_SIZES} value={item.size ?? spec.w} onChange={(size) => onChange({ size })} p={p} />
+            </div>
+          </Section>
+        </>
+      )}
+
       {onPlace && (
         <Section id="part-align" icon="grid_on" title={t("align", lang)} p={p}>
           <AlignBox onPlace={onPlace} p={p} />
@@ -182,16 +360,22 @@ export function PartInspector({
       locked={!!locked}
       onUnlock={onToggleLock}
       head={
-        <>
-          <PartHeader kind={item.kind} p={p} locked={!!locked} onDuplicate={onDuplicate} onToggleLock={onToggleLock} onDelete={onDelete} />
-          {!trigger && <div style={{ height: 10 }} />}
-        </>
+        <PartHeader kind={item.kind} p={p} locked={!!locked} onDuplicate={onDuplicate} onToggleLock={onToggleLock} onDelete={onDelete} />
       }
-      tabs={trigger ? <PartTabs value={tab} onChange={setTab} p={p} /> : undefined}
+      tabs={<PartTabs value={tab} onChange={setTab} p={p} />}
     >
-      {(!trigger || tab === "design") && design}
-      {trigger && tab === "behavior" && <TriggerSection item={item} frame={frame} allFrames={allFrames} selfRect={selfRect} onChange={onChange} p={p} />}
-      {(!trigger || tab === "behavior") && <NoteSection item={item} ai={ai} onChange={onChange} p={p} />}
+      {tab === "design" && design}
+      {tab === "behavior" &&
+        (trigger ? (
+          <TriggerSection item={item} frame={frame} allFrames={allFrames} selfRect={selfRect} onChange={onChange} p={p} />
+        ) : (
+          /* nothing is opened by tapping this one: the tab says so and leaves the spec the room */
+          <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, lineHeight: 1.5, color: p.onSurfaceVariant, padding: "2px 6px 10px" }}>
+            <Icon name="block" size={18} />
+            <span>{t("noTrigger", lang)}</span>
+          </div>
+        ))}
+      {tab === "behavior" && <NoteSection item={item} ai={ai} onChange={onChange} p={p} />}
     </PanelShell>
   );
 }

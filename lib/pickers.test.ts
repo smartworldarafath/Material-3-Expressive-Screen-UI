@@ -12,6 +12,7 @@ import {
   DEFAULT_THEME,
   KIND_ORDER,
   PALETTE_HIDDEN,
+  PROGRESS_KINDS,
   extendedFabHeight,
   extendedFabMetrics,
   fabTypePatch,
@@ -31,6 +32,7 @@ import {
   hourOf,
   makeItem,
   minuteOf,
+  progressTypePatch,
   sizeOf,
   timeLayoutOf,
 } from "./tokens";
@@ -160,10 +162,13 @@ describe("the FAB's three shapes", () => {
   });
 
   it("keeps the two other shapes out of the palette but still openable", () => {
-    expect(PALETTE_HIDDEN).toEqual(["extendedFab", "fabMenu"]);
-    /* a sketch saved with either of them still names a kind the editor knows */
+    /* the shapes a part is only switched into from its own panel: a FAB's other two, and the
+       ring a progress indicator becomes */
+    expect(PALETTE_HIDDEN).toEqual(["extendedFab", "fabMenu", "circularProgress"]);
+    /* a sketch saved with any of them still names a kind the editor knows */
     expect(KIND_ORDER).toContain("extendedFab");
     expect(KIND_ORDER).toContain("fabMenu");
+    expect(KIND_ORDER).toContain("circularProgress");
   });
 });
 
@@ -174,5 +179,28 @@ describe("a FAB that opens a menu", () => {
     const out = buildPrompt(doc, {}, undefined, "en");
     expect(out).toContain("raises a menu of 2 items");
     expect(out).toContain('"Note"(edit)');
+  });
+});
+
+describe("the two shapes of a progress indicator", () => {
+  it("switches between them in place, keeping how far along it is", () => {
+    const bar = { ...makeItem("linearProgress"), value: 40, wavy: true, trackThickness: 8 };
+    const ring = { ...bar, ...progressTypePatch(bar, "circularProgress") };
+    expect(ring.kind).toBe("circularProgress");
+    /* the value, the wave and the track travel; the measure does not, because a bar is drawn by
+       its width and a ring by its diameter */
+    expect(ring.value).toBe(40);
+    expect(ring.wavy).toBe(true);
+    expect(ring.trackThickness).toBe(8);
+    expect(sizeOf(ring, {})).toEqual({ w: 48, h: 48 });
+    expect({ ...ring, ...progressTypePatch(ring, "linearProgress") }.size).toBe(380);
+    expect(PROGRESS_KINDS).toEqual(["linearProgress", "circularProgress"]);
+  });
+
+  it("still says which shape it is in the prompt", () => {
+    const bar = buildPrompt(docWith({ ...makeItem("linearProgress"), wavy: true, value: 40 }), {}, undefined, "en");
+    expect(bar).toContain("a wavy linear progress indicator (40%)");
+    const ring = buildPrompt(docWith({ ...makeItem("circularProgress"), trackThickness: 8 }), {}, undefined, "en");
+    expect(ring).toContain("a circular progress indicator (indeterminate, 8dp track thickness)");
   });
 });

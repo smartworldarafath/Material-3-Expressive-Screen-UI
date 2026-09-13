@@ -91,6 +91,27 @@ export const FAB_SIZES = [
 export const FAB_H_MIN = 40;
 export const FAB_H_MAX = 96;
 
+/** The sizes a ring, a loading indicator and a progress bar are offered at. They are asked for by
+ *  the letter Material names every other size by -- S, M, L -- and the dp each comes to rides in
+ *  the hover text, because a row of raw numbers says nothing about which one to reach for. */
+export const RING_SIZES = [
+  { key: "s", value: 24 },
+  { key: "m", value: 48 },
+  { key: "l", value: 64 },
+] as const;
+export const LOADING_SIZES = [
+  { key: "s", value: 32 },
+  { key: "m", value: 48 },
+  { key: "l", value: 64 },
+  { key: "xl", value: 96 },
+] as const;
+/** a bar is measured across the screen it sits on, so its three sizes are read off that width */
+export const barWidths = (frameW: number) => [
+  { key: "s", value: halfWidth(frameW) },
+  { key: "m", value: contentWidth(frameW) },
+  { key: "l", value: frameW },
+];
+
 /** the named size a height lands exactly on, if it lands on one */
 export const buttonSizeKeyOf = (height: number): ButtonSizeKey | null => BUTTON_SIZES.find((s) => s.h === height)?.key ?? null;
 export const GAP = 3; // connected group spacing
@@ -1097,8 +1118,8 @@ export const KIND_SPEC: Record<Kind, KindSpec> = {
     defSize: CONTENT_W,
   },
   loadingIndicator: {
-    label: "Loading Indicator",
-    noun: "ローディングインジケータ",
+    label: "Loading",
+    noun: "ローディング",
     category: "progress",
     paletteIcon: "motion_blur",
     w: 48,
@@ -1109,14 +1130,14 @@ export const KIND_SPEC: Record<Kind, KindSpec> = {
     hasSupporting: false,
     hasIcon: false,
     hasContained: true,
-    size: { min: 32, max: 128, step: 4, icon: "open_in_full", presets: [32, 48, 64, 96] },
+    size: { min: 32, max: 128, step: 4, icon: "open_in_full", presets: LOADING_SIZES.map((s) => s.value) },
     defLabel: "",
     defIcon: null,
     defSize: 48,
   },
   linearProgress: {
-    label: "Linear Progress",
-    noun: "リニアプログレス",
+    label: "Progress",
+    noun: "プログレス",
     category: "progress",
     paletteIcon: "linear_scale",
     w: CONTENT_W,
@@ -1134,8 +1155,8 @@ export const KIND_SPEC: Record<Kind, KindSpec> = {
     defSize: CONTENT_W,
   },
   circularProgress: {
-    label: "Circular Progress",
-    noun: "サーキュラープログレス",
+    label: "Progress",
+    noun: "プログレス",
     category: "progress",
     paletteIcon: "progress_activity",
     w: 48,
@@ -1147,7 +1168,7 @@ export const KIND_SPEC: Record<Kind, KindSpec> = {
     hasIcon: false,
     hasValue: true,
     hasWavy: true,
-    size: { min: 24, max: 120, step: 4, icon: "open_in_full", presets: [24, 40, 48, 52, 64] },
+    size: { min: 24, max: 120, step: 4, icon: "open_in_full", presets: RING_SIZES.map((s) => s.value) },
     defLabel: "",
     defIcon: null,
     defSize: 48,
@@ -1500,7 +1521,7 @@ export type FabKind = (typeof FAB_KINDS)[number];
 export const isFab = (k: Kind): k is FabKind => (FAB_KINDS as readonly string[]).includes(k);
 /** parts the palette does not list on their own: a FAB's other two shapes are reached from its
  *  own panel, where the three sit side by side. A saved sketch may still hold any of them. */
-export const PALETTE_HIDDEN: Kind[] = ["extendedFab", "fabMenu"];
+export const PALETTE_HIDDEN: Kind[] = ["extendedFab", "fabMenu", "circularProgress"];
 /** how tall an extended FAB is drawn, and what it is made of at that height */
 export const extendedFabHeight = (it: Item) => clamp(Math.round(it.size2 ?? 56), 56, FAB_H_MAX);
 export function extendedFabMetrics(h: number) {
@@ -1522,6 +1543,19 @@ export function fabTypePatch(it: Item, to: FabKind): Partial<Item> {
   const base: Partial<Item> = { kind: to };
   if (to === "fab") return { ...base, size: it.size2 ?? 56, size2: undefined };
   return { ...base, size: undefined, size2: Math.max(56, it.size ?? 56), label: it.label || KIND_SPEC.extendedFab.defLabel };
+}
+
+/** The two shapes a progress indicator takes: the bar and the ring. They are one part in the
+ *  palette, and the panel switches between them. */
+export const PROGRESS_KINDS = ["linearProgress", "circularProgress"] as const;
+export type ProgressKind = (typeof PROGRESS_KINDS)[number];
+export const isProgress = (k: Kind): k is ProgressKind => (PROGRESS_KINDS as readonly string[]).includes(k);
+/** the patch that turns one shape into the other: a bar is measured by its width and a ring by
+ *  its diameter, so neither carries the other's measure and each takes its own. What the two
+ *  share -- how far along it is, the wave, the thickness of the track -- travels across. */
+export function progressTypePatch(it: Item, to: ProgressKind): Partial<Item> {
+  if (it.kind === to) return {};
+  return { kind: to, size: to === "linearProgress" ? CONTENT_W : 48 };
 }
 
 /** target id for the menu a FAB opens: the entries rise out of the button itself */

@@ -24,6 +24,7 @@ const mix = (a: Box, c: Box, k: number): Box => ({ l: lerp(a.l, c.l, k), t: lerp
  *  picked in the panel moves the part and its handles together. A drag sets the box at once. */
 export function SizeHandles({
   round,
+  sides,
   box,
   z,
   instant,
@@ -32,6 +33,8 @@ export function SizeHandles({
 }: {
   /** the part is a circle: it is held by four points on it rather than by its edges */
   round: boolean;
+  /** the edges it may be held by; all four unless the part has only one measure to change */
+  sides?: readonly HandleSide[];
   box: Box;
   /** canvas zoom, so a handle keeps its size on screen */
   z: number;
@@ -140,7 +143,7 @@ export function SizeHandles({
   const vw = Math.min(hh, w * 0.55);
   return (
     <>
-      {(["left", "right", "top", "bottom"] as const).map((side) => {
+      {(sides ?? (["left", "right", "top", "bottom"] as const)).map((side) => {
         const vertical = side === "top" || side === "bottom";
         return handle(
           side,
