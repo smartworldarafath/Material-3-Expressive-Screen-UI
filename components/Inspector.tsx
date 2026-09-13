@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Action,
   BACK_TARGET,
@@ -60,34 +60,10 @@ import { ButtonInspector } from "./ButtonInspector";
 import { PartInspector } from "./PartInspector";
 import { PartTabs, Tab, hasTrigger } from "./PartPanel";
 import { Icon } from "./M3Node";
-import { ButtonRun, CardLayoutPicker, CornerIcon, Field, IconBtn, PanelShell, Section, Segmented, SizePresets, Slider, TextTokenChips, TidyButton, TidyState, Toggle, TokenChips } from "./ui";
+import { ButtonRun, CardLayoutPicker, CornerIcon, Field, IconBtn, ImageRow, PanelShell, Section, Segmented, SizePresets, Slider, TextTokenChips, TidyButton, TidyState, Toggle, TokenChips } from "./ui";
 import { AiWriteBtn } from "./AiPanel";
 import { popHistory } from "@/lib/ai";
 import { KIND_TEXT, SWIPE_TEXT, TRANSITION_TEXT, UIKey, t, useLang } from "@/lib/i18n";
-
-/** A text field for a web address: what is typed stays in the box, and only a complete
- *  http(s) address (or an emptied box) reaches the part. */
-function UrlField({ value, onChange, placeholder, p }: { value: string; onChange: (src: string | undefined) => void; placeholder: string; p: Palette }) {
-  const [text, setText] = useState(value);
-  useEffect(() => setText(value), [value]);
-  return (
-    <div onBlurCapture={() => setText(value)}>
-      <Field
-        value={text}
-        onChange={(v) => {
-          setText(v);
-          const s = v.trim();
-          /* an emptied box removes a URL; a picked file (which shows as an empty box) is left alone */
-          if (!s && value) onChange(undefined);
-          else if (/^https?:\/\/\S+$/.test(s)) onChange(s);
-        }}
-        placeholder={placeholder}
-        p={p}
-        icon="link"
-      />
-    </div>
-  );
-}
 
 export function variantsOf(kind: Kind): { key: Variant; label: string }[] {
   const variants = VARIANTS.map((v) => ({ ...v, label: t(v.key) }));
@@ -177,8 +153,6 @@ export function VariantSwatch({
   );
 }
 
-const MAX_IMAGE_PX = 1200;
-
 /** hover text for a width preset derived from the selected frame */
 export const widthPresetLabel = (v: number, frameWidth = PHONE_W): string | undefined =>
   v === frameWidth
@@ -222,27 +196,6 @@ export function FrameSizePicker({
 }
 
 /** Downscale a picked file so the document stays small enough for localStorage. */
-function readImage(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(file);
-    const img = new Image();
-    img.onload = () => {
-      const s = Math.min(1, MAX_IMAGE_PX / Math.max(img.width, img.height));
-      const c = document.createElement("canvas");
-      c.width = Math.max(1, Math.round(img.width * s));
-      c.height = Math.max(1, Math.round(img.height * s));
-      c.getContext("2d")!.drawImage(img, 0, 0, c.width, c.height);
-      URL.revokeObjectURL(url);
-      resolve(c.toDataURL("image/webp", 0.86));
-    };
-    img.onerror = () => {
-      URL.revokeObjectURL(url);
-      reject(new Error("image"));
-    };
-    img.src = url;
-  });
-}
-
 function FrameChips({
   frames,
   value,
@@ -668,7 +621,6 @@ export function Inspector({
   onShowMenu?: (open: boolean) => void;
 }) {
   const lang = useLang();
-  const fileRef = useRef<HTMLInputElement>(null);
   const slots = item ? iconSlotsOf(item) : [];
   const [slotKey, setSlotKey] = useState("icon");
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -756,7 +708,7 @@ export function Inspector({
   }
 
   /* the parts that are surfaces rather than controls share one panel, built from the button's own */
-  if (item.kind === "carousel" || item.kind === "datePicker" || item.kind === "timePicker" || item.kind === "loadingIndicator" || isProgress(item.kind)) {
+  if (item.kind === "carousel" || item.kind === "datePicker" || item.kind === "timePicker" || item.kind === "slider" || item.kind === "loadingIndicator" || isProgress(item.kind)) {
     return (
       <PartInspector
         ai={ai}
@@ -1098,53 +1050,7 @@ export function Inspector({
               )}
             </div>
           )}
-          <input
-            ref={fileRef}
-            type="file"
-            accept="image/*"
-            hidden
-            onChange={async (e) => {
-              const f = e.target.files?.[0];
-              e.target.value = "";
-              if (!f) return;
-              try {
-                onChange({ src: await readImage(f) });
-              } catch {}
-            }}
-          />
-          {(!item.noImage || item.src) && (<>
-          <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-            <button
-              onClick={() => fileRef.current?.click()}
-              className="m3-press"
-              style={{
-                flex: 1,
-                height: 44,
-                borderRadius: 22,
-                border: "none",
-                background: p.primary,
-                color: p.onPrimary,
-                fontSize: 13,
-                fontWeight: 600,
-                cursor: "pointer",
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 8,
-              }}
-            >
-              <Icon name="upload" size={20} />
-              {t("pickImage", lang)}
-            </button>
-            {item.src && (
-              <IconBtn icon="close" p={p} size={44} onClick={() => onChange({ src: undefined })} title={t("removeImage", lang)} />
-            )}
-          </div>
-          {/* a picture on the web by its address; a picked file shows as data and is not editable here */}
-          <div style={{ marginTop: 8 }}>
-            <UrlField key={item.id} value={item.src && /^https?:\/\//.test(item.src) ? item.src : ""} onChange={(src) => onChange({ src })} placeholder={t("imageUrl", lang)} p={p} />
-          </div>
-          </>)}
+          {(!item.noImage || item.src) && <ImageRow key={item.id} value={item.src} onChange={(src) => onChange({ src })} p={p} />}
         </Section>
       )}
 
@@ -1245,7 +1151,7 @@ export function Inspector({
         </Section>
       )}
 
-      {(spec.hasChecked || spec.hasValue || item.kind === "listItem") && !editOn && (
+      {(spec.hasChecked || item.kind === "listItem") && !editOn && (
         <Section id="state" icon="tune" title={t("state", lang)} p={p}>
           <div style={{ display: "flex", flexDirection: "column", gap: 14, padding: "2px 0" }}>
             {item.kind === "listItem" && (
@@ -1267,18 +1173,6 @@ export function Inspector({
             )}
             {item.kind === "switch" && (
               <Toggle on={!item.noCheck} onChange={(on) => onChange({ noCheck: on ? undefined : true })} p={p} icon="check" label={t("thumbCheck", lang)} grow />
-            )}
-            {spec.hasValue && (
-              <Slider
-                icon="percent"
-                value={item.value ?? 40}
-                min={0}
-                max={100}
-                step={1}
-                onChange={(value) => onChange({ value })}
-                p={p}
-                unit="%"
-              />
             )}
           </div>
         </Section>

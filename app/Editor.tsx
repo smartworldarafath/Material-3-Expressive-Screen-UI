@@ -34,6 +34,7 @@ import {
   menuUp,
   opensMenu,
   splitOpens,
+  migrateCarousel,
   migrateFabMenu,
   buttonMinWidth,
   explodeGroup,
@@ -223,9 +224,15 @@ type Snapshot = { groups: Group[]; frames: Frame[]; meta?: DocMeta };
 
 /** The parts a lone one of can be resized on the canvas itself: the controls that carry a size,
  *  and the indicators, whose width is the thing an author reaches for most. */
-const HANDLED: Kind[] = ["button", "iconButton", "chip", "splitButton", "fab", "extendedFab", "linearProgress", "circularProgress", "loadingIndicator"];
-/** a bar is held by its two ends; it has no height of its own to pull on */
+const HANDLED: Kind[] = ["button", "iconButton", "chip", "splitButton", "fab", "extendedFab", "linearProgress", "circularProgress", "loadingIndicator", "slider", "carousel"];
+/** parts held by the four points around them: a circle's diameter, a label's height */
+const ROUND: Kind[] = ["iconButton", "chip", "splitButton", "fab", "extendedFab", "circularProgress", "loadingIndicator"];
+/** these are held by their two ends; they have no height of their own to pull on */
+const WIDE: Kind[] = ["linearProgress", "slider"];
 const BAR_SIDES = ["left", "right"] as const;
+/** a carousel runs the width of the screen: only its height is pulled on */
+const TALL: Kind[] = ["carousel"];
+const TALL_SIDES = ["top", "bottom"] as const;
 
 /** a screen changing size eases the way a settling part does */
 const SIZE_TRANSITION = `width ${SETTLE_MS}ms cubic-bezier(0.2, 0, 0, 1), height ${SETTLE_MS}ms cubic-bezier(0.2, 0, 0, 1), border-radius ${SETTLE_MS}ms cubic-bezier(0.2, 0, 0, 1)`;
@@ -253,6 +260,19 @@ function migrateGroups(groups: Group[], frames: Frame[]): Group[] {
   const oldNavH = KIND_SPEC.bottomNav.h - NAV_BAR_H;
   /* a menu used to be a part of its own; now it is something a FAB is asked to open */
   groups = groups.map((g) => (g.items.some((it) => it.kind === "fabMenu") ? { ...g, items: g.items.map(migrateFabMenu) } : g));
+  /* a carousel used to be one box with one caption and one destination; now every card has its own */
+  groups = groups.map((g) => (g.items.some((it) => it.kind === "carousel" && (it.label || it.action)) ? { ...g, items: g.items.map(migrateCarousel) } : g));
+  /* a carousel is as wide as the screen it stands on, whatever size that screen is */
+  groups = groups.map((g) => {
+    if (!g.items.some((it) => it.kind === "carousel")) return g;
+    const f = frames.find((fr) => {
+      const r = frameRect(fr);
+      return g.x >= r.l - 1 && g.x <= r.r && g.y >= r.t - 1 && g.y <= r.b;
+    });
+    const w = f ? frameSizeOf(f).w : PHONE_W;
+    if (g.items.every((it) => it.kind !== "carousel" || (it.size ?? KIND_SPEC.carousel.defSize) === w)) return g;
+    return { ...g, items: g.items.map((it) => (it.kind === "carousel" ? { ...it, size: w } : it)) };
+  });
   return groups.map((g) => {
     if (g.items.length !== 1 || g.items[0].kind !== "bottomNav") return g;
     const f = frames.find((fr) => {
@@ -1340,6 +1360,8 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
     vertical: boolean;
     round: boolean;
     tall: boolean;
+    /** the part must stay at least as wide as it is tall */
+    grows: boolean;
     startX: number;
     startY: number;
     start0: number;
@@ -1366,8 +1388,11 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
     const startV = vertical || tall ? box.h : box.w;
     /* an indicator is sized the way its panel sizes it: between the bounds its kind is given,
      * and a bar as wide as the screen it sits on */
-    const gauge = isProgress(item.kind) || item.kind === "loadingIndicator";
-    const gaugeSpec = KIND_SPEC[item.kind].size;
+    const gauge = isProgress(item.kind) || item.kind === "loadingIndicator" || item.kind === "slider" || item.kind === "carousel";
+    /* across, the part's own measure; down, the second one a carousel has */
+    const gaugeSpec = vertical ? KIND_SPEC[item.kind].size2 : KIND_SPEC[item.kind].size;
+    /* only a button must stay at least as wide as it is tall: it is a circle at its narrowest */
+    const grows = item.kind === "button";
     widthDragRef.current = {
       id: item.id,
       gid: g.id,
@@ -1375,6 +1400,7 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
       vertical,
       round,
       tall,
+      grows,
       startX: e.clientX,
       startY: e.clientY,
       start0: vertical ? e.clientY : e.clientX,
@@ -1383,7 +1409,7 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
       /* a button is a circle at its narrowest, so its height says how narrow it may be drawn */
       min: gauge ? gaugeSpec!.min : isFab(item.kind) ? (tall ? 56 : FAB_H_MIN) : item.kind === "chip" ? CHIP_H_MIN : vertical || round ? BUTTON_H_MIN : buttonMinWidth(item),
       max: gauge
-        ? item.kind === "linearProgress"
+        ? !vertical && (WIDE.includes(item.kind) || item.kind === "carousel")
           ? f
             ? frameSizeOf(f).w
             : PHONE_W
@@ -1438,7 +1464,7 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
                     ? it
                     : d.vertical || d.tall
                       ? /* a width the author set that is now narrower than the button is tall grows with it */
-                        { ...it, size2: v, ...(!d.tall && it.size && it.size < v ? { size: v } : {}) }
+                        { ...it, size2: v, ...(d.grows && it.size && it.size < v ? { size: v } : {}) }
                       : { ...it, size: v },
                 ),
               },
@@ -1641,15 +1667,13 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
         return;
       }
       if (d.fromPalette) snapshot();
-      const targetFrame =
-        frameRef.current === "phone"
-          ? framesRef.current.find((f) => {
-              const r = frameRect(f);
-              const cx = rawX + sz.w / 2;
-              const cy = rawY + sz.h / 2;
-              return cx >= r.l && cx <= r.r && cy >= r.t && cy <= r.b;
-            })
-          : undefined;
+      /* the screen the part was let go over, whatever size that screen is */
+      const targetFrame = framesRef.current.find((f) => {
+        const r = frameRect(f);
+        const cx = rawX + sz.w / 2;
+        const cy = rawY + sz.h / 2;
+        return cx >= r.l && cx <= r.r && cy >= r.t && cy <= r.b;
+      });
       /* a bar spans the screen it lands on, beside its rail; any other part keeps its phone-sized
        * default (a list or a field as wide as a desktop is rarely what the author means), but no
        * taller than the screen */
@@ -4139,9 +4163,10 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
                   <SizeHandles
                     /* one measure, so the part is held by the points around it rather than by
                      * its edges: a circle's diameter, a label's height */
-                    round={selected.kind !== "button" && selected.kind !== "linearProgress"}
-                    /* a bar has a width and nothing else: it is held by its two ends */
-                    sides={selected.kind === "linearProgress" ? BAR_SIDES : undefined}
+                    round={ROUND.includes(selected.kind)}
+                    /* a bar and a slider have a width and nothing else: they are held by their two
+                     * ends; a carousel is the other way about and is held by its top and bottom */
+                    sides={WIDE.includes(selected.kind) ? BAR_SIDES : TALL.includes(selected.kind) ? TALL_SIDES : undefined}
                     box={{ l: b.l + sx, t: b.t + sy, r: b.r + sx, b: b.b + sy }}
                     z={view.z}
                     instant={widthDragId === selected.id || sizeEditId === selected.id}

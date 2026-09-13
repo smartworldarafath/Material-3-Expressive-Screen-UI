@@ -60,6 +60,7 @@ import {
   isScrollableTabs,
   tabScrollOffset,
   SCROLL_TAB_W,
+  RIPPLE_KINDS,
 } from "@/lib/tokens";
 import { CircularProgress, LinearProgress, LoadingIndicator } from "./Loading";
 import { CarouselBody, DatePickerBody, TimePickerBody } from "./Pickers";
@@ -171,9 +172,6 @@ function RippleShape({ part }: { part: string | null }) {
     </span>
   );
 }
-
-/** the parts a press lights up from inside: the button family, each in its own shape */
-const RIPPLE_KINDS: Kind[] = ["button", "iconButton", "chip", "fab", "extendedFab", "splitButton"];
 
 /** the touches a part is holding, and where each of them landed */
 function useRipples(on: boolean) {
@@ -1399,7 +1397,8 @@ function Body({ item, p, tabScroll, menuShown }: { item: Item; p: Palette; tabSc
       );
 
     case "carousel":
-      return <CarouselBody item={item} p={p} />;
+      /* the same measure a scrolling tab row is drawn at: how far the row has been carried */
+      return <CarouselBody item={item} p={p} scroll={tabScroll} />;
     case "datePicker":
       return <DatePickerBody item={item} p={p} />;
     case "timePicker":
@@ -1837,27 +1836,30 @@ export function M3Node({
   /* only the button family lights up from inside; everything else is left as it was drawn */
   const lights = !!ripple && RIPPLE_KINDS.includes(item.kind);
   const ripples = useRipples(lights);
+  /* the light a part carries in from wherever it was dropped belongs to the same family: a bar
+   * landing on a screen simply arrives, it does not light up */
+  const carried = RIPPLE_KINDS.includes(item.kind) ? lit : null;
   /* a given light belongs to the shape it was given inside: on a split button, the half the
    * finger is on */
   const litPart =
-    lit && item.kind === "splitButton" ? (lit.x > size.w - splitMetrics(buttonHeightOf(item)).trailW ? SPLIT_MENU_SLOT : SPLIT_MAIN_SLOT) : null;
+    carried && item.kind === "splitButton" ? (carried.x > size.w - splitMetrics(buttonHeightOf(item)).trailW ? SPLIT_MENU_SLOT : SPLIT_MAIN_SLOT) : null;
   /* how far the light had already spread where it came from: read once, when it arrives, so the
    * circle picks up where the other drawing left off and keeps going at the same pace */
   const litSpread = useRef<{ from: number; dur: number } | null>(null);
-  if (!lit) litSpread.current = null;
+  if (!carried) litSpread.current = null;
   else if (!litSpread.current) {
-    const gone = lit.grown ? RIPPLE_GROW : lit.at ? Math.max(0, (performance.now() - lit.at) / 1000) : 0;
+    const gone = carried.grown ? RIPPLE_GROW : carried.at ? Math.max(0, (performance.now() - carried.at) / 1000) : 0;
     litSpread.current = { from: Math.min(1, gone / RIPPLE_GROW), dur: Math.max(0, RIPPLE_GROW - gone) };
   }
-  const shown: Ripple[] = lit
+  const shown: Ripple[] = carried
     ? [
         ...ripples.list,
         {
           id: 0,
           part: litPart,
-          x: lit.x,
-          y: lit.y,
-          d: rippleSize({ width: size.w, height: size.h }, lit.x, lit.y),
+          x: carried.x,
+          y: carried.y,
+          d: rippleSize({ width: size.w, height: size.h }, carried.x, carried.y),
           from: litSpread.current?.from,
           dur: litSpread.current?.dur,
         },
@@ -1922,7 +1924,7 @@ export function M3Node({
         <Body item={drawn} p={palette} tabScroll={tabScroll} menuShown={menu.open} />
         {/* a part drawn as one shape is lit through its own box; one made of several -- a split
             button -- carries the light inside each of them instead */}
-        {(lights || !!lit) && item.kind !== "splitButton" && <RippleShape part={null} />}
+        {(lights || !!carried) && item.kind !== "splitButton" && <RippleShape part={null} />}
       </RippleCtx.Provider>
     </motion.div>
   );

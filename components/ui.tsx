@@ -312,6 +312,7 @@ export function Segmented<K extends string>({
   p,
   height = 40,
   grow = true,
+  tight = false,
 }: {
   options: SegOption<K>[];
   value: K;
@@ -319,6 +320,8 @@ export function Segmented<K extends string>({
   p: Palette;
   height?: number;
   grow?: boolean;
+  /** the cells may be narrower than they are tall: a long run still fits the panel */
+  tight?: boolean;
 }) {
   return (
     <div style={{ display: "flex", gap: 3 }}>
@@ -336,7 +339,7 @@ export function Segmented<K extends string>({
             className="m3-press"
             style={{
               flex: (o.grow ?? grow) ? 1 : "0 0 auto",
-              minWidth: o.wide ? height * 1.4 : height,
+              minWidth: tight ? 0 : o.wide ? height * 1.4 : height,
               height,
               padding: o.label ? "0 14px" : 0,
               border: "none",
@@ -1256,6 +1259,86 @@ export function CardLayoutPicker({ value, onChange, p }: { value: CardLayout; on
           </button>
         );
       })}
+    </div>
+  );
+}
+
+/** the longest side a picked picture is kept at: enough for a sketch, small enough to save */
+const MAX_IMAGE_PX = 1200;
+
+export function readImage(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const s = Math.min(1, MAX_IMAGE_PX / Math.max(img.width, img.height));
+      const c = document.createElement("canvas");
+      c.width = Math.max(1, Math.round(img.width * s));
+      c.height = Math.max(1, Math.round(img.height * s));
+      c.getContext("2d")!.drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(url);
+      resolve(c.toDataURL("image/webp", 0.86));
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("image"));
+    };
+    img.src = url;
+  });
+}
+
+/** A text field for a web address: what is typed stays in the box, and only a complete
+ *  http(s) address (or an emptied box) reaches the part. */
+export function UrlField({ value, onChange, placeholder, p }: { value: string; onChange: (src: string | undefined) => void; placeholder: string; p: Palette }) {
+  const [text, setText] = useState(value);
+  useEffect(() => setText(value), [value]);
+  return (
+    <div onBlurCapture={() => setText(value)}>
+      <Field
+        value={text}
+        onChange={(v) => {
+          setText(v);
+          const s = v.trim();
+          /* an emptied box removes a URL; a picked file (which shows as an empty box) is left alone */
+          if (!s && value) onChange(undefined);
+          else if (/^https?:\/\/\S+$/.test(s)) onChange(s);
+        }}
+        placeholder={placeholder}
+        p={p}
+        icon="link"
+      />
+    </div>
+  );
+}
+
+/** The picture on a part, and the two ways one arrives: an address on the web typed into the
+ *  box, or a file off the machine picked with the button at the end of it. It is one row
+ *  wherever a part can carry a picture -- a card, an image, a carousel card. */
+export function ImageRow({ value, onChange, p }: { value?: string; onChange: (src: string | undefined) => void; p: Palette }) {
+  const lang = useLang();
+  const fileRef = useRef<HTMLInputElement>(null);
+  return (
+    <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+      <input
+        ref={fileRef}
+        type="file"
+        accept="image/*"
+        hidden
+        onChange={async (e) => {
+          const f = e.target.files?.[0];
+          e.target.value = "";
+          if (!f) return;
+          try {
+            onChange(await readImage(f));
+          } catch {}
+        }}
+      />
+      {/* a picked file shows as data and is not editable here, so the box stays empty for it */}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <UrlField value={value && /^https?:\/\//.test(value) ? value : ""} onChange={onChange} placeholder={t("imageUrl", lang)} p={p} />
+      </div>
+      <IconBtn icon="upload" p={p} size={44} on onClick={() => fileRef.current?.click()} title={t("pickImage", lang)} />
+      {value && <IconBtn icon="close" p={p} size={44} onClick={() => onChange(undefined)} title={t("removeImage", lang)} />}
     </div>
   );
 }

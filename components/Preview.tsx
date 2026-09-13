@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import type { Item } from "@/lib/tokens";
+import type { Item, Kind } from "@/lib/tokens";
+import { RIPPLE_KINDS } from "@/lib/tokens";
 import { AnimatePresence, animate, motion, useMotionValue, useTransform, useReducedMotion, useIsPresent } from "motion/react";
 import type { TargetAndTransition, Variants } from "motion/react";
 import {
@@ -56,6 +57,11 @@ import {
   isWideRail,
   railMetrics,
   sizeOf,
+  carouselShapes,
+  carouselStops,
+  clamp,
+  carouselTrack,
+  isScrollableCarousel,
   isScrollableTabs,
   tabScrollOffset,
   SCROLL_TAB_W,
@@ -63,6 +69,7 @@ import {
 import { Icon, M3Node, Ripples, contentColor, menuShutMs, rippleSize } from "./M3Node";
 import type { Ripple } from "./M3Node";
 import { IconBtn } from "./ui";
+
 import { t, useLang } from "@/lib/i18n";
 import { constrainModalRails, modalRailOf, updateRail } from "@/lib/rail";
 import { railMotionTargets } from "@/lib/railView";
@@ -162,6 +169,12 @@ function flippedLook(it: Item): Item {
   return it;
 }
 
+/** In the preview a press lights up what a finger is meant to press: the button family, and the
+ *  controls whose whole purpose is being tapped -- a row in a list, a dropdown, a switch. An
+ *  indicator, a slider, a picture is not something that is pressed, so it stays as it is drawn.
+ *  A destination inside a bar has its own hit area, and lights up through that. */
+const TAP_LIT: Kind[] = [...RIPPLE_KINDS, "listItem", "select", "checkbox", "radio", "switch"];
+
 /** A part in the preview: a ripple spreads out of the point touched while the pointer is on it,
  *  then it fires its action on release, like a real widget. */
 function Tappable({
@@ -212,6 +225,9 @@ function Tappable({
   /* a tab row with more tabs than fit scrolls: by wheel, touch, or dragging the row; a chosen tab is brought into view */
   const scrollTabs = isScrollableTabs(item);
   const rowW = sizeOf(item, widths).w;
+  /* a carousel whose cards run past its box is dragged sideways, the way M3's carousel is */
+  const scrollCards = item.kind === "carousel" && isScrollableCarousel(item, rowW);
+  const scrollRow = scrollTabs || scrollCards;
   const [tabScroll, setTabScroll] = useState(() => tabScrollOffset(item, rowW));
   const scrollRef = useRef<HTMLDivElement>(null);
   /** the click that ends a drag of the row must not pick a tab */
@@ -227,23 +243,77 @@ function Tappable({
     el.scrollTo({ left: restOffset, behavior: settled.current ? "smooth" : "auto" });
     settled.current = true;
   }, [scrollTabs, item.id, item.selected, tabCount, restOffset]);
+  /* A row of cards comes to rest with a whole card at its head: let go part-way, it travels the
+   * rest of the way itself. The pull happens after the gesture, never during it, so what the
+   * finger is doing is what the row is doing. */
+  const dragging = useRef(false);
+  const settling = useRef(false);
+  const settleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const settleRow = (el: HTMLDivElement, from?: number) => {
+    if (!scrollCards) return;
+    const stops = carouselStops(item, rowW);
+    const nearest = (v: number) => stops.reduce((a, b, i) => (Math.abs(b - v) < Math.abs(stops[a] - v) ? i : a), 0);
+    let to = stops[nearest(el.scrollLeft)];
+    /* A gesture that went a quarter of the way to the next card carries the row there, rather
+     * than having to pass the half-way mark: a small deliberate push should move the row, not be
+     * pushed back. What the hand did decides, so it reads the same in either direction. */
+    if (from !== undefined && Math.abs(el.scrollLeft - from) > 1) {
+      const i = nearest(from);
+      const dir = el.scrollLeft > from ? 1 : -1;
+      const next = clamp(i + dir, 0, stops.length - 1);
+      const step = Math.abs(stops[next] - stops[i]);
+      /* a long gesture lands where it took the row; a short one still gets it as far as the
+       * next card, so a small deliberate push moves rather than being pushed back */
+      const least = step > 0 && Math.abs(el.scrollLeft - from) > step * 0.25 ? next : i;
+      const here = nearest(el.scrollLeft);
+      to = stops[dir > 0 ? Math.max(here, least) : Math.min(here, least)];
+    }
+    to = Math.min(to, el.scrollWidth - el.clientWidth);
+    if (Math.abs(to - el.scrollLeft) < 1) return;
+    settling.current = true;
+    el.scrollTo({ left: to, behavior: "smooth" });
+    window.setTimeout(() => (settling.current = false), 420);
+  };
+  /** the row has been let alone for a moment: it settles on the card nearest its head */
+  const restRow = (el: HTMLDivElement) => {
+    if (!scrollCards || settling.current || dragging.current) return;
+    if (settleTimer.current) clearTimeout(settleTimer.current);
+    settleTimer.current = setTimeout(() => settleRow(el), 140);
+  };
+  useEffect(() => () => {
+    if (settleTimer.current) clearTimeout(settleTimer.current);
+  }, []);
+
+  /** A row of cards travels slower than the hand that carries it: its cards are large, and each
+   *  one grows as it goes, so a movement that suits a row of tabs sends cards flying past. */
+  const GAIN = scrollCards ? 0.6 : 1;
+
   /** a mouse or pen drags the row; touch pans it natively, so it is left to the browser */
   const dragRow = (e: React.PointerEvent<HTMLDivElement>) => {
     swallowClick.current = false;
     if (e.pointerType === "touch" || e.button !== 0) return;
+    dragging.current = true;
     const el = e.currentTarget;
     const x0 = e.clientX;
     const left0 = el.scrollLeft;
     let moved = false;
+    /* while the row is being dragged nothing else may be: a pointer carried past the end of it
+     * would otherwise start selecting the page, which reads as the cards being torn out */
+    const selectable = document.body.style.userSelect;
+    document.body.style.userSelect = "none";
     const move = (ev: PointerEvent) => {
       const dx = ev.clientX - x0;
       if (Math.abs(dx) > 4) moved = true;
-      if (moved) el.scrollLeft = left0 - dx;
+      if (moved) el.scrollLeft = left0 - dx * GAIN;
     };
     const end = () => {
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", end);
       window.removeEventListener("pointercancel", end);
+      dragging.current = false;
+      document.body.style.userSelect = selectable;
+      if (moved) window.getSelection()?.removeAllRanges();
+      settleRow(el, left0);
       swallowClick.current = moved;
       /* a row the finger dragged was never a tap: the light it took goes out with the drag */
       if (moved) endRipples();
@@ -357,6 +427,16 @@ function Tappable({
     for (let i = 0; i < n; i++)
       slots.push({ key: `tab:${i}`, style: { left: rail.inset, width: rail.width - 2 * rail.inset, top: rail.top + i * (rail.itemHeight + rail.gap), height: rail.itemHeight, borderRadius: item.railExpanded ? 28 : 16 } });
   }
+  if (onSlot && item.kind === "carousel") {
+    /* a card is a place of its own to tap: the hit areas follow the very shapes the row is drawn
+       with, so each one covers the card the finger is looking at however far it has been carried.
+       They ride inside the scrolling layer, so their own scroll is added back. */
+    const { w } = sizeOf(item, widths);
+    carouselShapes(item, w, tabScroll).forEach(({ x, w: cw }, i) => {
+      if (cw < 8) return;
+      slots.push({ key: `tab:${i}`, style: { left: tabScroll + x, width: cw, top: 0, bottom: 0, borderRadius: 16 } });
+    });
+  }
   if (onSlot && item.kind === "toolbar") {
     const n = item.tabs?.length ?? 0;
     for (let i = 0; i < n; i++) slots.push({ key: `tab:${i}`, style: { left: 8 + i * 52, width: 48, top: 8, height: 48, borderRadius: 24 } });
@@ -395,7 +475,7 @@ function Tappable({
         }
         if (live) {
           setPressed(true);
-          if (!boxless && !segmented) addRipple(e, null);
+          if (!boxless && !segmented && TAP_LIT.includes(item.kind)) addRipple(e, null);
         }
       }}
       onPointerMove={(e) => {
@@ -414,9 +494,9 @@ function Tappable({
         endRipples();
       }}
       onClick={onPick ? () => onMenu?.(!menu) : onTap}
-      style={{ cursor: live || onValue ? "pointer" : "default", display: "flex", position: "relative", touchAction: scrollTabs ? "pan-x" : "none" }}
+      style={{ cursor: live || onValue ? "pointer" : "default", display: "flex", position: "relative", touchAction: scrollRow ? "pan-x" : "none" }}
     >
-      <M3Node item={item} palette={p} widths={widths} radii={radii} interactive={false} pressed={pressed && !onValue && !boxless} tabScroll={scrollTabs ? tabScroll : undefined} />
+      <M3Node item={item} palette={p} widths={widths} radii={radii} interactive={false} pressed={pressed && !onValue && !boxless} tabScroll={scrollRow ? tabScroll : undefined} />
       {live && !boxless && !segmented && (
         <div
           aria-hidden
@@ -448,7 +528,8 @@ function Tappable({
           aria-current={onRailToggle && s.key === `tab:${item.selected ?? 0}` ? "page" : undefined}
           onPointerDown={(e) => {
             e.stopPropagation();
-            addRipple(e, s.key);
+            /* a destination lights up under the finger; a picture on a carousel card does not */
+            if (item.kind !== "carousel") addRipple(e, s.key);
           }}
           onPointerUp={endRipples}
           onPointerCancel={endRipples}
@@ -473,14 +554,25 @@ function Tappable({
           {rippleNodes(s.key)}
         </Slot>;
       });
-      if (!scrollTabs) return slotNodes;
+      if (!scrollRow) return slotNodes;
       const n = item.tabs?.length ?? 0;
+      const runW = scrollCards ? carouselTrack(item, rowW) : n * SCROLL_TAB_W;
       return (
         <div
           ref={scrollRef}
           className="m3-hidden-scrollbar"
-          onScroll={(e) => setTabScroll(e.currentTarget.scrollLeft)}
+          onScroll={(e) => {
+            setTabScroll(e.currentTarget.scrollLeft);
+            restRow(e.currentTarget);
+          }}
+          /* a wheel over a row that only runs sideways moves it sideways, whichever way it is turned */
+          onWheel={(e) => {
+            const d = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+            e.currentTarget.scrollLeft += d * GAIN;
+          }}
           onPointerDownCapture={dragRow}
+          /* a card is a picture, but it is not one to be dragged out of the row */
+          onDragStart={(e) => e.preventDefault()}
           onClickCapture={(e) => {
             if (swallowClick.current) {
               e.stopPropagation();
@@ -488,9 +580,17 @@ function Tappable({
             }
             swallowClick.current = false;
           }}
-          style={{ position: "absolute", inset: 0, overflowX: "auto", overflowY: "hidden", touchAction: "pan-x", cursor: "grab" }}
+          style={{
+            position: "absolute",
+            inset: 0,
+            overflowX: "auto",
+            overflowY: "hidden",
+            touchAction: "pan-x",
+            cursor: "grab",
+            userSelect: "none",
+          }}
         >
-          <div style={{ position: "relative", width: n * SCROLL_TAB_W, height: "100%" }}>{slotNodes}</div>
+          <div style={{ position: "relative", width: runW, height: "100%" }}>{slotNodes}</div>
         </div>
       );
       })()}

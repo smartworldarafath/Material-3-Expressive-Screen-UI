@@ -629,6 +629,182 @@ export const hourOf = (it: Item) => clamp(Math.round(it.hour ?? 10), 0, 23);
 export const minuteOf = (it: Item) => clamp(Math.round(it.minute ?? 30), 0, 59);
 /** how many cards a carousel holds */
 export const carouselCountOf = (it: Item) => clamp(Math.round(it.count ?? 4), 2, 8);
+/** The cards themselves: one per card, carrying the picture and the words put on it. They are
+ *  kept in the same list a bar keeps its destinations in, so a card is a place a tap can be sent
+ *  from as well. */
+export const carouselCardsOf = (it: Item): NavTab[] =>
+  Array.from({ length: carouselCountOf(it) }, (_, i) => it.tabs?.[i] ?? { icon: "", label: "" });
+/** the patch that changes one card: the picture on it, or what it says */
+export function carouselCardPatch(it: Item, index: number, patch: Partial<NavTab>): Partial<Item> {
+  return { tabs: carouselCardsOf(it).map((c, i) => (i === index ? { ...c, ...patch } : c)) };
+}
+/** A sketch saved when a carousel was one box with one caption and one destination: both belong
+ *  to a card now, so they become the first card's -- the row itself is no longer tapped. */
+export function migrateCarousel(it: Item): Item {
+  if (it.kind !== "carousel" || (!it.label && !it.action)) return it;
+  const next: Item = { ...it, label: "" };
+  if (it.label) next.tabs = carouselCardsOf(it).map((c, i) => (i === 0 && !c.label ? { ...c, label: it.label } : c));
+  if (it.action) {
+    next.actions = { "tab:0": it.action, ...(it.actions ?? {}) };
+    next.action = undefined;
+  }
+  return next;
+}
+
+/** the gap between a carousel's cards */
+export const CARD_GAP = 8;
+
+/** The widths of a carousel's cards, in order, for the layout it was given. They are the sizes
+ *  M3's keylines name -- a large card, a medium one, and small ones -- measured against the box
+ *  rather than shared out between the cards, so a row of them runs past the edge and scrolls,
+ *  which is what a carousel is. */
+export function cardWidths(layout: string, width: number, count: number): number[] {
+  /* The arrangement is read off the screen it is on, so a carousel fills the row it is given
+   * whatever that screen is: the same picture on a phone and on a desktop, at that screen's size. */
+  const small = Math.max(24, Math.round(width * 0.14));
+  const large = Math.round(width * 0.56);
+  const medium = Math.round(width * 0.3);
+  if (layout === "fullScreen") {
+    /* one card fills the row and the next one only peeks in */
+    return Array(count).fill(Math.round(width * 0.86));
+  }
+  if (layout === "hero") {
+    /* one card is the hero; the rest are the small ones beside it */
+    return [Math.round(width * 0.72), ...Array(Math.max(0, count - 1)).fill(small)];
+  }
+  if (layout === "uncontained") {
+    /* every card is the same width, and the row runs past the edge */
+    return Array(count).fill(Math.max(40, Math.round(width / 2.4)));
+  }
+  /* multi-browse: a large card, a medium one, then small ones -- the large one leaves room for
+   * a sliver of the third, so the row says at a glance that it carries on */
+  return [large, medium, ...Array(Math.max(0, count - 2)).fill(small)];
+}
+
+/** an edge-to-edge carousel keeps the screen's margin at its start, an inset one sits flush */
+export const carouselInset = (width: number) => (width >= PHONE_W ? 16 : 0);
+
+/** how far the row of cards runs at rest, which on some layouts is past the part's own box */
+export function carouselRowWidth(it: Item, width: number): number {
+  const inset = carouselInset(width);
+  const ws = cardWidths(carouselLayoutOf(it), width - inset, carouselCountOf(it));
+  return inset + ws.reduce((a, b) => a + b, 0) + CARD_GAP * Math.max(0, ws.length - 1);
+}
+
+/** How many stops the row has past its first: enough for every card to pass out at the head, plus
+ *  the one that turns the arrangement around at the end, where the last card is the large one. */
+export function carouselScrollMax(it: Item, width: number): number {
+  const inset = carouselInset(width);
+  const count = carouselCountOf(it);
+  const ws = cardWidths(carouselLayoutOf(it), width - inset, count);
+  /* a row that fits the screen it is on has nowhere to go */
+  if (carouselRowWidth(it, width) <= width) return 0;
+  return clamp(count - carouselFill(ws, width - inset) + 1, 0, count - 1);
+}
+
+/** the row is longer than the box it sits in, so in the preview it scrolls sideways */
+export const isScrollableCarousel = (it: Item, width: number) => carouselScrollMax(it, width) > 0;
+
+/** Where the row rests: one stop per card, each the scroll at which that card stands at the head
+ *  of the arrangement. A scroll let go between two is pulled to the nearer one, so the card on the
+ *  left is always a whole card at its own size rather than something caught mid-growth. */
+export function carouselStops(it: Item, width: number): number[] {
+  const inset = carouselInset(width);
+  const ws = cardWidths(carouselLayoutOf(it), width - inset, carouselCountOf(it));
+  const stops = [0];
+  for (let i = 0; i < carouselScrollMax(it, width); i++) stops.push(stops[i] + ws[i] + CARD_GAP);
+  return stops;
+}
+
+/** how far the row may be scrolled, in pixels: the last stop, plus the box it is seen through */
+export function carouselTrack(it: Item, width: number): number {
+  const stops = carouselStops(it, width);
+  return width + stops[stops.length - 1];
+}
+
+/** how many cards the head of the row takes to fill the box: the rest are what there is to scroll */
+function carouselFill(ws: number[], width: number): number {
+  let acc = 0;
+  for (let i = 0; i < ws.length; i++) {
+    acc += ws[i] + (i ? CARD_GAP : 0);
+    if (acc >= width - 1) return i + 1;
+  }
+  return ws.length;
+}
+
+/** the width a card takes at a given place in the arrangement: on a stop it is that stop's own
+ *  width, and between two it is read off both, so a card grows into the next size as it travels */
+function slotWidth(ws: number[], at: number): number {
+  if (at <= -1) return 0;
+  /* The card at the head is on its way out. It draws in towards the small size and slides past
+   * the near edge, where the row cuts it off -- the same way the cards at the far end are cut
+   * off -- rather than thinning away to nothing while it stands there. */
+  if (at < 0) return lerp(ws[ws.length - 1], ws[0], at + 1);
+  const k = Math.floor(at);
+  const a = ws[Math.min(k, ws.length - 1)];
+  const b = ws[Math.min(k + 1, ws.length - 1)];
+  return lerp(a, b, at - k);
+}
+
+/** Where every card stands and how wide it is at a given scroll. Scrolling does not slide the row
+ *  past the box: each card travels through the arrangement instead, growing into the next size as
+ *  the one ahead of it shrinks away -- which is what makes a Material carousel read as one. At the
+ *  end of the list the arrangement turns around, so the last card finishes at the large keyline
+ *  rather than the row trailing off into space. */
+export function carouselShapes(it: Item, width: number, scroll = 0): { x: number; w: number; lead: number }[] {
+  const inset = carouselInset(width);
+  const count = carouselCountOf(it);
+  const ws = cardWidths(carouselLayoutOf(it), width - inset, count);
+  const stops = carouselStops(it, width);
+  /* how many cards the scroll has carried past, counted in cards rather than pixels */
+  let passed = stops.length - 1;
+  for (let i = 0; i < stops.length - 1; i++) {
+    if (scroll < stops[i + 1]) {
+      passed = i + (scroll - stops[i]) / (stops[i + 1] - stops[i]);
+      break;
+    }
+  }
+  if (!(scroll > 0)) passed = 0;
+  /* the last cards keep the row full between them: from there on the arrangement turns around */
+  const fill = carouselFill(ws, width - inset);
+  const turn = clamp(passed - (count - fill), 0, 1);
+  const out: { x: number; w: number; lead: number }[] = [];
+  /* The margin is the list's, not the edge's: the first card stands off the near edge, and past
+   * it the row simply runs to the edge and is cut there, so nothing is held in a margin on its
+   * way out. The card leaving carries the row's start with it as it goes. */
+  const leaving = passed - Math.floor(passed);
+  const going = slotWidth(ws, -leaving);
+  const start = inset * clamp(1 - passed, 0, 1);
+  let x = start - leaving * (going + CARD_GAP);
+  for (let i = 0; i < count; i++) {
+    const running = slotWidth(ws, i - passed);
+    /* turned around, a card takes its size from the end of the row rather than the head of it */
+    const ended = i < count - fill ? 0 : ws[Math.min(count - 1 - i, ws.length - 1)];
+    const w = turn > 0 ? lerp(running, ended, turn) : running;
+    /* how far this card has grown into the large keyline: the one standing in it is the main
+     * card, and the only one that says anything */
+    const lead = ws.length > 1 ? clamp((w - ws[1]) / Math.max(1, ws[0] - ws[1]), 0, 1) : 1;
+    out.push({ x, w, lead });
+    /* the gap goes with the card: it closes as the card it follows shrinks away */
+    x += w + CARD_GAP * Math.min(1, w / 8);
+  }
+  /* Turned around, the row is measured from its far edge instead of its near one: the last card
+   * stands whole against the same margin the first one started from, and what runs over does so
+   * at the head, where the cards are leaving anyway. */
+  if (turn > 0) {
+    const right = x - CARD_GAP * Math.min(1, out[count - 1].w / 8);
+    const want = lerp(0, width - inset - right, turn);
+    for (const c of out) c.x += want;
+  }
+  return out;
+}
+
+/** the three heights M3 gives a carousel, named the way every other size is */
+export const CAROUSEL_HEIGHTS = [
+  { key: "s", value: 140 },
+  { key: "m", value: 180 },
+  { key: "l", value: 260 },
+] as const;
 
 export type Axis = "x" | "y";
 /** kinds that fuse into a run: buttons side by side, list items stacked */
@@ -1370,7 +1546,9 @@ export const KIND_ORDER: Kind[] = [
 ];
 
 /* ---------- screen data ---------- */
-export type NavTab = { icon: string; label: string };
+/** an entry in a bar, a menu or a carousel: what it shows, and -- on a carousel card -- the
+ *  picture put on it */
+export type NavTab = { icon: string; label: string; src?: string };
 
 export type Item = {
   id: string;
@@ -1651,6 +1829,8 @@ export function actionSlotsOf(it: Item): IconSlot[] {
   /* the entries of a menu, whichever FAB opens it */
   if (it.kind === "fabMenu" || opensMenu(it)) return (it.tabs ?? []).map((t, i) => ({ key: `tab:${i}`, label: t.label || `${i + 1}`, value: t.icon || null }));
   if (it.kind === "tabs") return (it.tabs ?? []).map((t, i) => ({ key: `tab:${i}`, label: t.label || `${i + 1}`, value: null }));
+  /* every card of a carousel is a place of its own to be sent from */
+  if (it.kind === "carousel") return carouselCardsOf(it).map((_, i) => ({ key: `tab:${i}`, label: `${i + 1}`, value: null }));
   return [];
 }
 
@@ -1673,7 +1853,11 @@ export function actionsOf(it: Item): { slot: string; action: Action }[] {
 }
 
 /** kinds a user can tap in the preview */
-export const TAPPABLE: Kind[] = ["button", "iconButton", "fab", "extendedFab", "chip", "listItem", "card", "image", "text", "splitButton", "radio", "carousel", "datePicker", "timePicker"];
+/** The parts a press lights up from inside: the button family, each in its own shape. A bar, a
+ *  slider, an indicator is not something a finger presses, so it is left as it was drawn. */
+export const RIPPLE_KINDS: Kind[] = ["button", "iconButton", "chip", "fab", "extendedFab", "splitButton"];
+
+export const TAPPABLE: Kind[] = ["button", "iconButton", "fab", "extendedFab", "chip", "listItem", "card", "image", "text", "splitButton", "radio", "datePicker", "timePicker"];
 
 /** palette roles a user may pick as a background */
 export type ColorToken =
@@ -1854,7 +2038,8 @@ export const frameRect = (f: Frame) => {
 export const frameRadius = (f: Frame) => (isPhoneFrame(f) ? PHONE_R : DESKTOP_R);
 
 /** parts that span the screen edge to edge and follow its width when it changes */
-export const FULL_WIDTH: Kind[] = ["topAppBar", "bottomNav", "tabs"];
+/** parts that span the screen they are on: the bars, and a carousel, whose row is the screen */
+export const FULL_WIDTH: Kind[] = ["topAppBar", "bottomNav", "tabs", "carousel"];
 
 /** a part no taller than the screen it is placed on: a box or a rail sized to a phone shrinks to a shorter screen */
 export function fitHeight(it: Item, screenH: number): Item {

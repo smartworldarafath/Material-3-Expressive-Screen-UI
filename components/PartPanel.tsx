@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { BACK_TARGET, Frame, Item, KIND_SPEC, LINK_TARGET, MENU_TARGET, Palette, TAPPABLE, TOGGLEABLE, isFab, isPhoneFrame } from "@/lib/tokens";
+import { Action, BACK_TARGET, Frame, Item, KIND_SPEC, LINK_TARGET, MENU_TARGET, Palette, TAPPABLE, TOGGLEABLE, isFab, isPhoneFrame } from "@/lib/tokens";
 import { Icon } from "./M3Node";
 import { Field, IconBtn, Section, Select, SelectOption } from "./ui";
 import { AiHooks } from "./Inspector";
@@ -308,7 +308,9 @@ export function actionOptionsOf(item: Item, frame: Frame | null, frames: Frame[]
 }
 
 /** where a tap goes, with the map or the browser window under it. Parts that cannot be tapped
- *  never see this; the toggle a button can be is handled by the button's own panel. */
+ *  never see this; the toggle a button can be is handled by the button's own panel. A part made
+ *  of several places to tap -- the cards of a carousel -- gives the slot the section is about,
+ *  and the whole row of them is drawn above it by the panel. */
 export function TriggerSection({
   item,
   frame,
@@ -316,6 +318,8 @@ export function TriggerSection({
   selfRect,
   onChange,
   p,
+  slot,
+  head,
 }: {
   item: Item;
   frame: Frame | null;
@@ -323,25 +327,41 @@ export function TriggerSection({
   selfRect: { x: number; y: number; w: number; h: number } | null;
   onChange: (patch: Partial<Item>) => void;
   p: Palette;
+  /** the one place inside the part this is about; the part itself when left out */
+  slot?: string;
+  /** shown above the controls: which of those places is being set */
+  head?: React.ReactNode;
 }) {
   const lang = useLang();
-  const isLink = item.action?.to === LINK_TARGET;
-  const pick = (k: string) => {
-    if (k === LINK_TARGET) {
-      onChange({ action: { to: LINK_TARGET, transition: "none", url: item.action?.url } });
+  const action = slot ? item.actions?.[slot] : item.action;
+  const set = (next: Action | undefined) => {
+    if (!slot) {
+      onChange({ action: next });
       return;
     }
-    const transition = item.action && item.action.to !== LINK_TARGET ? item.action.transition : "slide";
-    onChange({ action: k === "none" ? undefined : { to: k, transition } });
+    const actions = { ...(item.actions ?? {}) };
+    if (next) actions[slot] = next;
+    else delete actions[slot];
+    onChange({ actions: Object.keys(actions).length ? actions : undefined });
+  };
+  const isLink = action?.to === LINK_TARGET;
+  const pick = (k: string) => {
+    if (k === LINK_TARGET) {
+      set({ to: LINK_TARGET, transition: "none", url: action?.url });
+      return;
+    }
+    const transition = action && action.to !== LINK_TARGET ? action.transition : "slide";
+    set(k === "none" ? undefined : { to: k, transition });
   };
   return (
     <Section id="part-action" icon="ads_click" title={t("tapTo", lang)} p={p}>
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        <Select options={actionOptionsOf(item, frame, allFrames, lang)} value={item.action?.to ?? "none"} onChange={pick} p={p} label={t("tapTo", lang)} />
+        {head}
+        <Select options={actionOptionsOf(item, frame, allFrames, lang)} value={action?.to ?? "none"} onChange={pick} p={p} label={t("tapTo", lang)} />
         {isLink ? (
-          <LinkStage self={frame} selfRect={selfRect} action={item.action} onChange={(action) => onChange({ action })} p={p} />
+          <LinkStage self={frame} selfRect={selfRect} action={action} onChange={set} p={p} />
         ) : (
-          <TapStage frames={allFrames} self={frame} selfRect={selfRect} action={item.action} onChange={(action) => onChange({ action })} p={p} />
+          <TapStage frames={allFrames} self={frame} selfRect={selfRect} action={action} onChange={set} p={p} />
         )}
       </div>
     </Section>

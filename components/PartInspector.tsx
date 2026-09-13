@@ -2,7 +2,9 @@
 
 import { useState } from "react";
 import {
+  CAROUSEL_HEIGHTS,
   CAROUSEL_LAYOUTS,
+  cardWidths,
   CarouselLayout,
   DATE_LAYOUTS,
   DateLayout,
@@ -21,6 +23,8 @@ import {
   TRACK_MIN,
   TimeLayout,
   barWidths,
+  carouselCardPatch,
+  carouselCardsOf,
   carouselCountOf,
   carouselLayoutOf,
   dateLayoutOf,
@@ -35,8 +39,9 @@ import {
   sizeOf,
   timeLayoutOf,
 } from "@/lib/tokens";
-import { Field, NamedSizes, PanelShell, Section, Segmented, Slider, Toggle } from "./ui";
+import { Field, ImageRow, NamedSizes, PanelShell, Section, Segmented, Slider, Toggle } from "./ui";
 import { arcPath, wavePath } from "./Loading";
+
 import { Icon } from "./M3Node";
 import { AiHooks } from "./Inspector";
 import { AlignBox, NoteSection, PartHeader, PartTabs, PlaceFn, Tab, TriggerSection, hasTrigger } from "./PartPanel";
@@ -53,6 +58,10 @@ function WidthRow({ item, frame, onChange, p }: { item: Item; frame: Frame | nul
   const spec = KIND_SPEC[item.kind];
   const size = spec.size!;
   const frameW = frame ? frameSizeOf(frame).w : PHONE_W;
+  const [picked, setCard] = useState(0);
+  /** the carousel card the panel is about: its picture, and where a tap on it goes. A row that
+   *  has lost cards leaves the pick on the last one still there. */
+  const card = item.kind === "carousel" ? Math.min(picked, carouselCountOf(item) - 1) : picked;
   /* a bar is measured across the screen; a ring is measured corner to corner */
   const bar = item.kind === "linearProgress";
   const width = sizeOf(item, {}).w;
@@ -163,6 +172,71 @@ function ProgressValue({ item, onChange, p }: { item: Item; onChange: (patch: Pa
   );
 }
 
+/** A layout drawn as the row of cards it actually makes: the same widths the part is built from,
+ *  read as shares of the row, so the picture in the cell is the arrangement itself. */
+function CarouselThumb({ layout, on, p }: { layout: CarouselLayout; on: boolean; p: Palette }) {
+  const shares = cardWidths(layout, 100, 4);
+  const ink = on ? p.onPrimary : p.onSurfaceVariant;
+  return (
+    <span aria-hidden style={{ display: "flex", gap: 1.5, width: 44, height: 22, overflow: "hidden" }}>
+      {shares.map((w, i) => (
+        <span key={i} style={{ width: `${w}%`, flex: "0 0 auto", borderRadius: 3, background: ink, opacity: i === 0 ? 1 : 0.45 }} />
+      ))}
+    </span>
+  );
+}
+
+/** M3's four arrangements as one connected run of those pictures, with no words: the drawing
+ *  says how the cards are laid out better than "multi-browse" ever could. */
+function CarouselLayoutPicker({ item, onChange, p }: { item: Item; onChange: (patch: Partial<Item>) => void; p: Palette }) {
+  const lang = useLang();
+  const current = carouselLayoutOf(item);
+  return (
+    <Segmented<CarouselLayout>
+      options={CAROUSEL_LAYOUTS.map((l) => ({
+        key: l.key,
+        title: t(`carousel${l.key[0].toUpperCase()}${l.key.slice(1)}` as "carouselHero", lang),
+        node: <CarouselThumb layout={l.key} on={l.key === current} p={p} />,
+      }))}
+      value={current}
+      onChange={(layout) => onChange({ layout })}
+      p={p}
+      height={44}
+    />
+  );
+}
+
+/** The cards themselves as one connected run: each cell shows the picture that card carries, or
+ *  its number while it has none, and the one picked out is the card the controls under it -- and
+ *  the trigger tab -- are about. A card a tap is sent from wears the run's own mark. */
+function CardStrip({ item, selected, onSelect, p }: { item: Item; selected: number; onSelect: (i: number) => void; p: Palette }) {
+  const cards = carouselCardsOf(item);
+  return (
+    <Segmented<string>
+      options={cards.map((card, i) => ({
+        key: String(i),
+        title: `${i + 1}`,
+        dot: !!item.actions?.[`tab:${i}`],
+        node: card.src ? (
+          <span aria-hidden style={{ position: "absolute", inset: 0, borderRadius: "inherit", overflow: "hidden" }}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={card.src} alt="" draggable={false} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+            {/* the picture covers the cell, so the one picked out wears a ring of its own */}
+            {i === selected && <span style={{ position: "absolute", inset: 0, borderRadius: "inherit", border: `3px solid ${p.primary}`, boxSizing: "border-box" }} />}
+          </span>
+        ) : (
+          <span style={{ fontSize: 12, fontWeight: 700 }}>{i + 1}</span>
+        ),
+      }))}
+      value={String(selected)}
+      onChange={(k) => onSelect(Number(k))}
+      p={p}
+      height={44}
+      tight
+    />
+  );
+}
+
 export function PartInspector({
   ai,
   item,
@@ -195,6 +269,10 @@ export function PartInspector({
   const trigger = hasTrigger(item.kind);
   const spec = KIND_SPEC[item.kind];
   const frameW = frame ? frameSizeOf(frame).w : PHONE_W;
+  const [picked, setCard] = useState(0);
+  /** the carousel card the panel is about: its picture, and where a tap on it goes. A row that
+   *  has lost cards leaves the pick on the last one still there. */
+  const card = item.kind === "carousel" ? Math.min(picked, carouselCountOf(item) - 1) : picked;
   /* a bar is measured across the screen; a ring is measured corner to corner */
   const bar = item.kind === "linearProgress";
 
@@ -203,29 +281,36 @@ export function PartInspector({
       {item.kind === "carousel" && (
         <>
           <Section id="part-layout" icon="view_carousel" title={t("layout", lang)} p={p}>
+            <CarouselLayoutPicker item={item} onChange={onChange} p={p} />
+          </Section>
+          <Section id="part-cards" icon="photo_library" title={t("cards", lang)} p={p}>
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              <Segmented<CarouselLayout>
-                options={CAROUSEL_LAYOUTS.map((l) => ({
-                  key: l.key,
-                  icon: l.icon,
-                  title: t(`carousel${l.key[0].toUpperCase()}${l.key.slice(1)}` as "carouselHero", lang),
-                }))}
-                value={carouselLayoutOf(item)}
-                onChange={(layout) => onChange({ layout })}
+              <Slider icon="view_column" title={t("cards", lang)} value={carouselCountOf(item)} min={2} max={8} step={1} onChange={(count) => onChange({ count })} p={p} />
+              <CardStrip item={item} selected={card} onSelect={setCard} p={p} />
+              {/* the card picked out in the run is the one these are about: what it says, and
+                * the picture on it. The words keep the line breaks they were typed with. */}
+              <Field
+                value={carouselCardsOf(item)[card]?.label ?? ""}
+                onChange={(label) => onChange(carouselCardPatch(item, card, { label }))}
+                placeholder={t("label", lang)}
+                p={p}
+                multiline
+                rows={2}
+                maxHeight={140}
+              />
+              <ImageRow
+                value={carouselCardsOf(item)[card]?.src}
+                onChange={(src) => onChange(carouselCardPatch(item, card, { src }))}
                 p={p}
               />
-              <Slider icon="view_column" title={t("cards", lang)} value={carouselCountOf(item)} min={2} max={8} step={1} onChange={(count) => onChange({ count })} p={p} />
             </div>
           </Section>
-          <Section id="part-text" icon="short_text" title={t("text", lang)} p={p}>
-            <Field value={item.label} onChange={(label) => onChange({ label })} placeholder={t("label", lang)} p={p} />
-          </Section>
           <Section id="part-size" icon="straighten" title={t("size", lang)} p={p}>
-            <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-              <WidthRow item={item} frame={frame} onChange={onChange} p={p} />
-              {spec.size2 && (
-                <Slider icon="height" title={t("height", lang)} value={sizeOf(item, {}).h} min={spec.size2.min} max={spec.size2.max} step={spec.size2.step} onChange={(size2) => onChange({ size2 })} p={p} />
-              )}
+            {/* a carousel runs the width of the screen it is on: its height is the one measure
+                its author sets */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              <Slider icon="height" title={t("height", lang)} value={sizeOf(item, {}).h} min={spec.size2!.min} max={spec.size2!.max} step={spec.size2!.step} onChange={(size2) => onChange({ size2 })} p={p} />
+              <NamedSizes steps={CAROUSEL_HEIGHTS} value={sizeOf(item, {}).h} onChange={(size2) => onChange({ size2 })} p={p} />
             </div>
           </Section>
         </>
@@ -323,6 +408,30 @@ export function PartInspector({
         </>
       )}
 
+      {item.kind === "slider" && (
+        <>
+          {/* where its handle sits: the one thing a sketched slider says */}
+          <Section id="part-state" icon="tune" title={t("state", lang)} p={p}>
+            <Slider icon="percent" title={t("progressState", lang)} value={item.value ?? 40} min={0} max={100} step={1} onChange={(value) => onChange({ value })} p={p} unit="%" />
+          </Section>
+          <Section id="part-size" icon="straighten" title={t("size", lang)} p={p}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              <Slider
+                icon="width"
+                title={t("width", lang)}
+                value={item.size ?? spec.w}
+                min={Math.min(spec.size!.min, item.size ?? spec.w)}
+                max={Math.max(frameW, spec.size!.max)}
+                step={spec.size!.step}
+                onChange={(size) => onChange({ size })}
+                p={p}
+              />
+              <NamedSizes steps={barWidths(frameW)} value={item.size ?? spec.w} onChange={(size) => onChange({ size })} p={p} />
+            </div>
+          </Section>
+        </>
+      )}
+
       {item.kind === "loadingIndicator" && (
         <>
           <Section id="part-state" icon="tune" title={t("state", lang)} p={p}>
@@ -366,7 +475,19 @@ export function PartInspector({
     >
       {tab === "design" && design}
       {tab === "behavior" &&
-        (trigger ? (
+        (item.kind === "carousel" ? (
+          /* every card is a place of its own to be sent from: the row picks which one */
+          <TriggerSection
+            item={item}
+            frame={frame}
+            allFrames={allFrames}
+            selfRect={selfRect}
+            onChange={onChange}
+            p={p}
+            slot={`tab:${card}`}
+            head={<CardStrip item={item} selected={card} onSelect={setCard} p={p} />}
+          />
+        ) : trigger ? (
           <TriggerSection item={item} frame={frame} allFrames={allFrames} selfRect={selfRect} onChange={onChange} p={p} />
         ) : (
           /* nothing is opened by tapping this one: the tab says so and leaves the spec the room */

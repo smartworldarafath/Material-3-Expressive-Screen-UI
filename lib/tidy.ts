@@ -522,7 +522,10 @@ export function tidyFrame(groups: Group[], frame: Frame, frames: Frame[], widths
       /* a run nearly as wide as the content (a button row, a chip row) sits on the left margin,
        * so its edge lines up with the cards and lists above and below it */
       const wide = w >= inner * 0.7;
-      const l = wide || a === "left" ? fr.l + PHONE_MARGIN : a === "right" ? fr.r - PHONE_MARGIN - w : fr.l + Math.round((frameW - w) / 2);
+      /* a part that spans the screen -- a carousel, a bar laid in the flow -- is edge to edge,
+       * and the margin is not its to keep */
+      const full = FULL_WIDTH.includes(u.kind as Kind) && w >= frameW - 1;
+      const l = full ? fr.l : wide || a === "left" ? fr.l + PHONE_MARGIN : a === "right" ? fr.r - PHONE_MARGIN - w : fr.l + Math.round((frameW - w) / 2);
       target.set(u, { l, t: yy });
     } else if (row.length === 2 && row.some(isLabel) && row.some(isControl)) {
       /* a label with its control: the label on the left margin, the control on the right, like a settings row */

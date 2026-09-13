@@ -4,8 +4,9 @@ import {
   CARD_PADDING,
   Item,
   Palette,
-  carouselCountOf,
-  carouselLayoutOf,
+  carouselCardsOf,
+  carouselShapes,
+  cardScrimOf,
   dateLayoutOf,
   dayOf,
   hourOf,
@@ -21,78 +22,72 @@ import { Icon } from "./M3Node";
  * cards, a calendar, a clock. They take their whole box and read their numbers off the item,
  * so a sketch shows a date and a time an author chose rather than today's. */
 
-const GAP = 8;
-
-/** the widths of a carousel's cards, in order, for the layout it was given */
-function cardWidths(layout: string, width: number, count: number): number[] {
-  const room = width - GAP * (count - 1);
-  if (layout === "fullScreen") {
-    /* one card fills the row and the next one only peeks in */
-    const first = Math.round(width * 0.86);
-    return [first, ...Array(count - 1).fill(Math.max(24, Math.round(width * 0.1)))];
-  }
-  if (layout === "hero") {
-    const first = Math.round(room * 0.68);
-    const rest = Math.max(24, Math.round((room - first) / Math.max(1, count - 1)));
-    return [first, ...Array(count - 1).fill(rest)];
-  }
-  if (layout === "uncontained") {
-    /* every card is the same width, and the row runs past the edge */
-    const one = Math.max(40, Math.round(width / 2.4));
-    return Array(count).fill(one);
-  }
-  /* multi-browse: a large card, a medium one, then small ones */
-  const large = Math.round(room * 0.52);
-  const medium = Math.round(room * 0.26);
-  const small = Math.max(24, Math.round(room * 0.12));
-  return [large, medium, ...Array(Math.max(0, count - 2)).fill(small)];
-}
-
-export function CarouselBody({ item, p }: { item: Item; p: Palette }) {
-  const layout = carouselLayoutOf(item);
+export function CarouselBody({ item, p, scroll = 0 }: { item: Item; p: Palette; scroll?: number }) {
   const { w, h } = sizeOf(item, {});
-  const count = carouselCountOf(item);
+  const cards = carouselCardsOf(item);
   const r = scaleR(16);
-  /* an edge-to-edge carousel keeps the screen's margin at its start, an inset one sits flush */
-  const inset = w >= 412 ? 16 : 0;
-  const widths = cardWidths(layout, w - inset, count);
+  /* where each card stands at this scroll: at rest it is the arrangement the layout names, and
+   * part-way through a scroll each card is between two of its sizes */
+  const shapes = carouselShapes(item, w, scroll);
   return (
-    <div style={{ display: "flex", gap: GAP, height: "100%", paddingLeft: inset, alignItems: "stretch", overflow: "hidden" }}>
-      {widths.map((cw, i) => (
-        <div
-          key={i}
-          style={{
-            width: cw,
-            flex: "0 0 auto",
-            borderRadius: r,
-            background: i === 0 ? p.primaryContainer : p.surfaceContainerHighest,
-            color: i === 0 ? p.onPrimaryContainer : p.onSurfaceVariant,
-            display: "grid",
-            placeItems: "center",
-            overflow: "hidden",
-            position: "relative",
-          }}
-        >
-          {cw > 56 && <Icon name="image" size={Math.min(32, Math.round(Math.min(cw, h) * 0.28))} />}
-          {i === 0 && cw > 96 && item.label.trim() && (
-            <span
-              style={{
-                position: "absolute",
-                left: 12,
-                right: 12,
-                bottom: 10,
-                fontSize: 12,
-                fontWeight: 600,
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
-              }}
-            >
-              {item.label}
-            </span>
-          )}
-        </div>
-      ))}
+    <div style={{ position: "relative", height: "100%", overflow: "hidden" }}>
+      {shapes.map(({ x, w: cw, lead }, i) => {
+        const card = cards[i];
+        const src = card?.src;
+        const words = card?.label?.trim() ?? "";
+        if (cw < 1) return null;
+        return (
+          <div
+            key={i}
+            data-card={i}
+            style={{
+              position: "absolute",
+              left: x,
+              top: 0,
+              width: cw,
+              height: "100%",
+              borderRadius: r,
+              background: src ? p.surfaceContainerHighest : i === 0 ? p.primaryContainer : p.surfaceContainerHighest,
+              color: i === 0 ? p.onPrimaryContainer : p.onSurfaceVariant,
+              display: "grid",
+              placeItems: "center",
+              overflow: "hidden",
+            }}
+          >
+            {src ? (
+              /* the picture fills its card, however the card is shaped */
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={src} alt="" draggable={false} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
+            ) : (
+              cw > 56 && !words && <Icon name="image" size={Math.min(32, Math.round(Math.min(cw, h) * 0.28))} />
+            )}
+            {/* every card stands on the same scrim a card's own words stand on: it fades in from
+              * the foot of the card, so the row reads as one whatever the pictures are */}
+            <div style={{ position: "absolute", inset: 0, background: cardScrimOf("#ffffff", "end"), pointerEvents: "none" }} />
+            {/* only the card in the large keyline says anything: it fades in as it grows into it */}
+            {cw > 72 && words && lead > 0 && (
+              <span
+                style={{
+                  position: "absolute",
+                  left: 14,
+                  right: 14,
+                  bottom: 12,
+                  fontSize: 16,
+                  fontWeight: 600,
+                  lineHeight: 1.35,
+                  /* what the author typed, line breaks and all */
+                  whiteSpace: "pre-line",
+                  overflow: "hidden",
+                  color: "#fff",
+                  opacity: lead,
+                }}
+              >
+                {words}
+              </span>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
