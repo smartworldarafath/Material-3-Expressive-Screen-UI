@@ -228,9 +228,20 @@ function migrateGroups(groups: Group[], frames: Frame[]): Group[] {
   });
 }
 
-/** Seed ids are deterministic so server and client render the same markup. */
 /* shown when an edit is refused because the group is locked */
 const lockedGroupMsg = () => t("lockedGroup", getLang());
+
+const isLegacySeed = (raw: string | null) => {
+  if (!raw) return false;
+  try {
+    const d = JSON.parse(raw) as Partial<Doc>;
+    const items = d.groups?.flatMap((g) => g.items) ?? [];
+    if (d.frames?.some((f) => f.id === "seedF2") || (items.some((i) => i.id?.startsWith("seed")) && !items.some((i) => i.icon2 === "chevron_right"))) {
+      return true;
+    }
+  } catch {}
+  return false;
+};
 
 const seed = (lang: Lang = getLang()): Group[] => {
   const text = SEED_TEXT[lang];
@@ -250,6 +261,7 @@ const seed = (lang: Lang = getLang()): Group[] => {
     it.label = t;
     it.icon = ["inbox", "star", "archive"][i];
     it.supporting = text.supporting;
+    it.icon2 = "chevron_right";
     return it;
   });
   const nav = mk("bottomNav");
