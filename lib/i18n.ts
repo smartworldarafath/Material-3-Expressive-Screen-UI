@@ -22,11 +22,144 @@ export const setGlobalLang = (l: Lang) => {
 export const LangContext = createContext<Lang>("en");
 export const useLang = () => useContext(LangContext);
 
-export const SEED_TEXT: Record<Lang, { favorite: string; share: string; inbox: string; starred: string; archive: string; supporting: string; start: string }> = {
-  ja: { favorite: "お気に入り", share: "共有", inbox: "受信トレイ", starred: "スター付き", archive: "アーカイブ", supporting: "サブテキスト", start: "はじめる" },
-  en: { favorite: "Favorite", share: "Share", inbox: "Inbox", starred: "Starred", archive: "Archive", supporting: "Supporting text", start: "Get started" },
-  zh: { favorite: "收藏", share: "分享", inbox: "收件箱", starred: "已加星标", archive: "归档", supporting: "辅助文本", start: "开始" },
-  ko: { favorite: "즐겨찾기", share: "공유", inbox: "받은편지함", starred: "별표 표시", archive: "보관함", supporting: "보조 텍스트", start: "시작하기" },
+export const SEED_TEXT: Record<
+  Lang,
+  {
+    favorite: string;
+    share: string;
+    inbox: string;
+    starred: string;
+    archive: string;
+    supporting: string;
+    start: string;
+    notes: string;
+    searchNotes: string;
+    chipAll: string;
+    chipWork: string;
+    chipPersonal: string;
+    recentNotes: string;
+    meetingNotes: string;
+    meetingDate: string;
+    shoppingList: string;
+    travelPlans: string;
+    today: string;
+    yesterday: string;
+    threeDaysAgo: string;
+    projectSync: string;
+    projectMeta: string;
+    playbackHint: string;
+    save: string;
+    reminder: string;
+  }
+> = {
+  ja: {
+    favorite: "お気に入り",
+    share: "共有",
+    inbox: "受信トレイ",
+    starred: "スター付き",
+    archive: "アーカイブ",
+    supporting: "サブテキスト",
+    start: "はじめる",
+    notes: "メモ",
+    searchNotes: "メモを検索",
+    chipAll: "すべて",
+    chipWork: "仕事",
+    chipPersonal: "個人",
+    recentNotes: "最近のメモ",
+    meetingNotes: "会議の議事録",
+    meetingDate: "2026年9月3日",
+    shoppingList: "買い物リスト",
+    travelPlans: "旅行の計画",
+    today: "今日",
+    yesterday: "昨日",
+    threeDaysAgo: "3日前",
+    projectSync: "プロジェクト定例",
+    projectMeta: "参加者 4名 · 45分",
+    playbackHint: "録音を再生しながらメモを読み返せます。",
+    save: "保存",
+    reminder: "リマインダー",
+  },
+  en: {
+    favorite: "Favorite",
+    share: "Share",
+    inbox: "Inbox",
+    starred: "Starred",
+    archive: "Archive",
+    supporting: "Supporting text",
+    start: "Get started",
+    notes: "Notes",
+    searchNotes: "Search notes",
+    chipAll: "All",
+    chipWork: "Work",
+    chipPersonal: "Personal",
+    recentNotes: "Recent notes",
+    meetingNotes: "Meeting minutes",
+    meetingDate: "Sep 3, 2026",
+    shoppingList: "Shopping list",
+    travelPlans: "Travel plans",
+    today: "Today",
+    yesterday: "Yesterday",
+    threeDaysAgo: "3 days ago",
+    projectSync: "Project Sync",
+    projectMeta: "4 participants · 45m",
+    playbackHint: "Review notes while listening to recording.",
+    save: "Save",
+    reminder: "Reminder",
+  },
+  zh: {
+    favorite: "收藏",
+    share: "分享",
+    inbox: "收件箱",
+    starred: "已加星标",
+    archive: "归档",
+    supporting: "辅助文本",
+    start: "开始",
+    notes: "备忘录",
+    searchNotes: "搜索备忘录",
+    chipAll: "全部",
+    chipWork: "工作",
+    chipPersonal: "个人",
+    recentNotes: "最近备忘录",
+    meetingNotes: "会议纪要",
+    meetingDate: "2026年9月3日",
+    shoppingList: "购物清单",
+    travelPlans: "旅行计划",
+    today: "今天",
+    yesterday: "昨天",
+    threeDaysAgo: "3天前",
+    projectSync: "项目例会",
+    projectMeta: "参会人员 4人 · 45分钟",
+    playbackHint: "可边听录音边查看备忘录。",
+    save: "保存",
+    reminder: "提醒",
+  },
+  ko: {
+    favorite: "즐겨찾기",
+    share: "공유",
+    inbox: "받은편지함",
+    starred: "별표 표시",
+    archive: "보관함",
+    supporting: "보조 텍스트",
+    start: "시작하기",
+    notes: "메모",
+    searchNotes: "메모 검색",
+    chipAll: "전체",
+    chipWork: "업무",
+    chipPersonal: "개인",
+    recentNotes: "최근 메모",
+    meetingNotes: "회의록",
+    meetingDate: "2026년 9월 3일",
+    shoppingList: "쇼핑 목록",
+    travelPlans: "여행 계획",
+    today: "오늘",
+    yesterday: "어제",
+    threeDaysAgo: "3일 전",
+    projectSync: "프로젝트 정례 회의",
+    projectMeta: "참석자 4명 · 45분",
+    playbackHint: "녹음을 재생하면서 메모를 확인할 수 있습니다.",
+    save: "저장",
+    reminder: "알림",
+  },
 };
 
 /** ponytail: matches defaults by text; add provenance if authored copies must be distinguished. */
@@ -38,7 +171,7 @@ export function translateDefaultText(value: string, kind: string, field: "label"
       if (index >= 0) return labels(lang)[index] ?? value;
     } else {
       if (value && value === KIND_TEXT[from][kind]?.[field]) return KIND_TEXT[lang][kind]?.[field] ?? value;
-      const keys: (keyof typeof SEED_TEXT.en)[] = field === "supporting" ? ["supporting"] : kind === "button" ? ["favorite", "share", "start"] : kind === "listItem" ? ["inbox", "starred", "archive"] : [];
+      const keys = Object.keys(SEED_TEXT.en) as (keyof typeof SEED_TEXT.en)[];
       for (const key of keys) {
         if (value === SEED_TEXT[from][key]) return SEED_TEXT[lang][key];
       }
@@ -52,6 +185,7 @@ type Str = { ja: string; en: string; zh: string };
 export function translateDefaultFrameName(name: string, lang: Lang): string {
   for (const { key } of LANGS) {
     if (name === t("home", key)) return t("home", lang);
+    if (name === t("details", key)) return t("details", lang);
     const prefix = `${t("screenN", key)} `;
     if (name.startsWith(prefix) && /^\d+$/.test(name.slice(prefix.length))) {
       return `${t("screenN", lang)} ${name.slice(prefix.length)}`;
@@ -324,6 +458,7 @@ export const UI = {
   trailing: { ja: "末尾", en: "Trailing", zh: "右侧图标" },
   // frames
   home: { ja: "ホーム", en: "Home", zh: "首页" },
+  details: { ja: "詳細", en: "Details", zh: "详情" },
   screenN: { ja: "画面", en: "Screen", zh: "屏幕" },
   copySuffix: { ja: " コピー", en: " copy", zh: " 副本" },
   frameSize: { ja: "画面サイズ", en: "Screen size", zh: "屏幕尺寸" },
@@ -483,7 +618,7 @@ export const KO: Record<UIKey, string> = {
   noLayers: "이 화면에는 아직 부품이 없습니다", showParts: "안의 부품 표시", hideParts: "안의 부품 숨기기", lock: "잠금", unlock: "잠금 해제", lockedGroup: "잠긴 그룹입니다. 먼저 레이어 패널에서 잠금을 해제하세요",
   brief: "이 앱에 대한 설명…", appName: "앱 이름", targetPlatform: "구현 대상", targetAndroid: "Android 네이티브 앱으로 만들기",
   targetWeb: "브라우저에서 실행되는 웹 앱으로 만들기", copyPrompt: "프롬프트 복사", back: "뒤로", close: "닫기 (Esc)", cancel: "취소", ok: "확인",
-  leading: "앞쪽", trailing: "뒤쪽", home: "홈", screenN: "화면", copySuffix: " 복사본", mobileNote: "전체 기능은 데스크톱 브라우저에서 사용할 수 있습니다",
+  leading: "앞쪽", trailing: "뒤쪽", home: "홈", details: "상세", screenN: "화면", copySuffix: " 복사본", mobileNote: "전체 기능은 데스크톱 브라우저에서 사용할 수 있습니다",
   addButton: "버튼 추가", done: "완료", theme: "테마", settings: "테마 및 설정", shape: "모양", typography: "글꼴", motion: "모션",
   brightness: "밝기", light: "라이트", dark: "다크", contrast: "대비", bothModes: "둘 다", contrastStandard: "표준", contrastMedium: "중간", contrastHigh: "높음",
   shapeScale: "모서리 둥글기", shapeSquare: "사각형", shapeRounded: "둥근형", shapeFull: "완전 둥근형",
