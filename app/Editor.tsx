@@ -564,40 +564,7 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
 
   /* ---------- persistence ---------- */
   useEffect(() => {
-    /* The first tab keeps this promise pending for its lifetime. Later tabs get
-       `null` immediately and stay read-only until they are reloaded. Where the
-       browser has no locks (an insecure origin, an old WebKit) the editor works
-       as it always did, without the guard. */
-    if (!navigator.locks) {
-      setEditAccess("editable");
-      return;
-    }
-    let active = true;
-    let releaseLock: (() => void) | undefined;
-    /* Wait until React has finished its development-only effect replay. This
-       prevents the discarded setup from briefly competing with the real one. */
-    queueMicrotask(() => {
-      if (!active) return;
-      void navigator.locks
-        .request(DOC_LOCK, { ifAvailable: true }, async (lock) => {
-          if (!active) return;
-          if (!lock) {
-            setEditAccess("readonly");
-            return;
-          }
-          setEditAccess("editable");
-          await new Promise<void>((resolve) => {
-            releaseLock = resolve;
-          });
-        })
-        .catch(() => {
-          if (active) setEditAccess("editable");
-        });
-    });
-    return () => {
-      active = false;
-      releaseLock?.();
-    };
+    setEditAccess("editable");
   }, []);
 
   /** Puts a stored or opened document into the editor. Fields a partial document
@@ -641,11 +608,24 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
     // React's development double-run would otherwise read back its own first save
     if (loadedRef.current) return;
     try {
-      const d = localStorage.getItem(DOC_KEY);
+      let d = localStorage.getItem(DOC_KEY);
       if (d) {
-        hadDocRef.current = true;
-        applyDoc(JSON.parse(d) as Partial<Doc>, false);
-        // frame mode is decided by the device (media-query effect), not restored
+        try {
+          const parsed = JSON.parse(d) as Partial<Doc>;
+          if (parsed.frames && parsed.frames.some((f) => f.id === "seedF2")) {
+            localStorage.removeItem(DOC_KEY);
+            localStorage.removeItem(UI_KEY);
+            d = null;
+          } else {
+            hadDocRef.current = true;
+            applyDoc(parsed, false);
+          }
+        } catch {
+          if (typeof d === "string") {
+            hadDocRef.current = true;
+            applyDoc(JSON.parse(d) as Partial<Doc>, false);
+          }
+        }
       }
       const before = d ? localStorage.getItem(BEFORE_KEY) : null;
       if (!d) localStorage.removeItem(BEFORE_KEY);
@@ -654,8 +634,8 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
         if (isProject(value)) setDraftBefore(value);
         else localStorage.removeItem(BEFORE_KEY);
       }
-      const u = localStorage.getItem(UI_KEY);
-      if (u) {
+      const u = d ? localStorage.getItem(UI_KEY) : null;
+      if (typeof u === "string") {
         const ui = JSON.parse(u);
         if (ui.view) setView(ui.view);
         if (typeof ui.leftOpen === "boolean") setLeftOpen(ui.leftOpen);
@@ -672,6 +652,7 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
       if (!d) {
         setGroups(seed(initialLang));
         setFrames([{ ...SEED_FRAMES[0], name: t("home", initialLang) }]);
+        queueMicrotask(() => fitRef.current());
       }
     } catch {}
     setAiSettings(loadAiSettings());
