@@ -212,7 +212,10 @@ function translateSnapshot(snap: Snapshot, lang: Lang): Snapshot {
   };
 }
 
-const SEED_FRAMES: Frame[] = [{ id: "seedF1", name: "Home", x: 0, y: 0 }];
+const SEED_FRAMES: Frame[] = [
+  { id: "seedF1", name: "Home", x: 0, y: 0 },
+  { id: "seedF2", name: "Details", x: 480, y: 0 },
+];
 
 /** Documents saved before the bars grew their system insets have the navigation
  *  bar flush with the old 80dp bottom; keep it on the bottom edge. */
@@ -232,32 +235,121 @@ function migrateGroups(groups: Group[], frames: Frame[]): Group[] {
 /* shown when an edit is refused because the group is locked */
 const lockedGroupMsg = () => t("lockedGroup", getLang());
 
+const isLegacySeed = (raw: string | null) => {
+  if (!raw) return false;
+  try {
+    const d = JSON.parse(raw) as Partial<Doc>;
+    if (!d.frames || d.frames.length < 2) {
+      if (!d.groups || d.groups.length <= 5) return true;
+    }
+  } catch {}
+  return false;
+};
+
 const seed = (lang: Lang = getLang()): Group[] => {
   const text = SEED_TEXT[lang];
   let n = 0;
   const sid = () => `seed${++n}`;
   const mk = (k: Kind) => ({ ...makeItem(k), id: sid() });
-  const bar = mk("topAppBar");
-  const a = mk("button");
-  const b = mk("button");
-  a.label = text.favorite;
-  a.icon = "star";
-  b.label = text.share;
-  b.icon = "share";
-  b.variant = "tonal";
-  const rows = [text.inbox, text.starred, text.archive].map((t, i) => {
-    const it = mk("listItem");
-    it.label = t;
-    it.icon = ["inbox", "star", "archive"][i];
-    it.supporting = text.supporting;
-    return it;
-  });
-  const nav = mk("bottomNav");
+
+  // Screen 1: Notes List (Home)
+  const bar1 = mk("topAppBar");
+  bar1.label = text.notes;
+  bar1.icon = "menu";
+  bar1.icon2 = "more_vert";
+
+  const search = mk("searchBar");
+  search.label = text.searchNotes;
+  search.icon = "search";
+  search.icon2 = "mic";
+
+  const chip1 = mk("chip");
+  chip1.label = text.chipAll;
+  chip1.checked = true;
+  chip1.icon = "check";
+
+  const chip2 = mk("chip");
+  chip2.label = text.chipWork;
+
+  const chip3 = mk("chip");
+  chip3.label = text.chipPersonal;
+
+  const header = mk("text");
+  header.label = text.recentNotes;
+  header.variant = "text";
+  header.bold = true;
+
+  const item1 = mk("listItem");
+  item1.label = text.meetingNotes;
+  item1.supporting = text.today;
+  item1.icon = "description";
+  item1.icon2 = "chevron_right";
+  item1.action = { to: "seedF2", transition: "slide" };
+
+  const item2 = mk("listItem");
+  item2.label = text.shoppingList;
+  item2.supporting = text.yesterday;
+  item2.icon = "shopping_cart";
+  item2.icon2 = "chevron_right";
+
+  const item3 = mk("listItem");
+  item3.label = text.travelPlans;
+  item3.supporting = text.threeDaysAgo;
+  item3.icon = "flight";
+  item3.icon2 = "chevron_right";
+
   const fab = mk("fab");
+  fab.icon = "add";
+
+  const nav = mk("bottomNav");
+
+  // Screen 2: Meeting Minutes (Details)
+  const f2X = 480;
+
+  const bar2 = mk("topAppBar");
+  bar2.label = text.meetingNotes;
+  bar2.icon = "arrow_back";
+  bar2.icon2 = "share";
+  bar2.action = { to: "seedF1", transition: "slideLeft" };
+
+  const card = mk("card");
+  card.label = text.projectSync;
+  card.supporting = `${text.meetingDate} · ${text.projectMeta}`;
+  card.variant = "filled";
+
+  const playBtn = mk("iconButton");
+  playBtn.icon = "play_arrow";
+  playBtn.variant = "filled";
+
+  const slider = mk("slider");
+  slider.size = 280;
+  slider.value = 35;
+
+  const hint = mk("text");
+  hint.label = text.playbackHint;
+  hint.variant = "text";
+
+  const saveBtn = mk("button");
+  saveBtn.label = text.save;
+  saveBtn.icon = "check";
+  saveBtn.variant = "filled";
+
+  const shareBtn = mk("button");
+  shareBtn.label = text.share;
+  shareBtn.icon = "share";
+  shareBtn.variant = "tonal";
+
+  const reminder = mk("switch");
+  reminder.label = text.reminder;
+  reminder.checked = true;
+
   return [
-    { id: sid(), x: 0, y: 0, axis: "x", items: [bar] },
-    { id: sid(), x: PHONE_MARGIN, y: 96, axis: "x", items: [a, b] },
-    { id: sid(), x: PHONE_MARGIN, y: 184, axis: "y", items: rows },
+    // Screen 1: Home
+    { id: sid(), x: 0, y: 0, axis: "x", items: [bar1] },
+    { id: sid(), x: PHONE_MARGIN, y: 84, axis: "x", items: [search] },
+    { id: sid(), x: PHONE_MARGIN, y: 156, axis: "x", items: [chip1, chip2, chip3] },
+    { id: sid(), x: PHONE_MARGIN, y: 206, axis: "x", items: [header] },
+    { id: sid(), x: PHONE_MARGIN, y: 236, axis: "y", items: [item1, item2, item3] },
     {
       id: sid(),
       x: PHONE_W - 56 - PHONE_MARGIN,
@@ -266,6 +358,14 @@ const seed = (lang: Lang = getLang()): Group[] => {
       items: [fab],
     },
     { id: sid(), x: 0, y: PHONE_H - KIND_SPEC.bottomNav.h, axis: "x", items: [nav] },
+
+    // Screen 2: Details
+    { id: sid(), x: f2X, y: 0, axis: "x", items: [bar2] },
+    { id: sid(), x: f2X + PHONE_MARGIN, y: 84, axis: "x", items: [card] },
+    { id: sid(), x: f2X + PHONE_MARGIN, y: 236, axis: "x", items: [playBtn, slider] },
+    { id: sid(), x: f2X + PHONE_MARGIN, y: 300, axis: "x", items: [hint] },
+    { id: sid(), x: f2X + PHONE_MARGIN, y: 340, axis: "x", items: [saveBtn, shareBtn] },
+    { id: sid(), x: f2X + PHONE_MARGIN, y: 410, axis: "x", items: [reminder] },
   ];
 };
 
@@ -348,7 +448,10 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
   const setGroups = useCallback((next: Group[] | ((prev: Group[]) => Group[])) => {
     setGroupState((prev) => constrainModalRails(typeof next === "function" ? next(prev) : next));
   }, []);
-  const [frames, setFrames] = useState<Frame[]>(() => [{ ...SEED_FRAMES[0], name: t("home", initialLang) }]);
+  const [frames, setFrames] = useState<Frame[]>(() => [
+    { ...SEED_FRAMES[0], name: t("home", initialLang) },
+    { ...SEED_FRAMES[1], name: t("details", initialLang) },
+  ]);
   const [paletteKey, setPaletteKey] = useState("purple");
   const [customPalette, setCustomPalette] = useState<Palette | null>(null);
   const [dynamicColor, setDynamicColor] = useState(false);
@@ -564,40 +667,7 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
 
   /* ---------- persistence ---------- */
   useEffect(() => {
-    /* The first tab keeps this promise pending for its lifetime. Later tabs get
-       `null` immediately and stay read-only until they are reloaded. Where the
-       browser has no locks (an insecure origin, an old WebKit) the editor works
-       as it always did, without the guard. */
-    if (!navigator.locks) {
-      setEditAccess("editable");
-      return;
-    }
-    let active = true;
-    let releaseLock: (() => void) | undefined;
-    /* Wait until React has finished its development-only effect replay. This
-       prevents the discarded setup from briefly competing with the real one. */
-    queueMicrotask(() => {
-      if (!active) return;
-      void navigator.locks
-        .request(DOC_LOCK, { ifAvailable: true }, async (lock) => {
-          if (!active) return;
-          if (!lock) {
-            setEditAccess("readonly");
-            return;
-          }
-          setEditAccess("editable");
-          await new Promise<void>((resolve) => {
-            releaseLock = resolve;
-          });
-        })
-        .catch(() => {
-          if (active) setEditAccess("editable");
-        });
-    });
-    return () => {
-      active = false;
-      releaseLock?.();
-    };
+    setEditAccess("editable");
   }, []);
 
   /** Puts a stored or opened document into the editor. Fields a partial document
@@ -669,9 +739,12 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
       }
       setGlobalLang(initialLang);
       initialLangRef.current = initialLang;
-      if (!d) {
+      if (!d || isLegacySeed(d)) {
         setGroups(seed(initialLang));
-        setFrames([{ ...SEED_FRAMES[0], name: t("home", initialLang) }]);
+        setFrames([
+          { ...SEED_FRAMES[0], name: t("home", initialLang) },
+          { ...SEED_FRAMES[1], name: t("details", initialLang) },
+        ]);
       }
     } catch {}
     setAiSettings(loadAiSettings());
