@@ -1,6 +1,6 @@
 import type { CSSProperties } from "react";
 import { FAB_MENU_TABS, KIND_TEXT, Lang, NAV_TABS, TAB_LABELS, getLang, t, SELECT_OPTIONS } from "./i18n";
-import { Contrast, schemeFromSeed } from "./color";
+import { Contrast, isLightColor, schemeFromSeed } from "./color";
 
 /* ---------- geometry ---------- */
 export const H = 56; // M3 medium button height (dp)
@@ -24,6 +24,10 @@ export const PHONE_R = 40;
 export const DESKTOP_W = 1280;
 export const DESKTOP_H = 800;
 export const DESKTOP_R = 28;
+/* Pixel Tablet / Android Tablet portrait (800x1280 dp, standard M3 expanded tablet) */
+export const TAB_W = 800;
+export const TAB_H = 1280;
+export const TAB_R = 28;
 /* Google Pixel Watch (Wear OS circular display: 384x384 dp, 192 dp circular radius) */
 export const WATCH_W = 384;
 export const WATCH_H = 384;
@@ -36,6 +40,27 @@ export const RAIL_W = 80;
 export const RAIL_TOP = 44;
 export const RAIL_ITEM_H = 52;
 export const RAIL_GAP = 12;
+/** M3 Expressive navigation rail tokens; the 80dp rail above is kept for saved sketches. */
+export const RAIL_COLLAPSED_W = 96;
+export const RAIL_EXPANDED_W = 220;
+export const isWideRail = (it: Item) => it.railExpanded !== undefined || it.railModal === true;
+export const railWidth = (it: Item) => it.railExpanded ? RAIL_EXPANDED_W : isWideRail(it) ? RAIL_COLLAPSED_W : RAIL_W;
+/** Modal expansion overlays the body, retaining only the collapsed rail's layout slot. */
+export const railLayoutWidth = (it: Item) => it.railModal ? RAIL_COLLAPSED_W : railWidth(it);
+/** Runtime-only expansion edge: copied by item edits, never included in JSON. */
+export const railExpansionSide = Symbol("railExpansionSide");
+/** Shared drawing / hit-area geometry. The header is a 48dp menu button with an 8dp gap. */
+export function railMetrics(it: Item) {
+  const wide = isWideRail(it);
+  return {
+    width: railWidth(it),
+    headerLeft: it.railExpanded ? 16 : (railWidth(it) - 48) / 2,
+    inset: wide ? 12 : 6,
+    top: RAIL_TOP + (wide ? 56 : 0),
+    itemHeight: wide ? 56 : RAIL_ITEM_H,
+    gap: wide ? (it.railExpanded ? 0 : 4) : RAIL_GAP,
+  };
+}
 /** system insets: the status bar above a top app bar and the gesture area below a navigation bar.
  *  Both bars carry their inset as extra height so their background reaches the rounded screen edge. */
 export const STATUS_BAR_H = 24;
@@ -76,6 +101,7 @@ export type Palette = {
   primaryContainer: string;
   onPrimaryContainer: string;
   inversePrimary: string;
+  secondary: string;
   secondaryContainer: string;
   onSecondaryContainer: string;
   tertiaryContainer: string;
@@ -104,7 +130,8 @@ const ERROR = {
   onErrorContainer: "#410E0B",
 };
 
-export const PALETTES: Palette[] = [
+/* presets are authored without secondary; it is derived from the seed below */
+const PRESETS: Omit<Palette, "secondary">[] = [
   {
     key: "purple",
     label: "Purple",
@@ -281,6 +308,7 @@ export const PALETTES: Palette[] = [
     ...ERROR,
   },
 ];
+export const PALETTES: Palette[] = PRESETS.map((p) => ({ ...p, secondary: schemeFromSeed(p.primary, p.label, { keepChroma: true }).secondary }));
 
 /* ---------- theme: the four expressive axes ---------- */
 export type ShapeScale = "square" | "rounded" | "full";
@@ -382,7 +410,10 @@ export function scaleR(r: number): number {
  *  other contrast levels are generated from the same seed. */
 export function paletteOf(key: string, custom?: Palette | null, theme?: Theme): Palette {
   const base = (key === "custom" && custom) || PALETTES.find((p) => p.key === key) || PALETTES[0];
-  if (!theme || (!theme.dark && theme.contrast === "standard")) return base;
+  if (!theme || (!theme.dark && theme.contrast === "standard")) {
+    /* Saved custom schemes may predate the secondary role. */
+    return base.secondary ? base : { ...base, secondary: schemeFromSeed(base.seed ?? base.primary).secondary };
+  }
   const seed = base.seed ?? base.primary;
   /* a preset's hue and chroma are deliberate (Mono is nearly grey), so they are kept as they are */
   return { ...schemeFromSeed(seed, base.label, { dark: theme.dark, contrast: theme.contrast, keepChroma: base.key !== "custom" }), key: base.key };
@@ -988,7 +1019,7 @@ export const KIND_SPEC: Record<Kind, KindSpec> = {
     hasIcon: false,
     hasValue: true,
     hasWavy: true,
-    size: { min: 24, max: 120, step: 4, icon: "open_in_full", presets: [24, 40, 48, 64] },
+    size: { min: 24, max: 120, step: 4, icon: "open_in_full", presets: [24, 40, 48, 52, 64] },
     defLabel: "",
     defIcon: null,
     defSize: 48,
@@ -1153,8 +1184,16 @@ export type Item = {
   selected?: number;
   /** list items: a switch at the trailing end instead of an icon; `checked` is its state */
   switch?: boolean;
-  /** cards: no image area at the top; `src` puts a picture in it */
+  /** cards: no image area; `src` puts a picture in it */
   noImage?: boolean;
+  /** cards: where the image area sits — the top when unset, a full-height side column, or the whole background behind the text */
+  imagePos?: CardImagePos;
+  /** cards: the image area's size in dp — its height on top, its width at a side; a background image fills the card */
+  imageSize?: number;
+  /** cards: where the text block sits vertically; unset means the top, or the bottom over a background image */
+  contentAlign?: CardAlign;
+  /** cards: a color role for the headline and body instead of the automatic one */
+  textColor?: TextToken;
   /** on/off state for switches, checkboxes and chips */
   checked?: boolean;
   /** a switch whose handle stays plain when on, without the check icon */
@@ -1162,6 +1201,13 @@ export type Item = {
   /** 0..100 for sliders and determinate progress; undefined = indeterminate */
   value?: number;
   wavy?: boolean;
+  /** Undefined retains the original rail; false/true select the collapsed/expanded expressive rail. */
+  railExpanded?: boolean;
+  /** Expanded rail overlays a scrim rather than taking additional layout space. */
+  railModal?: boolean;
+  [railExpansionSide]?: "left" | "right";
+  /** Progress track thickness in dp (TRACK_MIN..TRACK_MAX); omitted uses the standard 4dp stroke. */
+  trackThickness?: number;
   contained?: boolean;
   /** free text the author writes about what this part does */
   note?: string;
@@ -1280,7 +1326,90 @@ export const COLOR_TOKENS: { key: ColorToken; label: string }[] = [
 
 /** readable foreground for a chosen background token */
 /** the background a card draws when no token is set: it follows the variant */
-export const cardFillOf = (it: Item): ColorToken => it.fill ?? (it.variant === "outlined" ? "surface" : it.variant === "elevated" ? "surfaceContainerLow" : "surfaceContainerHighest");
+export const cardDefaultFillOf = (variant: Variant): ColorToken =>
+  variant === "outlined" ? "surface" : variant === "elevated" ? "surfaceContainerLow" : "surfaceContainerHighest";
+export const cardFillOf = (it: Item): ColorToken => it.fill ?? cardDefaultFillOf(it.variant);
+
+/** where a card's image area sits; sketches saved before placement existed stay on top */
+export type CardImagePos = "top" | "leading" | "trailing" | "background";
+export const isCardImagePos = (v: unknown): v is CardImagePos => v === "top" || v === "leading" || v === "trailing" || v === "background";
+export const cardImagePosOf = (it: Item): CardImagePos => it.imagePos ?? "top";
+
+/** the five card layouts the editor offers: the placements plus "no image", as one choice */
+export type CardLayout = CardImagePos | "none";
+export const cardLayoutOf = (it: Item): CardLayout => (it.noImage ? "none" : cardImagePosOf(it));
+/** the fields a layout choice sets; the top layout is the unset default so old sketches stay untouched */
+export const cardLayoutPatch = (layout: CardLayout): Pick<Item, "noImage" | "imagePos"> =>
+  layout === "none" ? { noImage: true, imagePos: undefined } : { noImage: undefined, imagePos: layout === "top" ? undefined : layout };
+
+export type CardAlign = "start" | "center" | "end";
+export const isCardAlign = (v: unknown): v is CardAlign => v === "start" || v === "center" || v === "end";
+/** the text block's vertical position: the top, or the bottom when it lies over a background image */
+export const cardContentAlignOf = (it: Item): CardAlign => it.contentAlign ?? (!it.noImage && cardImagePosOf(it) === "background" ? "end" : "start");
+
+/** the color roles a card's text may be set to; "on" roles pair with the containers offered as backgrounds */
+export type TextToken = "primary" | "secondary" | "onSurface" | "onSurfaceVariant" | "onPrimaryContainer" | "onSecondaryContainer" | "onTertiaryContainer" | "inverseOnSurface";
+export const TEXT_TOKENS: { key: TextToken; label: string }[] = [
+  { key: "onSurface", label: "On surface" },
+  { key: "onSurfaceVariant", label: "On surface variant" },
+  { key: "primary", label: "Primary" },
+  { key: "secondary", label: "Secondary" },
+  { key: "onPrimaryContainer", label: "On primary container" },
+  { key: "onSecondaryContainer", label: "On secondary container" },
+  { key: "onTertiaryContainer", label: "On tertiary container" },
+  { key: "inverseOnSurface", label: "Inverse on surface" },
+];
+export const isTextToken = (v: unknown): v is TextToken => TEXT_TOKENS.some((t) => t.key === v);
+/** the card's text color: the chosen role, else white over a photo, the container's
+ *  "on" color over a placeholder background or a chosen fill, and onSurface otherwise */
+export function cardTextColorOf(it: Item, p: Palette): string {
+  if (it.textColor) return p[it.textColor];
+  if (!it.noImage && cardImagePosOf(it) === "background") return it.src ? "#ffffff" : p.onPrimaryContainer;
+  return it.fill ? onToken(it.fill, p) : p.onSurface;
+}
+/** the body's color: a plain card keeps M3's onSurfaceVariant at full opacity; anything
+ *  colored, filled or over an image reuses the headline color at reduced opacity */
+export function cardBodyColorOf(it: Item, p: Palette): { color: string; opacity: number } {
+  const plain = !it.textColor && !it.fill && (it.noImage || cardImagePosOf(it) !== "background");
+  return plain ? { color: p.onSurfaceVariant, opacity: 1 } : { color: cardTextColorOf(it, p), opacity: 0.8 };
+}
+/** the scrim under text on a photo: it fades in from the text's side, dark under light
+ *  text and light under dark text, so the words stay readable either way */
+export function cardScrimOf(ink: string, align: CardAlign): string {
+  const c = isLightColor(ink) ? "0,0,0" : "255,255,255";
+  const a = isLightColor(ink) ? 0.65 : 0.72;
+  if (align === "start") return `linear-gradient(rgba(${c},${a}), rgba(${c},0) 60%)`;
+  if (align === "center") return `rgba(${c},${a * 0.65})`;
+  return `linear-gradient(rgba(${c},0) 40%, rgba(${c},${a}))`;
+}
+
+/* Card spacing is fixed: content sits 20dp from the edge, the headline and body are
+ * 4dp apart, and the image area keeps 12dp from the text. */
+export const CARD_PADDING = 20;
+export const CARD_TEXT_GAP = 4;
+export const CARD_MEDIA_GAP = 12;
+
+/** default width of a card's side image column (an M3 horizontal-card thumbnail) */
+export const CARD_SIDE_IMAGE_W = 80;
+/** the least room an image must leave the text: one headline and one body line tall, or a readable column wide */
+const CARD_MIN_TEXT_H = 48;
+const CARD_MIN_TEXT_W = 96;
+/** the smallest image area the editor offers */
+export const CARD_IMAGE_MIN = 40;
+/** the largest the image area can be inside this card without pushing its text out:
+ *  a top band is bounded by the drawn height, a side column by the drawn width */
+export function cardImageMaxOf(it: Item): number {
+  const { w, h } = sizeOf(it, {});
+  const room = cardImagePosOf(it) === "top" ? h - CARD_MIN_TEXT_H : w - CARD_MIN_TEXT_W;
+  return Math.max(CARD_IMAGE_MIN, room - CARD_PADDING * 2 - CARD_MEDIA_GAP);
+}
+/** the image area's extent in dp: the author's value, else 28% of the card's width
+ *  on top or the standard column on a side, never beyond cardImageMaxOf */
+export function cardImageSizeOf(it: Item): number {
+  const top = cardImagePosOf(it) === "top";
+  const size = it.imageSize ?? (top ? Math.round((it.size ?? KIND_SPEC.card.defSize ?? KIND_SPEC.card.w) * 0.28) : CARD_SIDE_IMAGE_W);
+  return Math.min(size, cardImageMaxOf(it));
+}
 
 export function onToken(t: ColorToken, p: Palette): string {
   switch (t) {
@@ -1314,9 +1443,24 @@ export type Frame = {
   noteHistory?: string[];
   /** frame ids reached by swiping in each direction */
   swipe?: Partial<Record<SwipeDir, string>>;
+  /** where Tidy puts the body rows between the bars: from the top unless the author says otherwise */
+  place?: Place;
 };
 
-export type FramePreset = "phone" | "desktop" | "watch";
+/** how Tidy stacks the body of a screen: from the top, centered, against the bottom bar, or spread out */
+export type Place = "top" | "center" | "bottom" | "spread";
+export const PLACES: { key: Place; icon: string }[] = [
+  { key: "top", icon: "vertical_align_top" },
+  { key: "center", icon: "vertical_align_center" },
+  { key: "bottom", icon: "vertical_align_bottom" },
+  { key: "spread", icon: "expand" },
+];
+export const isPlace = (v: unknown): v is Place => v === "top" || v === "center" || v === "bottom" || v === "spread";
+
+/** how a selection of parts is lined up: an edge or centre to share, or equal gaps along an axis */
+export type AlignKind = "left" | "centerH" | "right" | "distributeH" | "top" | "centerV" | "bottom" | "distributeV";
+
+export type FramePreset = "phone" | "desktop" | "watch" | "tab";
 export const frameSizeOf = (f: Frame) => ({ w: f.w ?? PHONE_W, h: f.h ?? PHONE_H });
 export const isPhoneFrame = (f: Frame) => {
   const { w, h } = frameSizeOf(f);
@@ -1326,16 +1470,22 @@ export const isWatchFrame = (f: Frame) => {
   const { w, h } = frameSizeOf(f);
   return w === WATCH_W && h === WATCH_H;
 };
+export const isTabFrame = (f: Frame) => {
+  const { w, h } = frameSizeOf(f);
+  return w === TAB_W && h === TAB_H;
+};
 export const isDesktopFrame = (f: Frame) => {
   const { w, h } = frameSizeOf(f);
   return w === DESKTOP_W && h === DESKTOP_H;
 };
 export const framePresetOf = (f: Frame): FramePreset => {
   if (isWatchFrame(f)) return "watch";
+  if (isTabFrame(f)) return "tab";
   return isPhoneFrame(f) ? "phone" : "desktop";
 };
 export const framePresetPatch = (preset: FramePreset): Pick<Frame, "w" | "h"> => {
   if (preset === "watch") return { w: WATCH_W, h: WATCH_H };
+  if (preset === "tab") return { w: TAB_W, h: TAB_H };
   if (preset === "desktop") return { w: DESKTOP_W, h: DESKTOP_H };
   return { w: undefined, h: undefined };
 };
@@ -1343,10 +1493,10 @@ export const frameRect = (f: Frame) => {
   const { w, h } = frameSizeOf(f);
   return { l: f.x, t: f.y, r: f.x + w, b: f.y + h };
 };
-/** the corner radius of a screen: a phone's rounded glass, a flatter window for the desktop, full circular for watch */
-export const frameRadius = (f: Frame) => (isWatchFrame(f) ? WATCH_R : isPhoneFrame(f) ? PHONE_R : DESKTOP_R);
+/** the corner radius of a screen: a phone's rounded glass, a flatter window for the desktop, tablet curves, full circular for watch */
+export const frameRadius = (f: Frame) => (isWatchFrame(f) ? WATCH_R : isTabFrame(f) ? TAB_R : isPhoneFrame(f) ? PHONE_R : DESKTOP_R);
 /** the icon representing the frame form factor */
-export const frameIconOf = (f: Frame) => (isWatchFrame(f) ? "watch" : isPhoneFrame(f) ? "smartphone" : "desktop_windows");
+export const frameIconOf = (f: Frame) => (isWatchFrame(f) ? "watch" : isTabFrame(f) ? "tablet_android" : isPhoneFrame(f) ? "smartphone" : "desktop_windows");
 
 /** parts that span the screen edge to edge and follow its width when it changes */
 export const FULL_WIDTH: Kind[] = ["topAppBar", "bottomNav", "tabs"];
@@ -1470,10 +1620,10 @@ export function runCorners(axis: Axis, first: boolean, last: boolean, outer: num
   return axis === "x" ? { tl: a, bl: a, tr: b, br: b } : { tl: a, tr: a, bl: b, br: b };
 }
 
-/** the corner radii of every part in a free group, with its hidden runs kept connected */
-export function freeRadii(g: Group, widths: Record<string, number>): Map<string, Radii> {
+/** the corner radii of every part across the given runs */
+export function radiiOfRuns(runs: Group[]): Map<string, Radii> {
   const out = new Map<string, Radii>();
-  for (const run of explodeGroup(g, widths)) {
+  for (const run of runs) {
     const n = run.items.length;
     run.items.forEach((it, i) => {
       const c = connectSpecOf(it);
@@ -1481,6 +1631,11 @@ export function freeRadii(g: Group, widths: Record<string, number>): Map<string,
     });
   }
   return out;
+}
+
+/** the corner radii of every part in a free group, with its hidden runs kept connected */
+export function freeRadii(g: Group, widths: Record<string, number>): Map<string, Radii> {
+  return radiiOfRuns(explodeGroup(g, widths));
 }
 
 /** a run belongs to the frame that contains its centre */
@@ -1503,6 +1658,8 @@ export type Group = {
   y: number;
   axis: Axis;
   items: Item[];
+  /** a finished section the author locked from the Layers panel: it cannot be dragged, deleted or tidied, but stays selectable */
+  locked?: boolean;
   /** a hand-made group: parts keep their own offsets (in `pos`) and move as one layer */
   free?: boolean;
   pos?: Record<string, { x: number; y: number }>;
@@ -1583,7 +1740,10 @@ export function makeItem(kind: Kind): Item {
     it.radiusTop = 0;
     it.radiusBottom = 0;
   }
-  if (kind === "navRail") it.tabs = defaultTabs();
+  if (kind === "navRail") {
+    it.tabs = defaultTabs();
+    it.railExpanded = false;
+  }
   if (kind === "tabs" || kind === "fabMenu" || kind === "select") it.tabs = defaultTabsFor(kind);
   if (kind === "toolbar") it.tabs = defaultTabsFor(kind).slice(0, 4);
   return it;
@@ -1591,6 +1751,19 @@ export function makeItem(kind: Kind): Item {
 
 /** Content-sized kinds are measured in the DOM; the rest derive from spec + size. */
 export const MEASURED: Kind[] = ["button", "extendedFab", "chip", "switch", "checkbox", "text", "splitButton", "radio", "badge"];
+
+/** Progress track thickness range in dp; Material's standard bar is 4 and its thick bar 8. */
+export const TRACK_MIN = 2;
+export const TRACK_MAX = 16;
+export const TRACK_DEFAULT = 4;
+/** A ring can only be so thick before its gap swallows it: a sixth of the diameter, never under 4. */
+export const maxRingThickness = (size: number) => Math.max(TRACK_DEFAULT, Math.min(TRACK_MAX, Math.floor(size / 6)));
+export const isTrackThickness = (v: unknown): v is number => typeof v === "number" && Number.isInteger(v) && v >= TRACK_MIN && v <= TRACK_MAX;
+/** The thickness actually drawn: a ring caps the value by its own diameter. */
+export const progressThickness = (it: Item): number => {
+  const v = isTrackThickness(it.trackThickness) ? it.trackThickness : TRACK_DEFAULT;
+  return it.kind === "circularProgress" ? Math.min(v, maxRingThickness(it.size ?? KIND_SPEC.circularProgress.w)) : v;
+};
 
 export function sizeOf(it: Item, widths: Record<string, number>) {
   const s = KIND_SPEC[it.kind];
@@ -1643,7 +1816,7 @@ export function sizeOf(it: Item, widths: Record<string, number>) {
     case "box":
       return { w: n, h: it.size2 ?? s.h };
     case "navRail":
-      return { w: s.w, h: it.size2 ?? s.h };
+      return { w: railWidth(it), h: it.size2 ?? s.h };
     default:
       return { w: s.w, h: s.h };
   }
@@ -1666,8 +1839,9 @@ export function baseRadii(it: Item): Radii {
     }
     case "navRail": {
       /* a rail's corners are its left and right sides: radiusTop is the left pair, radiusBottom the right */
-      const l = it.radiusTop ?? 0;
-      const r = it.radiusBottom ?? 0;
+      const modalRadius = it.railExpanded && it.railModal ? 16 : 0;
+      const l = it.radiusTop ?? modalRadius;
+      const r = it.radiusBottom ?? modalRadius;
       return { tl: l, bl: l, tr: r, br: r };
     }
     case "fab":
@@ -1679,10 +1853,12 @@ export function baseRadii(it: Item): Radii {
     case "circularProgress":
     case "loadingIndicator":
       return uniformRadii((it.size ?? 48) / 2);
+    case "card":
+      if (it.corners) return { ...it.corners };
+    // falls through
     case "image":
     case "camera":
     case "map":
-    case "card":
       return uniformRadii(it.radiusTop ?? scaleR(s.radius));
     case "badge":
     case "radio":
@@ -1694,6 +1870,66 @@ export function baseRadii(it: Item): Radii {
 }
 
 export const FAB_MENU_ITEM_H = 56;
+
+/** a tab row fits up to this many fixed tabs; more become M3 scrollable tabs */
+export const FIXED_TABS_MAX = 5;
+/** width of one scrollable tab; M3 asks for at least 90dp */
+export const SCROLL_TAB_W = 96;
+
+/** a tab row scrolls once it holds more tabs than M3 fixes in place and they would not fit its width */
+export const isScrollableTabs = (it: Item) => {
+  const n = it.tabs?.length ?? 0;
+  return it.kind === "tabs" && n > FIXED_TABS_MAX && n * SCROLL_TAB_W > sizeOf(it, {}).w;
+};
+
+/** per-tab tap targets renumbered after the tab list changed; `to(j)` gives the old index j its new one, or nothing */
+function remapTabActions(actions: Item["actions"], to: (j: number) => number | undefined): Item["actions"] {
+  if (!actions) return undefined;
+  const next: NonNullable<Item["actions"]> = {};
+  for (const [key, a] of Object.entries(actions)) {
+    const m = /^tab:(\d+)$/.exec(key);
+    if (!m) {
+      next[key] = a;
+      continue;
+    }
+    const j = to(Number(m[1]));
+    if (j !== undefined) next[`tab:${j}`] = a;
+  }
+  return Object.keys(next).length ? next : undefined;
+}
+
+/** the patch that drops entry i: later entries, the selected index and the tap targets move up one; a
+ *  dropdown may end with no initial value, a bar or tab row keeps the entry that takes the removed one's place */
+export function removeTabPatch(it: Item, i: number): Pick<Item, "tabs" | "selected" | "actions"> {
+  const tabs = (it.tabs ?? []).filter((_, j) => j !== i);
+  const sel = it.selected;
+  const last = Math.max(0, tabs.length - 1);
+  const selected =
+    sel === undefined ? undefined : sel > i ? sel - 1 : sel < i ? sel : it.kind === "select" ? undefined : Math.min(i, last);
+  return { tabs, selected, actions: remapTabActions(it.actions, (j) => (j === i ? undefined : j > i ? j - 1 : j)) };
+}
+
+/** the patch that sets the entry count: extra entries come from the defaults, and the tap targets of dropped entries go */
+export function tabCountPatch(it: Item, n: number, defaults: NavTab[]): Pick<Item, "tabs" | "selected" | "actions"> {
+  const cur = it.tabs ?? [];
+  const tabs: NavTab[] = [];
+  for (let i = 0; i < n; i++) tabs.push(cur[i] ? { ...cur[i] } : { ...defaults[i % defaults.length] });
+  return {
+    tabs,
+    selected: it.selected !== undefined && it.selected >= n ? undefined : it.selected,
+    actions: remapTabActions(it.actions, (j) => (j < n ? j : undefined)),
+  };
+}
+
+/** how far a scrollable tab row is shifted left so the selected tab is in view with half of the
+ *  next one peeking in; the drawing and the preview's hit areas share it, so a tap lands on the tab that is shown */
+export function tabScrollOffset(it: Item, width: number): number {
+  if (!isScrollableTabs(it)) return 0;
+  const n = it.tabs?.length ?? 0;
+  const sel = Math.min(it.selected ?? 0, Math.max(0, n - 1));
+  const max = Math.max(0, n * SCROLL_TAB_W - width);
+  return Math.max(0, Math.min(max, (sel + 1.5) * SCROLL_TAB_W - width));
+}
 export const FAB_MENU_GAP = 8;
 /** a toolbar hugs its icon buttons: 48dp each with 4dp between, 8dp at the ends */
 export const toolbarWidth = (it: Item) => {

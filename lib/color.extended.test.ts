@@ -157,6 +157,7 @@ describe("schemeFromSeed()", () => {
       "onPrimaryContainer",
       "inversePrimary",
       "secondaryContainer",
+      "secondary",
       "onSecondaryContainer",
       "tertiaryContainer",
       "onTertiaryContainer",

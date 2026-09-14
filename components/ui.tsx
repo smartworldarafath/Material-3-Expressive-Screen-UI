@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { COLOR_TOKENS, ColorToken, Palette, R_INNER, clamp } from "@/lib/tokens";
+import { useEffect, useRef, useState } from "react";
+import { COLOR_TOKENS, CardLayout, ColorToken, PLACES, Palette, Place, R_INNER, TEXT_TOKENS, TextToken, clamp } from "@/lib/tokens";
 import { AnimatePresence, motion } from "motion/react";
-import { COLOR_TOKEN_TEXT, t, useLang } from "@/lib/i18n";
+import { COLOR_TOKEN_TEXT, TEXT_TOKEN_TEXT, t, useLang } from "@/lib/i18n";
 import { Icon } from "./M3Node";
+import { onColorFor } from "@/lib/color";
 
 export function IconBtn({
   icon,
@@ -144,6 +145,7 @@ export function Field({
   icon,
   multiline,
   rows = 3,
+  grow,
   height = 44,
 }: {
   value: string;
@@ -153,10 +155,20 @@ export function Field({
   icon?: string;
   multiline?: boolean;
   rows?: number;
+  /** a multiline field that grows with its text instead of scrolling, starting at `rows` lines;
+   *  it wraps but never takes a line break, since the canvas wraps the text on its own */
+  grow?: boolean;
   height?: number;
 }) {
   const lang = useLang();
   const filled = value.length > 0;
+  const areaRef = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    const el = areaRef.current;
+    if (!el || !grow) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, [value, grow]);
   const base: React.CSSProperties = {
     width: "100%",
     padding: multiline ? `12px ${filled ? 40 : 14}px 12px ${icon ? 42 : 14}px` : `0 ${filled ? 40 : 14}px 0 ${icon ? 42 : 14}px`,
@@ -189,11 +201,13 @@ export function Field({
       )}
       {multiline ? (
         <textarea
+          ref={areaRef}
           value={value}
           rows={rows}
-          onChange={(e) => onChange(e.target.value)}
+          onChange={(e) => onChange(grow ? e.target.value.replace(/[\r\n]+/g, " ") : e.target.value)}
+          onKeyDown={grow ? (e) => { if (e.key === "Enter") e.preventDefault(); } : undefined}
           placeholder={placeholder}
-          style={base}
+          style={grow ? { ...base, overflow: "hidden" } : base}
         />
       ) : (
         <input
@@ -427,6 +441,100 @@ export function SizePresets({
   );
 }
 
+/** The five card layouts as small pictures of a card: where the image sits, or no image.
+ *  A picture reads faster than "leading" or "trailing", so no words are needed beyond the caption. */
+const CARD_LAYOUTS: { key: CardLayout; label: "imageTop" | "imageLeading" | "imageTrailing" | "background" | "noImageLayout" }[] = [
+  { key: "top", label: "imageTop" },
+  { key: "leading", label: "imageLeading" },
+  { key: "trailing", label: "imageTrailing" },
+  { key: "background", label: "background" },
+  { key: "none", label: "noImageLayout" },
+];
+
+function CardLayoutThumb({ layout, on, p }: { layout: CardLayout; on: boolean; p: Palette }) {
+  const ink = on ? p.onPrimaryContainer : p.onSurfaceVariant;
+  const image = on ? p.primary : p.outline;
+  const line = (w: string) => <div style={{ height: 3, width: w, borderRadius: 2, background: ink, opacity: 0.55 }} />;
+  const lines = (
+    <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 3, justifyContent: "center" }}>
+      {line("80%")}
+      {line("55%")}
+    </div>
+  );
+  const box: React.CSSProperties = { width: 44, height: 34, borderRadius: 6, border: `1.5px solid ${ink}`, boxSizing: "border-box", padding: 5, display: "flex", gap: 4, overflow: "hidden", position: "relative" };
+  if (layout === "background") {
+    return (
+      <div style={{ ...box, background: image, alignItems: "flex-end", padding: 5 }}>
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 3 }}>
+          <div style={{ height: 3, width: "80%", borderRadius: 2, background: on ? p.onPrimary : p.surface }} />
+          <div style={{ height: 3, width: "55%", borderRadius: 2, background: on ? p.onPrimary : p.surface, opacity: 0.7 }} />
+        </div>
+      </div>
+    );
+  }
+  const media = <div style={{ background: image, borderRadius: 3, flex: "0 0 auto", ...(layout === "top" ? { height: 10 } : { width: 12 }) }} />;
+  return (
+    <div style={{ ...box, flexDirection: layout === "top" ? "column" : "row" }}>
+      {layout === "top" || layout === "leading" ? media : null}
+      {lines}
+      {layout === "trailing" ? media : null}
+    </div>
+  );
+}
+
+/** Radio row of card layouts drawn as thumbnails, with a short caption under each. */
+export function CardLayoutPicker({ value, onChange, p }: { value: CardLayout; onChange: (layout: CardLayout) => void; p: Palette }) {
+  const lang = useLang();
+  /* one tab stop for the group; the arrow keys move the choice, as a native radio group does */
+  const step = (e: React.KeyboardEvent, i: number) => {
+    const d = e.key === "ArrowRight" || e.key === "ArrowDown" ? 1 : e.key === "ArrowLeft" || e.key === "ArrowUp" ? -1 : 0;
+    if (!d) return;
+    e.preventDefault();
+    const next = CARD_LAYOUTS[(i + d + CARD_LAYOUTS.length) % CARD_LAYOUTS.length].key;
+    onChange(next);
+    (e.currentTarget.parentElement?.querySelector(`[data-layout="${next}"]`) as HTMLElement | null)?.focus();
+  };
+  return (
+    <div role="radiogroup" aria-label={t("cardLayout", lang)} style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 4 }}>
+      {CARD_LAYOUTS.map((o, i) => {
+        const on = o.key === value;
+        const label = t(o.label, lang);
+        return (
+          <button
+            key={o.key}
+            type="button"
+            role="radio"
+            aria-checked={on}
+            aria-label={label}
+            title={label}
+            data-layout={o.key}
+            tabIndex={on ? 0 : -1}
+            onKeyDown={(e) => step(e, i)}
+            onClick={() => onChange(o.key)}
+            className="m3-press"
+            style={{
+              border: "none",
+              borderRadius: 10,
+              padding: "6px 2px 4px",
+              background: on ? p.primaryContainer : "transparent",
+              color: on ? p.onPrimaryContainer : p.onSurfaceVariant,
+              cursor: "pointer",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: 4,
+              minWidth: 0,
+            }}
+          >
+            <CardLayoutThumb layout={o.key} on={on} p={p} />
+            <span style={{ fontSize: 10, fontWeight: 600, lineHeight: "12px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "100%" }}>{label}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 export function Toggle({
   on,
   onChange,
@@ -503,6 +611,7 @@ export function Section({
   children,
   right,
   defaultOpen = true,
+  onToggle,
 }: {
   id: string;
   icon: string;
@@ -511,6 +620,8 @@ export function Section({
   children: React.ReactNode;
   right?: React.ReactNode;
   defaultOpen?: boolean;
+  /** called after the user opens or collapses the section by hand */
+  onToggle?: (open: boolean) => void;
 }) {
   const [open, setOpen] = useState(defaultOpen);
   useEffect(() => {
@@ -520,12 +631,12 @@ export function Section({
     } catch {}
   }, [id]);
   const toggle = () => {
-    setOpen((o) => {
-      try {
-        localStorage.setItem(`m3e:sec:${id}`, o ? "0" : "1");
-      } catch {}
-      return !o;
-    });
+    const next = !open;
+    try {
+      localStorage.setItem(`m3e:sec:${id}`, next ? "1" : "0");
+    } catch {}
+    setOpen(next);
+    onToggle?.(next);
   };
   return (
     <div style={{ marginBottom: 10 }}>
@@ -658,6 +769,35 @@ export function Tile({
 }
 
 /** palette-role swatches; the dot shows the real color of the current theme */
+/** One 30dp color disc; the selected one wears the primary ring */
+function TokenDisc({ color, label, on, onClick, p, icon, iconColor }: { color: string; label: string; on: boolean; onClick: () => void; p: Palette; icon?: string; iconColor?: string }) {
+  return (
+    <button
+      onClick={onClick}
+      title={label}
+      aria-label={label}
+      aria-pressed={on}
+      className="m3-press"
+      style={{
+        width: 30,
+        height: 30,
+        borderRadius: 15,
+        border: `1px solid ${p.outlineVariant}`,
+        padding: 0,
+        cursor: "pointer",
+        background: color,
+        color: iconColor,
+        display: "grid",
+        placeItems: "center",
+        outline: on ? `2px solid ${p.primary}` : "2px solid transparent",
+        outlineOffset: 2,
+      }}
+    >
+      {icon && <Icon name={icon} size={16} />}
+    </button>
+  );
+}
+
 export function TokenChips({
   value,
   onChange,
@@ -665,6 +805,10 @@ export function TokenChips({
   none,
   noneOn,
   onNone,
+  noneColor,
+  noneTextColor,
+  noneIcon = "block",
+  noneLabel,
 }: {
   value: ColorToken;
   onChange: (t: ColorToken) => void;
@@ -673,60 +817,35 @@ export function TokenChips({
   none?: boolean;
   noneOn?: boolean;
   onNone?: () => void;
+  /** a fallback option may represent a real computed color rather than transparency */
+  noneColor?: string;
+  noneTextColor?: string;
+  noneIcon?: string;
+  noneLabel?: string;
 }) {
   const lang = useLang();
   return (
     <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
       {none && (
-        <button
-          onClick={onNone}
-          title={t("noBackground", lang)}
-          aria-label={t("noBackground", lang)}
-          aria-pressed={noneOn}
-          className="m3-press"
-          style={{
-            width: 30,
-            height: 30,
-            borderRadius: 15,
-            border: `1px solid ${p.outlineVariant}`,
-            padding: 0,
-            cursor: "pointer",
-            background: "transparent",
-            color: p.onSurfaceVariant,
-            display: "grid",
-            placeItems: "center",
-            outline: noneOn ? `2px solid ${p.primary}` : "2px solid transparent",
-            outlineOffset: 2,
-          }}
-        >
-          <Icon name="block" size={16} />
-        </button>
+        <TokenDisc color={noneColor ?? "transparent"} label={noneLabel ?? t("noBackground", lang)} on={!!noneOn} onClick={() => onNone?.()} p={p} icon={noneIcon} iconColor={noneTextColor ?? p.onSurfaceVariant} />
       )}
-      {COLOR_TOKENS.map((t) => {
-        const on = !noneOn && t.key === value;
-        const label = lang === "en" ? t.label : COLOR_TOKEN_TEXT[lang][t.key];
-        return (
-          <button
-            key={t.key}
-            onClick={() => onChange(t.key)}
-            title={label}
-            aria-label={label}
-            aria-pressed={on}
-            className="m3-press"
-            style={{
-              width: 30,
-              height: 30,
-              borderRadius: 15,
-              border: `1px solid ${p.outlineVariant}`,
-              padding: 0,
-              cursor: "pointer",
-              background: p[t.key],
-              outline: on ? `2px solid ${p.primary}` : "2px solid transparent",
-              outlineOffset: 2,
-            }}
-          />
-        );
-      })}
+      {COLOR_TOKENS.map((tk) => (
+        <TokenDisc key={tk.key} color={p[tk.key]} label={lang === "en" ? tk.label : COLOR_TOKEN_TEXT[lang][tk.key]} on={!noneOn && tk.key === value} onClick={() => onChange(tk.key)} p={p} />
+      ))}
+    </div>
+  );
+}
+
+/** Chips for a text color role, drawn like the background chips: color discs led by an
+ *  automatic chip in the color the card would pick on its own. */
+export function TextTokenChips({ value, auto, onChange, p }: { value?: TextToken; auto: string; onChange: (t?: TextToken) => void; p: Palette }) {
+  const lang = useLang();
+  return (
+    <div role="group" aria-label={t("textColor", lang)} style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+      <TokenDisc color={auto} label={t("autoColor", lang)} on={!value} onClick={() => onChange(undefined)} p={p} icon="restart_alt" iconColor={onColorFor(auto)} />
+      {TEXT_TOKENS.map((tk) => (
+        <TokenDisc key={tk.key} color={p[tk.key]} label={lang === "en" ? tk.label : TEXT_TOKEN_TEXT[lang][tk.key]} on={value === tk.key} onClick={() => onChange(tk.key)} p={p} />
+      ))}
     </div>
   );
 }
@@ -741,11 +860,54 @@ export type TidyState = "tidy" | "undo" | "done";
 
 /** One button that reads as "Tidy", turns into "Undo tidy" right after, and is
  *  disabled while the screen is already tidy. */
-export function TidyButton({ state, onClick, p, pill }: { state: TidyState; onClick: () => void; p: Palette; /** the toolbar version next to the zoom pill */ pill?: boolean }) {
+export function TidyButton({
+  state,
+  onClick,
+  p,
+  pill,
+  place,
+  onPlace,
+}: {
+  state: TidyState;
+  onClick: () => void;
+  p: Palette;
+  /** the toolbar version next to the zoom pill */
+  pill?: boolean;
+  /** where the screen's body goes; with `onPlace` the button gains a trailing menu to change it */
+  place?: Place;
+  onPlace?: (place: Place) => void;
+}) {
   const lang = useLang();
   const done = state === "done";
   const label = state === "undo" ? t("tidyUndo", lang) : state === "done" ? t("tidyDone", lang) : t("tidy", lang);
-  return (
+  const [menu, setMenu] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  /* the menu closes on a tap anywhere else or on Escape */
+  useEffect(() => {
+    if (!menu) return;
+    const away = (e: PointerEvent) => {
+      if (!ref.current?.contains(e.target as Node)) setMenu(false);
+    };
+    const key = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      /* the editor also clears its selection on Escape; closing the menu is enough here */
+      e.stopPropagation();
+      setMenu(false);
+    };
+    document.addEventListener("pointerdown", away, true);
+    document.addEventListener("keydown", key, true);
+    return () => {
+      document.removeEventListener("pointerdown", away, true);
+      document.removeEventListener("keydown", key, true);
+    };
+  }, [menu]);
+  const split = !!onPlace;
+  const current = place ?? "top";
+  const placeLabel = (k: Place) => t(k === "top" ? "placeTop" : k === "center" ? "placeCenter" : k === "bottom" ? "placeBottom" : "placeSpread", lang);
+  const h = pill ? 40 : 44;
+  const bg = done ? "transparent" : state === "undo" ? p.tertiaryContainer : p.secondaryContainer;
+  const fg = done ? p.onSurfaceVariant : state === "undo" ? p.onTertiaryContainer : p.onSecondaryContainer;
+  const main = (
     <button
       onClick={onClick}
       disabled={done}
@@ -753,13 +915,14 @@ export function TidyButton({ state, onClick, p, pill }: { state: TidyState; onCl
       aria-label={label}
       className="m3-press"
       style={{
-        width: pill ? (done ? 40 : undefined) : "100%",
-        height: pill ? 40 : 44,
+        width: pill ? (done ? 40 : undefined) : split ? undefined : "100%",
+        flex: split && !pill ? 1 : undefined,
+        height: h,
         padding: done ? 0 : pill ? "0 16px 0 12px" : "0 16px",
-        borderRadius: pill ? 20 : 22,
+        borderRadius: split && !done ? `${h / 2}px ${R_INNER}px ${R_INNER}px ${h / 2}px` : h / 2,
         border: "none",
-        background: done ? "transparent" : state === "undo" ? p.tertiaryContainer : p.secondaryContainer,
-        color: done ? p.onSurfaceVariant : state === "undo" ? p.onTertiaryContainer : p.onSecondaryContainer,
+        background: bg,
+        color: fg,
         fontSize: 13,
         fontWeight: 600,
         cursor: done ? "default" : "pointer",
@@ -774,6 +937,84 @@ export function TidyButton({ state, onClick, p, pill }: { state: TidyState; onCl
       <Icon name={state === "undo" ? "undo" : state === "done" ? "check" : "align_space_even"} size={done ? 22 : 20} />
       {!done && label}
     </button>
+  );
+  if (!split) return main;
+  /* a split button: tidy on the left, the placement menu behind the chevron, 3dp apart like a connected pair */
+  return (
+    <div ref={ref} style={{ position: "relative", display: "flex", gap: 3, alignItems: "center", width: pill ? undefined : "100%" }}>
+      {main}
+      <button
+        onClick={() => setMenu((m) => !m)}
+        title={t("placement", lang)}
+        aria-label={t("placement", lang)}
+        aria-expanded={menu}
+        aria-haspopup="true"
+        className="m3-press"
+        style={{
+          height: h,
+          width: h,
+          borderRadius: done ? h / 2 : `${R_INNER}px ${h / 2}px ${h / 2}px ${R_INNER}px`,
+          border: "none",
+          background: done ? "transparent" : bg,
+          color: done ? p.onSurfaceVariant : fg,
+          cursor: "pointer",
+          display: "grid",
+          placeItems: "center",
+          flex: "0 0 auto",
+        }}
+      >
+        <Icon name={PLACES.find((o) => o.key === current)?.icon ?? "vertical_align_top"} size={20} />
+      </button>
+      {menu && (
+        /* the placement choices as one compact row of icon buttons, floating off the chevron */
+        <div
+          role="group"
+          aria-label={t("placement", lang)}
+          style={{
+            position: "absolute",
+            ...(pill ? { bottom: "100%", marginBottom: 8 } : { top: "100%", marginTop: 8 }),
+            right: 0,
+            display: "flex",
+            gap: 3,
+            padding: 4,
+            borderRadius: 24,
+            background: p.surfaceContainer,
+            boxShadow: "0 2px 6px rgba(0,0,0,0.15), 0 8px 24px rgba(0,0,0,0.12)",
+            zIndex: 30,
+          }}
+        >
+          {PLACES.map((o) => {
+            const on = current === o.key;
+            return (
+              <button
+                key={o.key}
+                aria-pressed={on}
+                title={placeLabel(o.key)}
+                aria-label={placeLabel(o.key)}
+                onClick={() => {
+                  setMenu(false);
+                  onPlace(o.key);
+                }}
+                className="m3-press"
+                style={{
+                  width: 40,
+                  height: 40,
+                  borderRadius: 20,
+                  border: "none",
+                  background: on ? p.secondaryContainer : "transparent",
+                  color: on ? p.onSecondaryContainer : p.onSurfaceVariant,
+                  cursor: "pointer",
+                  display: "grid",
+                  placeItems: "center",
+                }}
+              >
+                <Icon name={o.icon} size={22} fill={on} />
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
 }
 

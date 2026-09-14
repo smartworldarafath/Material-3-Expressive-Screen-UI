@@ -1,6 +1,8 @@
 import { KIND_TEXT, Lang, SWIPE_TEXT, TRANSITION_TEXT, getLang } from "./i18n";
+import { constrainModalRails } from "./rail";
 import {
   CONTENT_W,
+  Place,
   Platform,
   Action,
   BACK_TARGET,
@@ -20,12 +22,19 @@ import {
   frameOfGroup,
   frameRect,
   frameSizeOf,
+  cardImagePosOf,
+  cardImageSizeOf,
   groupBounds,
   isPhoneFrame,
   isWatchFrame,
+  isTabFrame,
   isDesktopFrame,
+  isWideRail,
   normalizeTheme,
   paletteOf,
+  railWidth,
+  progressThickness,
+  isScrollableTabs,
 } from "./tokens";
 
 const VARIANT_TEXT: Record<Lang, Record<Variant, string>> = {
@@ -36,14 +45,67 @@ const VARIANT_TEXT: Record<Lang, Record<Variant, string>> = {
 };
 
 const hasText = (s?: string | null) => !!s && s.trim().length > 0;
-/** what sits at the top of a card: nothing, a picture, or the placeholder with its icon */
+/** a card's image area in words: what fills it (a picture or the placeholder with its icon),
+ *  where it sits (top, a full-height side column, or the whole background) and its stated size */
 function cardImage(it: Item, lang: Lang): string {
   if (it.noImage) return "";
   const url = imageSrc(it);
-  if (lang === "ja") return url ? `上部に ${url} の画像、` : it.src ? "上部に指定の画像、" : `上部に${it.icon ? `${it.icon} アイコンの` : ""}プレースホルダー画像、`;
-  if (lang === "zh") return url ? `顶部是 ${url} 的图片，` : it.src ? "顶部是指定的图片，" : `顶部是${it.icon ? `${it.icon} 图标的` : ""}占位图片，`;
-  if (lang === "ko") return url ? `위쪽에 ${url}의 이미지, ` : it.src ? "위쪽에 지정한 이미지, " : `위쪽에 ${it.icon ? `${it.icon} 아이콘의 ` : ""}자리표시자 이미지, `;
-  return url ? `with an image from ${url} on top, ` : it.src ? "with the provided image on top, " : `with a placeholder image${it.icon ? ` (${it.icon} icon)` : ""} on top, `;
+  const pos = cardImagePosOf(it);
+  const size = pos !== "background" && it.imageSize !== undefined ? cardImageSizeOf(it) : undefined;
+  if (lang === "ja") {
+    const what = url ? ` ${url} の画像` : it.src ? "指定の画像" : `${it.icon ? `${it.icon} アイコンの` : ""}プレースホルダー画像`;
+    const sized = size ? `（${pos === "top" ? "高さ" : "幅"} ${size}dp）` : "";
+    if (pos === "leading") return `先頭側（全高）に${what}${sized}、`;
+    if (pos === "trailing") return `末尾側（全高）に${what}${sized}、`;
+    if (pos === "background") return `背景全面に${what}（テキストの背後にスクリム）、`;
+    return `上部に${what}${sized}、`;
+  }
+  if (lang === "zh") {
+    const what = url ? ` ${url} 的图片` : it.src ? "指定的图片" : `${it.icon ? `${it.icon} 图标的` : ""}占位图片`;
+    const sized = size ? `（${pos === "top" ? "高" : "宽"} ${size}dp）` : "";
+    if (pos === "leading") return `左侧（全高）是${what}${sized}，`;
+    if (pos === "trailing") return `右侧（全高）是${what}${sized}，`;
+    if (pos === "background") return `整张卡片的背景是${what}（文字后方加渐变遮罩），`;
+    return `顶部是${what}${sized}，`;
+  }
+  if (lang === "ko") {
+    const what = url ? `${url}의 이미지` : it.src ? "지정한 이미지" : `${it.icon ? `${it.icon} 아이콘의 ` : ""}자리표시자 이미지`;
+    const sized = size ? `(${pos === "top" ? "높이" : "너비"} ${size}dp)` : "";
+    if (pos === "leading") return `앞쪽(전체 높이)에 ${what}${sized}, `;
+    if (pos === "trailing") return `뒤쪽(전체 높이)에 ${what}${sized}, `;
+    if (pos === "background") return `배경 전체에 ${what}(텍스트 뒤에 스크림), `;
+    return `위쪽에 ${what}${sized}, `;
+  }
+  const what = url ? `an image from ${url}` : it.src ? "the provided image" : `a placeholder image${it.icon ? ` (${it.icon} icon)` : ""}`;
+  const sized = size ? ` (${size}dp ${pos === "top" ? "tall" : "wide"})` : "";
+  if (pos === "leading") return `with ${what}${sized} filling the leading side, `;
+  if (pos === "trailing") return `with ${what}${sized} filling the trailing side, `;
+  if (pos === "background") return `with ${what} as a full-bleed background behind a scrim under the text, `;
+  return `with ${what}${sized} on top, `;
+}
+
+/** a card's text choices that differ from the automatic ones: where the block sits and its color role */
+function cardText(it: Item, lang: Lang): string {
+  const parts: string[] = [];
+  const align = it.contentAlign;
+  const auto = !it.noImage && cardImagePosOf(it) === "background" ? "end" : "start";
+  if (align && align !== auto) {
+    const pos = lang === "ja" ? { start: "上", center: "中央", end: "下" } : lang === "zh" ? { start: "顶部", center: "垂直居中", end: "底部" } : lang === "ko" ? { start: "위", center: "가운데", end: "아래" } : { start: "top", center: "middle", end: "bottom" };
+    parts.push(lang === "ja" ? `文字は${pos[align]}寄せ` : lang === "zh" ? `文字${pos[align]}对齐` : lang === "ko" ? `텍스트 ${pos[align]} 정렬` : `text aligned to the ${pos[align]}`);
+  }
+  if (it.textColor) parts.push(lang === "ja" ? `文字色 ${it.textColor}` : lang === "zh" ? `文字颜色 ${it.textColor}` : lang === "ko" ? `텍스트 색상 ${it.textColor}` : `text in ${it.textColor}`);
+  if (!parts.length) return "";
+  return lang === "en" ? ` (${parts.join(", ")})` : lang === "ko" ? ` (${parts.join(", ")})` : `（${parts.join("、")}）`;
+}
+
+/** a card's background and corners when the author changed them, as one parenthetical */
+function cardLook(it: Item, lang: Lang): string {
+  const parts: string[] = [];
+  if (it.fill) parts.push(lang === "ja" ? `背景 ${it.fill}` : lang === "zh" ? `背景 ${it.fill}` : lang === "ko" ? `배경 ${it.fill}` : `on ${it.fill}`);
+  if (it.corners) parts.push(boxCorners(it, lang));
+  else if (it.radiusTop !== undefined) parts.push(lang === "ja" ? `角丸 ${it.radiusTop}dp` : lang === "zh" ? `圆角 ${it.radiusTop}dp` : lang === "ko" ? `모서리 ${it.radiusTop}dp` : `${it.radiusTop}dp corners`);
+  if (!parts.length) return "";
+  return lang === "en" ? ` ${parts.join(", ")}` : lang === "ko" ? `(${parts.join(", ")})` : `（${parts.join("、")}）`;
 }
 
 /** an image's web address, when it was given as one rather than picked from a file */
@@ -71,6 +133,17 @@ const qz = (s: string) => `“${s.trim()}”`;
 const quote = (lang: Lang) => (lang === "ja" ? qj : lang === "zh" ? qz : qe);
 const trimEnd = (s: string) => s.trim().replace(/[。.\s]+$/, "");
 
+/** Rails without either expressive setting preserve their original export. */
+function railStateText(it: Item, lang: Lang): string {
+  if (!isWideRail(it)) return "";
+  const component = it.railModal ? "ModalWideNavigationRail" : "WideNavigationRail";
+  const width = railWidth(it);
+  if (lang === "ja") return `。${component}、${it.railExpanded ? "展開状態" : "折りたたみ状態"}、幅 ${width}dp。${it.railModal ? "モーダル型：展開時はスクリム付きで本文に重ね、レイアウトの占有幅は 96dp のまま" : "非モーダル型：現在の幅だけレイアウトを占有"}。上部のメニューボタンで展開・折りたたみを切り替える`;
+  if (lang === "zh") return `。${component}，${it.railExpanded ? "展开状态" : "折叠状态"}，宽 ${width}dp。${it.railModal ? "模态覆盖：展开时带遮罩覆盖内容，布局占位保持 96dp" : "非模态布局：按当前宽度占据布局空间"}。顶部菜单按钮切换展开与折叠`;
+  if (lang === "ko") return `. ${component}, ${it.railExpanded ? "펼친 상태" : "접힌 상태"}, 너비 ${width}dp. ${it.railModal ? "모달 오버레이: 펼치면 스크림과 함께 콘텐츠를 덮고 레이아웃 점유 너비는 96dp로 유지" : "비모달 레이아웃: 현재 너비만큼 레이아웃 공간을 차지"}. 상단 메뉴 버튼으로 펼치기와 접기를 전환한다`;
+  return `; ${component}, ${it.railExpanded ? "expanded" : "collapsed"}, ${width}dp wide; ${it.railModal ? "modal overlay: when expanded, cover the content with a scrim while keeping the layout footprint at 96dp" : "non-modal layout: reserve the current width in the layout"}; toggle expansion with the top menu button`;
+}
+
 /* ================= single parts ================= */
 
 function itemJa(it: Item): string {
@@ -96,13 +169,13 @@ function itemJa(it: Item): string {
     }
     case "navRail": {
       const tabs = (it.tabs ?? []).map((t) => `${q(t.label || "ラベルなし")}(${t.icon || "アイコンなし"})`);
-      return `${tabs.length}項目のナビゲーションレール（${tabs.join("、")}。${selectedText(it, "ja")}）`;
+      return `${tabs.length}項目のナビゲーションレール（${tabs.join("、")}。${selectedText(it, "ja")}）${railStateText(it, "ja")}`;
     }
     case "searchBar":
       return `プレースホルダー${q(it.label)}の検索バー${it.icon2 ? `（右端に ${it.icon2} アイコン）` : ""}`;
     case "card": {
       const style = it.variant === "elevated" ? "エレベーテッド" : it.variant === "outlined" ? "アウトライン" : "塗りつぶし";
-      return `${style}カード${it.size2 ? `（高さ ${it.size2}dp）` : ""}${it.fill ? `（背景 ${it.fill}）` : ""}。${cardImage(it, "ja")}見出し${q(it.label)}${hasText(it.supporting) ? `、本文${q(it.supporting!)}` : ""}`;
+      return `${style}カード${it.size2 ? `（高さ ${it.size2}dp）` : ""}${cardLook(it, "ja")}。${cardImage(it, "ja")}見出し${q(it.label)}${hasText(it.supporting) ? `、本文${q(it.supporting!)}` : ""}${cardText(it, "ja")}`;
     }
     case "listItem":
       return `${q(it.label)}${hasText(it.supporting) ? `（サブテキスト${q(it.supporting!)}）` : ""}${it.icon ? `、先頭に ${it.icon} アイコン${it.iconFill === "none" ? "（背景なし）" : it.iconFill ? `（背景 ${it.iconFill}）` : ""}` : ""}${it.switch ? `、末尾にスイッチ（初期状態${it.checked ? "オン" : "オフ"}）` : it.icon2 ? `、末尾に ${it.icon2}` : ""}${it.fill && it.fill !== "surfaceContainerLow" ? `、背景は ${it.fill}` : ""}`;
@@ -138,9 +211,9 @@ function itemJa(it: Item): string {
     case "loadingIndicator":
       return `M3 Expressive の形が変化するローディングインジケータ${it.contained ? "（コンテナ付き）" : ""}`;
     case "linearProgress":
-      return `${it.wavy ? "波形の" : ""}リニアプログレス（${it.value === undefined ? "不確定" : `${it.value}%`}）`;
+      return `${it.wavy ? "波形の" : ""}リニアプログレス（${it.value === undefined ? "不確定" : `${it.value}%`}${progressThickness(it) !== 4 ? `、トラックの太さ ${progressThickness(it)}dp` : ""}）`;
     case "circularProgress":
-      return `${it.wavy ? "波形の" : ""}サーキュラープログレス（${it.value === undefined ? "不確定" : `${it.value}%`}）`;
+      return `${it.wavy ? "波形の" : ""}サーキュラープログレス（${it.value === undefined ? "不確定" : `${it.value}%`}${progressThickness(it) !== 4 ? `、トラックの太さ ${progressThickness(it)}dp` : ""}）`;
     case "splitButton":
       return `${q(it.label)}${it.icon ? `（${it.icon} アイコン付き）` : ""}の${v}スプリットボタン（右側にメニューを開く矢印のセグメント）`;
     case "fabMenu": {
@@ -153,7 +226,7 @@ function itemJa(it: Item): string {
     }
     case "tabs": {
       const labels = (it.tabs ?? []).map((t) => q(t.label || "ラベルなし"));
-      return `${labels.join("、")}の ${labels.length} つのタブ（${selectedText(it, "ja")}）`;
+      return `${labels.join("、")}の ${labels.length} つのタブ（${selectedText(it, "ja")}${isScrollableTabs(it) ? "、横にスクロールするタブ" : ""}）`;
     }
     case "radio":
       return `${q(it.label)}のラジオボタン（初期状態は${it.checked ? "選択" : "未選択"}）`;
@@ -187,13 +260,13 @@ function itemEn(it: Item): string {
     }
     case "navRail": {
       const tabs = (it.tabs ?? []).map((t) => `${q(t.label || "unlabeled")} (${t.icon || "no icon"})`);
-      return `a navigation rail with ${tabs.length} destinations: ${tabs.join(", ")}; ${selectedText(it, "en")}`;
+      return `a navigation rail with ${tabs.length} destinations: ${tabs.join(", ")}; ${selectedText(it, "en")}${railStateText(it, "en")}`;
     }
     case "searchBar":
       return `a search bar with the placeholder ${q(it.label)}${it.icon2 ? ` and a ${it.icon2} icon at the end` : ""}`;
     case "card": {
       const style = it.variant === "elevated" ? "an elevated" : it.variant === "outlined" ? "an outlined" : "a filled";
-      return `${style} card${it.size2 ? ` (${it.size2}dp tall)` : ""}${it.fill ? ` on ${it.fill}` : ""} ${cardImage(it, "en") || "with "}the headline ${q(it.label)}${hasText(it.supporting) ? ` and the body ${q(it.supporting!)}` : ""}`;
+      return `${style} card${it.size2 ? ` (${it.size2}dp tall)` : ""}${cardLook(it, "en")} ${cardImage(it, "en") || "with "}the headline ${q(it.label)}${hasText(it.supporting) ? ` and the body ${q(it.supporting!)}` : ""}${cardText(it, "en")}`;
     }
     case "listItem":
       return `${q(it.label)}${hasText(it.supporting) ? ` with supporting text ${q(it.supporting!)}` : ""}${it.icon ? `, a leading ${it.icon} icon${it.iconFill === "none" ? " (no background circle)" : it.iconFill ? ` (on a ${it.iconFill} circle)` : ""}` : ""}${it.switch ? `, a trailing switch (initially ${it.checked ? "on" : "off"})` : it.icon2 ? `, a trailing ${it.icon2} icon` : ""}${it.fill && it.fill !== "surfaceContainerLow" ? `, on a ${it.fill} background` : ""}`;
@@ -229,9 +302,9 @@ function itemEn(it: Item): string {
     case "loadingIndicator":
       return `the M3 Expressive shape-morphing loading indicator${it.contained ? " (contained)" : ""}`;
     case "linearProgress":
-      return `a ${it.wavy ? "wavy " : ""}linear progress indicator (${it.value === undefined ? "indeterminate" : `${it.value}%`})`;
+      return `a ${it.wavy ? "wavy " : ""}linear progress indicator (${it.value === undefined ? "indeterminate" : `${it.value}%`}${progressThickness(it) !== 4 ? `, ${progressThickness(it)}dp track thickness` : ""})`;
     case "circularProgress":
-      return `a ${it.wavy ? "wavy " : ""}circular progress indicator (${it.value === undefined ? "indeterminate" : `${it.value}%`})`;
+      return `a ${it.wavy ? "wavy " : ""}circular progress indicator (${it.value === undefined ? "indeterminate" : `${it.value}%`}${progressThickness(it) !== 4 ? `, ${progressThickness(it)}dp track thickness` : ""})`;
     case "splitButton":
       return `a ${v} split button ${q(it.label)}${it.icon ? ` with a ${it.icon} icon` : ""} and a trailing menu segment with a down arrow`;
     case "fabMenu": {
@@ -244,7 +317,7 @@ function itemEn(it: Item): string {
     }
     case "tabs": {
       const labels = (it.tabs ?? []).map((t) => q(t.label || "unlabeled"));
-      return `a tab row with ${labels.length} tabs: ${labels.join(", ")}; ${selectedText(it, "en")}`;
+      return `a ${isScrollableTabs(it) ? "horizontally scrolling " : ""}tab row with ${labels.length} tabs: ${labels.join(", ")}; ${selectedText(it, "en")}`;
     }
     case "radio":
       return `a radio button ${q(it.label)} (initially ${it.checked ? "selected" : "unselected"})`;
@@ -278,26 +351,26 @@ function itemZh(it: Item): string {
     }
     case "navRail": {
       const tabs = (it.tabs ?? []).map((t) => `${q(t.label || "无标签")}(${t.icon || "无图标"})`);
-      return `${tabs.length}个项目的侧边导航栏（${tabs.join("、")}，${selectedText(it, "zh")}）`;
+      return `${tabs.length}个项目的侧边导航栏（${tabs.join("、")}，${selectedText(it, "zh")}）${railStateText(it, "zh")}`;
     }
     case "searchBar":
       return `占位文字为${q(it.label)}的搜索栏${it.icon2 ? `（右端有 ${it.icon2} 图标）` : ""}`;
     case "card": {
       const style = it.variant === "elevated" ? "浮起" : it.variant === "outlined" ? "描边" : "填充";
-      return `${style}卡片${it.size2 ? `（高 ${it.size2}dp）` : ""}${it.fill ? `（背景 ${it.fill}）` : ""}。${cardImage(it, "zh")}标题${q(it.label)}${hasText(it.supporting) ? `，正文${q(it.supporting!)}` : ""}`;
+      return `${style}卡片${it.size2 ? `（高 ${it.size2}dp）` : ""}${cardLook(it, "zh")}。${cardImage(it, "zh")}标题${q(it.label)}${hasText(it.supporting) ? `，正文${q(it.supporting!)}` : ""}${cardText(it, "zh")}`;
     }
     case "listItem":
-      return `${q(it.label)}${hasText(it.supporting) ? `（辅助文本${q(it.supporting!)}）` : ""}${it.icon ? `，前置 ${it.icon} 图标${it.iconFill === "none" ? "（无背景）" : it.iconFill ? `（背景 ${it.iconFill}）` : ""}` : ""}${it.switch ? `，末尾为开关（初始${it.checked ? "开启" : "关闭"}）` : it.icon2 ? `，后置 ${it.icon2}` : ""}${it.fill && it.fill !== "surfaceContainerLow" ? `，背景为 ${it.fill}` : ""}`;
+      return `${q(it.label)}${hasText(it.supporting) ? `（辅助文本${q(it.supporting!)}）` : ""}${it.icon ? `，左侧显示 ${it.icon} 图标${it.iconFill === "none" ? "（无背景）" : it.iconFill ? `（背景 ${it.iconFill}）` : ""}` : ""}${it.switch ? `，显示列表项开关（初始${it.checked ? "开启" : "关闭"}）` : it.icon2 ? `，右侧显示 ${it.icon2} 图标` : ""}${it.fill && it.fill !== "surfaceContainerLow" ? `，背景为 ${it.fill}` : ""}`;
     case "dialog":
       return `标题${q(it.label)}${hasText(it.supporting) ? `、正文${q(it.supporting!)}` : ""}${it.icon ? `、带 ${it.icon} 图标` : ""}的对话框（取消／确定文字按钮）`;
     case "snackbar":
       return `${q(it.label)}消息条${hasText(it.supporting) ? `（带${q(it.supporting!)}操作）` : ""}`;
     case "textField":
-      return `标签为${q(it.label)}的${it.variant === "filled" ? "填充" : "描边"}文本输入框${it.icon ? `（前置 ${it.icon} 图标）` : ""}${hasText(it.supporting) ? `，辅助文本为${q(it.supporting!)}` : ""}`;
+      return `标签为${q(it.label)}的${it.variant === "filled" ? "填充" : "描边"}文本输入框${it.icon ? `（左侧显示 ${it.icon} 图标）` : ""}${hasText(it.supporting) ? `，辅助文本为${q(it.supporting!)}` : ""}`;
     case "select": {
       const opts = (it.tabs ?? []).map((t) => q(t.label || "无标签"));
       const initial = it.selected !== undefined && it.tabs?.[it.selected] ? `，初始值为${q(it.tabs[it.selected].label)}` : "，初始未选择";
-      return `标签为${q(it.label)}的${it.variant === "filled" ? "填充" : "描边"}下拉菜单（点击展开菜单选择一项，选项为${opts.join("、")}${initial}）${it.icon ? `（前置 ${it.icon} 图标）` : ""}${hasText(it.supporting) ? `，辅助文本为${q(it.supporting!)}` : ""}`;
+      return `标签为${q(it.label)}的${it.variant === "filled" ? "填充" : "描边"}下拉菜单（点击展开菜单选择一项，选项为${opts.join("、")}${initial}）${it.icon ? `（左侧显示 ${it.icon} 图标）` : ""}${hasText(it.supporting) ? `，辅助文本为${q(it.supporting!)}` : ""}`;
     }
     case "switch":
       return `${q(it.label)}开关（初始状态为${it.checked ? "开" : "关"}${it.noCheck ? "，开启时手柄上不显示勾选图标" : ""}）`;
@@ -320,9 +393,9 @@ function itemZh(it: Item): string {
     case "loadingIndicator":
       return `M3 Expressive 形状变化的加载指示器${it.contained ? "（带容器）" : ""}`;
     case "linearProgress":
-      return `${it.wavy ? "波浪形" : ""}线性进度条（${it.value === undefined ? "不确定进度" : `${it.value}%`}）`;
+      return `${it.wavy ? "波浪形" : ""}线性进度条（${it.value === undefined ? "不确定进度" : `${it.value}%`}${progressThickness(it) !== 4 ? `，轨道粗细 ${progressThickness(it)}dp` : ""}）`;
     case "circularProgress":
-      return `${it.wavy ? "波浪形" : ""}圆形进度条（${it.value === undefined ? "不确定进度" : `${it.value}%`}）`;
+      return `${it.wavy ? "波浪形" : ""}圆形进度条（${it.value === undefined ? "不确定进度" : `${it.value}%`}${progressThickness(it) !== 4 ? `，轨道粗细 ${progressThickness(it)}dp` : ""}）`;
     case "splitButton":
       return `${q(it.label)}${it.icon ? `（带 ${it.icon} 图标）` : ""}的${v}拆分按钮（右侧为带向下箭头的菜单段）`;
     case "fabMenu": {
@@ -335,7 +408,7 @@ function itemZh(it: Item): string {
     }
     case "tabs": {
       const labels = (it.tabs ?? []).map((t) => q(t.label || "无标签"));
-      return `${labels.join("、")}这 ${labels.length} 个标签页（${selectedText(it, "zh")}）`;
+      return `${labels.join("、")}这 ${labels.length} 个标签页（${selectedText(it, "zh")}${isScrollableTabs(it) ? "，可横向滚动" : ""}）`;
     }
     case "radio":
       return `${q(it.label)}单选按钮（初始状态为${it.checked ? "选中" : "未选中"}）`;
@@ -363,12 +436,12 @@ function itemKo(it: Item): string {
     }
     case "navRail": {
       const tabs = (it.tabs ?? []).map((t) => `${q(t.label || "레이블 없음")}(${t.icon || "아이콘 없음"})`);
-      return `${tabs.length}개 항목의 내비게이션 레일(${tabs.join(", ")}, ${selectedText(it, "ko")})`;
+      return `${tabs.length}개 항목의 내비게이션 레일(${tabs.join(", ")}, ${selectedText(it, "ko")})${railStateText(it, "ko")}`;
     }
     case "searchBar": return `자리표시자가 ${q(it.label)}인 검색창${it.icon2 ? `(오른쪽 끝에 ${it.icon2} 아이콘)` : ""}`;
     case "card": {
       const style = it.variant === "elevated" ? "돌출" : it.variant === "outlined" ? "윤곽선" : "채움";
-      return `${style} 카드${it.size2 ? `(높이 ${it.size2}dp)` : ""}${it.fill ? `(배경 ${it.fill})` : ""}. ${cardImage(it, "ko")}제목 ${q(it.label)}${hasText(it.supporting) ? `, 본문 ${q(it.supporting!)}` : ""}`;
+      return `${style} 카드${it.size2 ? `(높이 ${it.size2}dp)` : ""}${cardLook(it, "ko")}. ${cardImage(it, "ko")}제목 ${q(it.label)}${hasText(it.supporting) ? `, 본문 ${q(it.supporting!)}` : ""}${cardText(it, "ko")}`;
     }
     case "listItem": return `${q(it.label)}${hasText(it.supporting) ? `(보조 텍스트 ${q(it.supporting!)})` : ""}${it.icon ? `, 앞쪽 ${it.icon} 아이콘${it.iconFill === "none" ? "(배경 없음)" : it.iconFill ? `(배경 ${it.iconFill})` : ""}` : ""}${it.switch ? `, 끝에 스위치(초기 상태 ${it.checked ? "켜짐" : "꺼짐"})` : it.icon2 ? `, 뒤쪽 ${it.icon2}` : ""}${it.fill && it.fill !== "surfaceContainerLow" ? `, 배경 ${it.fill}` : ""}`;
     case "dialog": return `제목 ${q(it.label)}${hasText(it.supporting) ? `, 본문 ${q(it.supporting!)}` : ""}${it.icon ? `, ${it.icon} 아이콘 포함` : ""} 대화상자(취소/확인 텍스트 버튼)`;
@@ -389,8 +462,8 @@ function itemKo(it: Item): string {
     case "divider": return "구분선";
     case "box": return `${it.size ?? PHONE_W}×${it.size2 ?? 220}dp ${it.checked ? "하단 시트(위쪽 드래그 핸들 포함)" : "상자"}(배경 ${it.fill ?? "surfaceContainerLow"}, ${boxCorners(it, "ko")})`;
     case "loadingIndicator": return `M3 Expressive 형태 변환 로딩 표시기${it.contained ? "(컨테이너 포함)" : ""}`;
-    case "linearProgress": return `${it.wavy ? "물결 모양 " : ""}선형 진행 표시기(${it.value === undefined ? "불확정" : `${it.value}%`})`;
-    case "circularProgress": return `${it.wavy ? "물결 모양 " : ""}원형 진행 표시기(${it.value === undefined ? "불확정" : `${it.value}%`})`;
+    case "linearProgress": return `${it.wavy ? "물결 모양 " : ""}선형 진행 표시기(${it.value === undefined ? "불확정" : `${it.value}%`}${progressThickness(it) !== 4 ? `, 트랙 두께 ${progressThickness(it)}dp` : ""})`;
+    case "circularProgress": return `${it.wavy ? "물결 모양 " : ""}원형 진행 표시기(${it.value === undefined ? "불확정" : `${it.value}%`}${progressThickness(it) !== 4 ? `, 트랙 두께 ${progressThickness(it)}dp` : ""})`;
     case "splitButton": return `${q(it.label)}${it.icon ? `(${it.icon} 아이콘 포함)` : ""} ${v} 분할 버튼(오른쪽에 아래쪽 화살표가 있는 메뉴 영역)`;
     case "fabMenu": {
       const items = (it.tabs ?? []).map((t) => `${q(t.label || "레이블 없음")}(${t.icon || "아이콘 없음"})`);
@@ -402,7 +475,7 @@ function itemKo(it: Item): string {
     }
     case "tabs": {
       const labels = (it.tabs ?? []).map((t) => q(t.label || "레이블 없음"));
-      return `${labels.join(", ")}의 탭 ${labels.length}개(${selectedText(it, "ko")})`;
+      return `${labels.join(", ")}의 탭 ${labels.length}개(${selectedText(it, "ko")}${isScrollableTabs(it) ? ", 가로로 스크롤되는 탭" : ""})`;
     }
     case "radio": return `${q(it.label)} 라디오 버튼(초기 상태 ${it.checked ? "선택됨" : "선택 안 됨"})`;
     case "badge": return hasText(it.label) ? `${q(it.label)}을 표시하는 배지` : "작은 점 배지";
@@ -422,6 +495,12 @@ function boxCorners(it: Item, lang: Lang): string {
   }
   const t = c ? c.tl : (it.radiusTop ?? 28);
   const b = c ? c.bl : (it.radiusBottom ?? 28);
+  if (t === b) {
+    if (lang === "ja") return `角丸 ${t}dp`;
+    if (lang === "zh") return `圆角 ${t}dp`;
+    if (lang === "ko") return `모서리 ${t}dp`;
+    return `${t}dp corners`;
+  }
   if (lang === "ja") return `角丸は上 ${t}dp・下 ${b}dp`;
   if (lang === "zh") return `圆角上 ${t}dp、下 ${b}dp`;
   if (lang === "ko") return `위쪽 모서리 ${t}dp / 아래쪽 ${b}dp`;
@@ -752,6 +831,13 @@ function describeNodes(lines: string[], nodes: LNode[], within: Rect | null, wid
 
 const RAIL_LEAD: Record<Lang, string> = { ja: "左端に", en: "Along the left edge: ", zh: "左缘：", ko: "왼쪽 가장자리에 " };
 
+const WIDE_RAIL_STYLE: Record<Lang, string> = {
+  ja: "M3 Expressive ナビゲーションレール: 折りたたみ時は幅 96dp、アイコンの下にラベル。展開時は幅 220dp、高さ 56dp の項目内でアイコンとラベルを横並びにし、間隔は 8dp。既存のトップアプリバーに合わせ、両モードの開閉状態すべてで背景は surfaceContainer。選択項目は secondaryContainer のピル型インジケータ、アイコンは onSecondaryContainer、ラベルは secondary を優先し、実際の背景（折りたたみ時は surfaceContainer、展開時は secondaryContainer）とのコントラストが 4.5:1 未満なら、それぞれ onSurface / onSecondaryContainer を使う。上部のメニューボタンで開閉する。非モーダル型は本文の横に配置し、モーダル型は展開時にスクリムとともに本文に重ね、背景操作を遮断する。スクリムのタップまたは Escape で閉じる。",
+  en: "M3 Expressive navigation rail: 96dp wide when collapsed, with labels below icons. Expanded width is 220dp, with 56dp-high destinations and horizontal icon/label rows separated by 8dp. Match the existing top app bar with a surfaceContainer background in both modes, whether collapsed or expanded. The selected destination uses a secondaryContainer pill, onSecondaryContainer icon, and a label that prefers secondary. If its contrast against the actual background (surfaceContainer when collapsed, secondaryContainer when expanded) is below 4.5:1, use onSurface / onSecondaryContainer respectively. A top menu button toggles expansion. The non-modal variant sits beside the content; the modal variant overlays it with a scrim when expanded and blocks background interaction. Dismiss with a scrim tap or Escape.",
+  zh: "M3 Expressive 侧边导航栏：折叠宽 96dp，标签位于图标下方。展开宽 220dp，项目高 56dp，图标与标签横向排列，间距 8dp。沿用现有顶部应用栏配色，两种模式在折叠与展开时均使用 surfaceContainer 背景。选中项用 secondaryContainer 胶囊指示器，图标为 onSecondaryContainer，文字优先使用 secondary；若与实际背景（折叠为 surfaceContainer，展开为 secondaryContainer）的对比度低于 4.5:1，则分别使用 onSurface / onSecondaryContainer。顶部菜单按钮切换展开与折叠。非模态型位于内容旁；模态型展开时带遮罩覆盖内容并阻止背景交互，点击遮罩或按 Escape 关闭。",
+  ko: "M3 Expressive 내비게이션 레일: 접으면 너비 96dp, 아이콘 아래에 레이블을 배치한다. 펼치면 너비 220dp, 항목 높이 56dp, 아이콘과 레이블을 8dp 간격으로 가로 배치한다. 기존 상단 앱 바와 맞추어 두 모드의 접힌 상태와 펼친 상태 모두 surfaceContainer 배경을 사용한다. 선택 항목은 secondaryContainer 알약 표시기, onSecondaryContainer 아이콘, 레이블은 secondary를 우선 사용한다. 실제 배경(접힘: surfaceContainer, 펼침: secondaryContainer)과의 대비가 4.5:1 미만이면 각각 onSurface / onSecondaryContainer를 사용한다. 상단 메뉴 버튼으로 펼치기와 접기를 전환한다. 비모달은 콘텐츠 옆에 배치하고 모달은 펼칠 때 스크림과 함께 콘텐츠를 덮어 배경 조작을 차단한다. 스크림을 탭하거나 Escape를 누르면 닫힌다.",
+};
+
 function describeScreen(lines: string[], groups: Group[], frameRect: Rect | null, widths: Record<string, number>, lang: Lang) {
   if (!groups.length) return;
   /* a navigation rail runs the full height, so it is written first, on its own; the
@@ -776,6 +862,7 @@ function paletteLines(p: Palette): string[] {
       ["onPrimaryContainer", p.onPrimaryContainer],
     ]),
     row([
+      ["secondary", p.secondary],
       ["secondaryContainer", p.secondaryContainer],
       ["onSecondaryContainer", p.onSecondaryContainer],
       ["tertiaryContainer", p.tertiaryContainer],
@@ -828,7 +915,7 @@ const STYLE_NOTES: Record<Lang, Partial<Record<Kind | "boxSheet", string>>> = {
     navRail:
       "ナビゲーションレール: 幅 80dp、画面の左端に上から下まで、背景は surfaceContainer。項目は上から縦に並べ、選択中の項目は secondaryContainer のピル型インジケータ（幅 56dp・高さ 32dp）で示し、アイコンは塗りつぶし、その下に labelMedium のラベル。本文はレールの右に置く。",
     searchBar: "検索バー: 高さ 56dp、角は完全な丸、背景は surfaceContainerHigh。先頭に検索アイコン、末尾に指定のアイコン。",
-    card: "カード: 角丸 20dp、上部に画像領域。塗りつぶしは surfaceContainerHighest、エレベーテッドは surfaceContainerLow に Level 1 の影、アウトラインは outlineVariant の 1dp 枠。見出しは titleMedium、本文は bodyMedium、内側の余白は 16dp。",
+    card: "カード: 角丸 20dp。画像領域は各カードの記述に従い、上部・先頭側・末尾側・背景全面のいずれかに置く（背景の場合はテキストの側からスクリムをかける。明るい文字なら黒、暗い文字なら白のフェード）。画像はアスペクト比を保って中央でクロップし、領域いっぱいに表示する。塗りつぶしは surfaceContainerHighest、エレベーテッドは surfaceContainerLow に Level 1 の影、アウトラインは outlineVariant の 1dp 枠。見出しは titleMedium、本文は bodyMedium。内側余白は 20dp、見出しと本文の間は 4dp、画像とテキストの間は 12dp。",
     listItem:
       "リスト項目: 高さ 72dp、先頭アイコンは 24dp（指定がなければ primaryContainer の 40dp の円の上）、主テキストは bodyLarge、サブテキストは bodyMedium の onSurfaceVariant。背景は指定のロール（指定がなければ surfaceContainerLow）。上下に連結したリストは 3dp の隙間で並べ、外側の角を 28dp、隣り合う内側の角を 8dp にする（M3 Expressive のリスト表現）。",
     dialog: "ダイアログ: 幅 312dp、角丸 28dp、背景は surfaceContainerHigh。見出しは headlineSmall、本文は bodyMedium、下部右寄せにテキストボタン。",
@@ -850,8 +937,8 @@ const STYLE_NOTES: Record<Lang, Partial<Record<Kind | "boxSheet", string>>> = {
       "ボックス / ボトムシート: 指定した背景色と角丸を持つコンテナ。ドラッグハンドル付きと書いたものだけはモーダルボトムシート（ModalBottomSheet）として下から出し、それ以外のボックスは単なる背景コンテナにする。",
     loadingIndicator:
       "ローディング表示: M3 Expressive の形が変化する LoadingIndicator（回転しながら多角形の間を変形するもの）を使う。コンテナ付きは secondaryContainer の円の中に置く。",
-    linearProgress: "リニアプログレス: M3 Expressive の太いバー。波形指定のときは進行中に波打つ wavy スタイルにする。トラックは secondaryContainer、進捗は primary。",
-    circularProgress: "サーキュラープログレス: M3 Expressive の太いストローク。波形指定のときは波打つ wavy スタイルにする。",
+    linearProgress: "リニアプログレス: 指定された太さ（指定がなければ 4dp）で、端を丸くする。波形指定のときは M3 Expressive の wavy スタイルにする。トラックは secondaryContainer、進捗は primary。",
+    circularProgress: "サーキュラープログレス: 指定された太さ（指定がなければ 4dp）で、端を丸くする。波形指定のときは M3 Expressive の wavy スタイルにする。",
     splitButton:
       "スプリットボタン: M3 Expressive の SplitButton。左のセグメントが主アクション、右の矢印セグメントがメニューを開く。2 つのセグメントは 2dp の隙間で並べ、外側の角は完全な丸、隣り合う内側の角は 8dp。メニューを開くと矢印が回転し、セグメントの角が丸くなる。",
     fabMenu:
@@ -877,7 +964,7 @@ const STYLE_NOTES: Record<Lang, Partial<Record<Kind | "boxSheet", string>>> = {
     navRail:
       "Navigation rail: 80dp wide on surfaceContainer, running the full height of the left edge. Destinations stack from the top; the active one shows a secondaryContainer pill indicator (56×32dp) with a filled icon and a labelMedium label below it. The content sits to the right of the rail.",
     searchBar: "Search bar: 56dp tall, fully rounded, on surfaceContainerHigh, with a leading search icon and the specified trailing icon.",
-    card: "Cards: 20dp corners with an image area on top. Filled uses surfaceContainerHighest, elevated uses surfaceContainerLow with a level 1 shadow, outlined has a 1dp outlineVariant border. Headline in titleMedium, body in bodyMedium, 16dp inner padding.",
+    card: "Cards: 20dp corners. Place each card's image area where its line says — on top, filling the leading or trailing side, or as a full-bleed background (a scrim fades in from the text's side: dark under light text, light under dark text). Images keep their aspect ratio and are center-cropped to fill their area. Filled uses surfaceContainerHighest, elevated uses surfaceContainerLow with a level 1 shadow, outlined has a 1dp outlineVariant border. Headline in titleMedium, body in bodyMedium. 20dp padding, 4dp between headline and body, 12dp between the image and the text.",
     listItem:
       "List items: 72dp tall, 24dp leading icon (on a 40dp primaryContainer circle unless stated), headline in bodyLarge, supporting text in bodyMedium on onSurfaceVariant, on the specified background role (surfaceContainerLow unless stated). A stacked list is a vertical run with 3dp gaps, 28dp outer corners and 8dp inner corners (the M3 Expressive list treatment).",
     dialog: "Dialogs: 312dp wide, 28dp corners, on surfaceContainerHigh. Headline in headlineSmall, body in bodyMedium, text buttons aligned right at the bottom.",
@@ -899,8 +986,8 @@ const STYLE_NOTES: Record<Lang, Partial<Record<Kind | "boxSheet", string>>> = {
       "Boxes / bottom sheets: containers with the specified background token and corner radii. Only the ones described with a drag handle are modal bottom sheets that slide up from the bottom; every other box is a plain background container.",
     loadingIndicator:
       "Loading: use the M3 Expressive shape-morphing LoadingIndicator (the rotating polygon that morphs between shapes). The contained variant sits inside a secondaryContainer circle.",
-    linearProgress: "Linear progress: the thick M3 Expressive bar; use the wavy style when specified. Track is secondaryContainer, progress is primary.",
-    circularProgress: "Circular progress: the thick M3 Expressive stroke; use the wavy style when specified.",
+    linearProgress: "Linear progress: use the stated track thickness (4dp unless stated) with round caps, and the M3 Expressive wavy style when specified. Track is secondaryContainer, progress is primary.",
+    circularProgress: "Circular progress: use the stated track thickness (4dp unless stated) with round caps, and the M3 Expressive wavy style when specified.",
     splitButton:
       "Split button: the M3 Expressive SplitButton. The leading segment is the main action and the trailing arrow segment opens a menu. The two segments sit 2dp apart with fully rounded outer corners and 8dp inner corners; opening the menu rotates the arrow and rounds the segment.",
     fabMenu:
@@ -924,10 +1011,10 @@ const STYLE_NOTES: Record<Lang, Partial<Record<Kind | "boxSheet", string>>> = {
       "导航栏：高 80dp，背景为 surfaceContainer。背景延伸到屏幕底部的手势导航区域，并按系统内边距在底部留出空间。选中项用 secondaryContainer 的胶囊指示器（宽 64dp、高 32dp）表示，图标为填充样式，标签用 labelMedium。",
     navRail:
       "侧边导航栏：宽 80dp，贴着屏幕左缘通高，背景为 surfaceContainer。项目从上往下排列，选中项用 secondaryContainer 的胶囊指示器（宽 56dp、高 32dp）表示，图标为填充样式，下方为 labelMedium 标签。内容放在导航栏右侧。",
-    searchBar: "搜索栏：高 56dp，完全圆角，背景为 surfaceContainerHigh。前置搜索图标，后置指定图标。",
-    card: "卡片：圆角 20dp，顶部为图片区域。填充用 surfaceContainerHighest，浮起用 surfaceContainerLow 加 Level 1 阴影，描边用 1dp 的 outlineVariant 边框。标题用 titleMedium，正文用 bodyMedium，内边距 16dp。",
+    searchBar: "搜索栏：高 56dp，完全圆角，背景为 surfaceContainerHigh。左侧显示搜索图标，右侧显示指定图标。",
+    card: "卡片：圆角 20dp。图片区域按每张卡片的描述放在顶部、左侧、右侧或作为整卡背景（背景时从文字一侧加渐变遮罩：浅色文字用黑色，深色文字用白色）。图片保持宽高比并居中裁剪以填满区域。填充用 surfaceContainerHighest，浮起用 surfaceContainerLow 加 Level 1 阴影，描边用 1dp 的 outlineVariant 边框。标题用 titleMedium，正文用 bodyMedium。内边距 20dp，标题与正文间距 4dp，图片与文字间距 12dp。",
     listItem:
-      "列表项：高 72dp，前置图标 24dp（未指定时放在 40dp 的 primaryContainer 圆形上），主文本用 bodyLarge，辅助文本用 bodyMedium 的 onSurfaceVariant，背景为指定的颜色角色（未指定则为 surfaceContainerLow）。上下相连的列表以 3dp 间距排列，外侧圆角 28dp，相邻内侧圆角 8dp（M3 Expressive 的列表样式）。",
+      "列表项：高 72dp，左侧图标 24dp（未指定时放在 40dp 的 primaryContainer 圆形上），主文本用 bodyLarge，辅助文本用 bodyMedium 的 onSurfaceVariant，背景为指定的颜色角色（未指定则为 surfaceContainerLow）。上下相连的列表以 3dp 间距排列，外侧圆角 28dp，相邻内侧圆角 8dp（M3 Expressive 的列表样式）。",
     dialog: "对话框：宽 312dp，圆角 28dp，背景为 surfaceContainerHigh。标题用 headlineSmall，正文用 bodyMedium，底部右对齐放文字按钮。",
     snackbar: "消息条：高 48dp，圆角 8dp，背景为 inverseSurface，文字为 inverseOnSurface。操作为 inversePrimary 的文字按钮。显示在距屏幕底部 16dp 处，数秒后消失。",
     textField:
@@ -945,8 +1032,8 @@ const STYLE_NOTES: Record<Lang, Partial<Record<Kind | "boxSheet", string>>> = {
     box: "容器框：只是带指定背景色和圆角的容器，作为叠放在其上的组件的背景，本身没有任何行为。",
     boxSheet: "容器框／底部面板：带指定背景色和圆角的容器。只有描述中带拖动条的才做成从底部滑出的模态底部面板（ModalBottomSheet），其余容器框只是普通的背景容器。",
     loadingIndicator: "加载指示：使用 M3 Expressive 形状变化的 LoadingIndicator（旋转并在多边形之间变形）。带容器的放在 secondaryContainer 的圆形中。",
-    linearProgress: "线性进度条：M3 Expressive 的粗进度条。指定波浪形时使用进行中波动的 wavy 样式。轨道为 secondaryContainer，进度为 primary。",
-    circularProgress: "圆形进度条：M3 Expressive 的粗描边。指定波浪形时使用 wavy 样式。",
+    linearProgress: "线性进度条：使用指定的轨道粗细（未指定则为 4dp）和圆形端帽。指定波浪形时使用 M3 Expressive 的 wavy 样式。轨道为 secondaryContainer，进度为 primary。",
+    circularProgress: "圆形进度条：使用指定的轨道粗细（未指定则为 4dp）和圆形端帽。指定波浪形时使用 M3 Expressive 的 wavy 样式。",
     splitButton:
       "拆分按钮：M3 Expressive 的 SplitButton。左段为主操作，右侧箭头段打开菜单。两段间距 2dp，外侧完全圆角，相邻内侧圆角 8dp。打开菜单时箭头旋转、段变为圆形。",
     fabMenu:
@@ -967,7 +1054,7 @@ const STYLE_NOTES: Record<Lang, Partial<Record<Kind | "boxSheet", string>>> = {
     topAppBar: "상단 앱 바: 높이 64dp, 배경 surface. 상태 표시줄 뒤까지 배경을 늘리고 시스템 인셋만큼 위쪽 여백을 둔다. 제목은 titleLarge, 양쪽 아이콘 버튼은 48dp를 사용한다.",
     bottomNav: "내비게이션 바: 높이 80dp, 배경 surfaceContainer. 제스처 내비게이션 영역까지 배경을 늘리고 시스템 인셋만큼 아래쪽 여백을 둔다. 선택 항목은 64×32dp secondaryContainer 알약 표시기, 채운 아이콘, labelMedium 레이블로 표시한다.",
     searchBar: "검색창: 높이 56dp, 완전 둥근 모서리, 배경 surfaceContainerHigh. 앞쪽 검색 아이콘과 지정된 뒤쪽 아이콘을 둔다.",
-    card: "카드: 모서리 20dp, 위쪽 이미지 영역. 채움은 surfaceContainerHighest, 돌출은 surfaceContainerLow와 Level 1 그림자, 윤곽선은 1dp outlineVariant 테두리를 사용한다. 제목 titleMedium, 본문 bodyMedium, 안쪽 여백 16dp.",
+    card: "카드: 모서리 20dp. 이미지 영역은 각 카드의 설명에 따라 위쪽·앞쪽·뒤쪽·배경 전체 중 한 곳에 배치한다(배경일 때는 텍스트 쪽에서 스크림을 넣는다. 밝은 텍스트에는 검정, 어두운 텍스트에는 흰색 페이드). 이미지는 비율을 유지한 채 가운데를 기준으로 잘라 영역을 채운다. 채움은 surfaceContainerHighest, 돌출은 surfaceContainerLow와 Level 1 그림자, 윤곽선은 1dp outlineVariant 테두리를 사용한다. 제목 titleMedium, 본문 bodyMedium. 안쪽 여백 20dp, 제목과 본문 사이 4dp, 이미지와 텍스트 사이 12dp.",
     listItem: "목록 항목: 높이 72dp, 앞쪽 아이콘 24dp(별도 지정이 없으면 40dp primaryContainer 원 위), 주 텍스트 bodyLarge, 보조 텍스트 bodyMedium/onSurfaceVariant. 연결 목록은 간격 3dp, 바깥 모서리 28dp, 안쪽 모서리 8dp.",
     dialog: "대화상자: 너비 312dp, 모서리 28dp, 배경 surfaceContainerHigh. 제목 headlineSmall, 본문 bodyMedium, 텍스트 버튼은 아래쪽 오른쪽 정렬.",
     snackbar: "스낵바: 높이 48dp, 모서리 8dp, inverseSurface 배경과 inverseOnSurface 텍스트. 동작은 inversePrimary 텍스트 버튼으로 하고 아래쪽에서 16dp 띄워 몇 초 뒤 닫는다.",
@@ -984,8 +1071,8 @@ const STYLE_NOTES: Record<Lang, Partial<Record<Kind | "boxSheet", string>>> = {
     box: "상자: 지정된 배경 토큰과 모서리를 가진 단순 컨테이너. 겹쳐 놓은 부품의 배경으로 사용하며 자체 동작은 넣지 않는다.",
     boxSheet: "상자/하단 시트: 지정된 배경과 모서리를 가진 컨테이너. 드래그 핸들이 명시된 것만 아래에서 올라오는 ModalBottomSheet로 만들고 나머지는 단순 배경 컨테이너로 둔다.",
     loadingIndicator: "로딩: 다각형이 회전하며 형태가 바뀌는 M3 Expressive LoadingIndicator를 사용한다. 컨테이너형은 secondaryContainer 원 안에 둔다.",
-    linearProgress: "선형 진행 표시기: M3 Expressive의 두꺼운 바. 지정된 경우 물결 스타일을 사용하며 트랙은 secondaryContainer, 진행은 primary로 표시한다.",
-    circularProgress: "원형 진행 표시기: M3 Expressive의 두꺼운 스트로크. 지정된 경우 물결 스타일을 사용한다.",
+    linearProgress: "선형 진행 표시기: 지정된 트랙 두께(지정이 없으면 4dp)와 둥근 끝을 사용한다. 지정된 경우 M3 Expressive 물결 스타일을 사용하며 트랙은 secondaryContainer, 진행은 primary로 표시한다.",
+    circularProgress: "원형 진행 표시기: 지정된 트랙 두께(지정이 없으면 4dp)와 둥근 끝을 사용한다. 지정된 경우 M3 Expressive 물결 스타일을 사용한다.",
     splitButton: "분할 버튼: M3 Expressive SplitButton. 왼쪽은 주 동작, 오른쪽 화살표 영역은 메뉴를 연다. 두 영역 간격 2dp, 바깥 모서리는 완전 둥글게, 안쪽은 8dp로 한다.",
     fabMenu: "FAB 메뉴: M3 Expressive FloatingActionButtonMenu. 닫혔을 때는 일반 FAB이고 탭하면 항목이 위로 차례로 나타나며 아이콘은 close로 바뀐다. 각 항목은 높이 56dp, 완전 둥근 모서리, 아이콘과 레이블을 포함한다.",
     toolbar: "플로팅 도구 모음: M3 Expressive HorizontalFloatingToolbar. 높이 64dp, 완전 둥근 모서리로 화면 아래쪽에서 16dp 띄운다. 표준은 surfaceContainer, 비브런트는 primaryContainer, 내부 아이콘 버튼은 48dp.",
@@ -1150,11 +1237,13 @@ const STYLE_NOTES_WEB: Record<Lang, Partial<Record<Kind, string>>> = {
 /* ---------- fixed phrases ---------- */
 
 /** what the screens are drawn for: phones only, desktops only, watches only, both, or no screens at all */
-type Viewport = "phone" | "desktop" | "watch" | "mixed" | "free";
+type Viewport = "phone" | "desktop" | "watch" | "tab" | "mixed" | "free";
 const viewportOf = (frames: Frame[], phone: boolean): Viewport => {
   if (!phone || frames.length === 0) return "free";
   const watches = frames.filter(isWatchFrame).length;
   if (watches === frames.length) return "watch";
+  const tabs = frames.filter(isTabFrame).length;
+  if (tabs === frames.length) return "tab";
   const phones = frames.filter(isPhoneFrame).length;
   if (phones === frames.length) return "phone";
   const desktops = frames.filter(isDesktopFrame).length;
@@ -1167,9 +1256,11 @@ const sizeLabel = (f: Frame, vp: Viewport, lang: Lang): string | undefined => {
   const { w, h } = frameSizeOf(f);
   const kind = isWatchFrame(f)
     ? { ja: "Pixel Watch", en: "watch", zh: "手表", ko: "워치" }
-    : isPhoneFrame(f)
-      ? { ja: "スマホ", en: "phone", zh: "手机", ko: "휴대전화" }
-      : { ja: "デスクトップ", en: "desktop", zh: "桌面", ko: "데스크톱" };
+    : isTabFrame(f)
+      ? { ja: "タブレット", en: "tablet", zh: "平板", ko: "태블릿" }
+      : isPhoneFrame(f)
+        ? { ja: "スマホ", en: "phone", zh: "手机", ko: "휴대전화" }
+        : { ja: "デスクトップ", en: "desktop", zh: "桌面", ko: "데スク톱" };
   return `${kind[lang]} ${w}×${h}`;
 };
 
@@ -1183,15 +1274,17 @@ const PH = {
       `${
         vp === "watch"
           ? "想定は円形スマートウォッチ画面（Google Pixel Watch / Wear OS、384×384dp）で、"
-          : vp === "phone"
-            ? "想定はスマホの縦画面（412×892dp）で、"
-            : vp === "desktop"
-              ? pl === "web"
-                ? "想定はデスクトップのブラウザ画面（基準 1280×800）で、"
-                : "想定は横向きのタブレット画面（基準 1280×800dp）で、"
-              : vp === "mixed"
-                ? `スマホの縦画面（412×892）や${pl === "web" ? "デスクトップのブラウザ画面" : "横向きのタブレット画面"}（1280×800）、スマートウォッチ画面などを想定し、同じ名前の画面は 1 つの画面の異なる幅として、レスポンシブに実装します。`
-                : "レイアウトは自由配置で、"
+          : vp === "tab"
+            ? "想定はタブレット画面（800×1280dp）で、"
+            : vp === "phone"
+              ? "想定はスマホの縦画面（412×892dp）で、"
+              : vp === "desktop"
+                ? pl === "web"
+                  ? "想定はデスクトップのブラウザ画面（基準 1280×800）で、"
+                  : "想定は横向きのタブレット画面（基準 1280×800dp）で、"
+                : vp === "mixed"
+                  ? `スマホの縦画面（412×892）やタブレット（800×1280）、${pl === "web" ? "デスクトップのブラウザ画面" : "横向きの画面"}（1280×800）、スマートウォッチ画面などを想定し、同じ名前の画面は 1 つの画面の異なる幅として、レスポンシブに実装します。`
+                  : "レイアウトは自由配置で、"
       }${both ? "ライトモードとダークモードの両方に対応し、端末のシステム設定に従って切り替えます。" : dark ? "ダークモード固定です。" : "ライトモード固定です。"}`,
     platform: (pl: Platform) => (pl === "web" ? "実装先は Web（ブラウザで動くアプリ）です。" : "実装先は Android（ネイティブアプリ）です。"),
     schemeHead: (dark: boolean) => (dark ? "ダークスキーム:" : "ライトスキーム:"),
@@ -1210,6 +1303,7 @@ const PH = {
     hLayout: "## 画面構成",
     empty: "画面にはまだ部品が置かれていません。",
     screens: (names: string[]) => `画面は ${names.length} つあり、${names.join("、")}です。`,
+    placement: (place: Place) => (place === "center" ? "本文の部品は画面の縦中央にまとめて配置します。" : place === "bottom" ? "本文の部品は画面の下側（ナビゲーションバーの上）に寄せて配置します。" : "本文の部品は画面の高さいっぱいに均等な間隔で配置します（1 行だけなら縦中央）。"),
     screenHead: (name: string, bg: string | undefined, has: boolean, size?: string) => `${name}画面${size || bg ? `（${[size, bg ? `背景は ${bg}` : ""].filter(Boolean).join("、")}）` : ""}${has ? "は上から順に次の通りです。重なっている部品はその旨を書いています。" : "はまだ空です。"}`,
     loose: "画面の外に置かれている部品（共通パーツや参考）:",
     freeform: "画面を上から順に説明します。",
@@ -1227,15 +1321,17 @@ const PH = {
       `${
         vp === "watch"
           ? "Target a circular smartwatch screen (Google Pixel Watch / Wear OS, 384×384dp)"
-          : vp === "phone"
-            ? "Target a portrait phone screen (412×892dp)"
-            : vp === "desktop"
-              ? pl === "web"
-                ? "Target a desktop browser viewport (1280×800 reference)"
-                : "Target a landscape tablet screen (1280×800dp reference)"
-              : vp === "mixed"
-                ? `Target multiple form factors (portrait phone 412×892, ${pl === "web" ? "desktop browser viewport" : "landscape tablet"} 1280×800, smartwatch 384×384); screens that share a name are one screen at different form factors, so build them responsively`
-                : "The layout is free-form"
+          : vp === "tab"
+            ? "Target a tablet screen (800×1280dp)"
+            : vp === "phone"
+              ? "Target a portrait phone screen (412×892dp)"
+              : vp === "desktop"
+                ? pl === "web"
+                  ? "Target a desktop browser viewport (1280×800 reference)"
+                  : "Target a landscape tablet screen (1280×800dp reference)"
+                : vp === "mixed"
+                  ? `Target multiple form factors (portrait phone 412×892, tablet 800×1280, ${pl === "web" ? "desktop browser viewport" : "landscape tablet"} 1280×800, smartwatch 384×384); screens that share a name are one screen at different form factors, so build them responsively`
+                  : "The layout is free-form"
       }, ${both ? "supporting both light and dark mode and following the device's system setting" : `${dark ? "dark" : "light"} mode only`}.`,
     platform: (pl: Platform) => (pl === "web" ? "Build it for the web, as an app that runs in the browser." : "Build it for Android, as a native app."),
     schemeHead: (dark: boolean) => (dark ? "Dark scheme:" : "Light scheme:"),
@@ -1254,6 +1350,7 @@ const PH = {
     hLayout: "## Layout",
     empty: "Nothing has been placed on the screen yet.",
     screens: (names: string[]) => `There are ${names.length} screens: ${names.join(", ")}.`,
+    placement: (place: Place) => (place === "center" ? "The body parts sit together in the vertical center of the screen." : place === "bottom" ? "The body parts sit toward the bottom of the screen, above the navigation bar." : "The body parts are spread over the screen height with equal gaps (a single row sits in the vertical center)."),
     screenHead: (name: string, bg: string | undefined, has: boolean, size?: string) => `The ${name} screen${size || bg ? ` (${[size, bg ? `background ${bg}` : ""].filter(Boolean).join(", ")})` : ""}${has ? ", from top to bottom (overlapping parts are called out as such):" : " is still empty."}`,
     loose: "Parts placed outside the screens (shared parts or references):",
     freeform: "The screen, from top to bottom:",
@@ -1271,15 +1368,17 @@ const PH = {
       `${
         vp === "watch"
           ? "目标为圆形智能手表屏幕（Google Pixel Watch / Wear OS，384×384dp）"
-          : vp === "phone"
-            ? "目标为竖屏手机（412×892dp）"
-            : vp === "desktop"
-              ? pl === "web"
-                ? "目标为桌面浏览器视口（以 1280×800 为基准）"
-                : "目标为横屏平板（以 1280×800dp 为基准）"
-              : vp === "mixed"
-                ? `同时面向多种形态（竖屏手机 412×892、${pl === "web" ? "桌面浏览器视口" : "横屏平板"} 1280×800、智能手表 384×384）；同名的屏幕是同一个屏幕的不同形态，请做成响应式`
-                : "布局为自由排布"
+          : vp === "tab"
+            ? "目标为平板屏幕（800×1280dp）"
+            : vp === "phone"
+              ? "目标为竖屏手机（412×892dp）"
+              : vp === "desktop"
+                ? pl === "web"
+                  ? "目标为桌面浏览器视口（以 1280×800 为基准）"
+                  : "目标为横屏平板（以 1280×800dp 为基准）"
+                : vp === "mixed"
+                  ? `同时面向多种形态（竖屏手机 412×892、平板 800×1280、${pl === "web" ? "桌面浏览器视口" : "横屏平板"} 1280×800、智能手表 384×384）；同名的屏幕是同一个屏幕的不同形态，请做成响应式`
+                  : "布局为自由排布"
       }，${both ? "同时支持浅色和深色模式，并跟随设备的系统设置切换" : `只做${dark ? "深色" : "浅色"}模式`}。`,
     platform: (pl: Platform) => (pl === "web" ? "实现目标是 Web（在浏览器中运行的应用）。" : "实现目标是 Android（原生应用）。"),
     schemeHead: (dark: boolean) => (dark ? "深色配色：" : "浅色配色："),
@@ -1298,6 +1397,7 @@ const PH = {
     hLayout: "## 屏幕结构",
     empty: "屏幕上还没有放置任何组件。",
     screens: (names: string[]) => `共有 ${names.length} 个屏幕：${names.join("、")}。`,
+    placement: (place: Place) => (place === "center" ? "内容作为整体，在屏幕内容区域内纵向居中排列。" : place === "bottom" ? "内容区域中的组件靠屏幕底部（导航栏上方）放置。" : "各行内容在屏幕内容区域内纵向均匀分布（只有一行时纵向居中）。"),
     screenHead: (name: string, bg: string | undefined, has: boolean, size?: string) => `${name}屏幕${size || bg ? `（${[size, bg ? `背景为 ${bg}` : ""].filter(Boolean).join("，")}）` : ""}${has ? "从上到下依次如下（重叠的组件会特别说明）：" : "目前为空。"}`,
     loose: "放在屏幕之外的组件（公共部件或参考）：",
     freeform: "从上到下说明屏幕内容：",
@@ -1311,7 +1411,7 @@ const PH = {
     intro: (title: string, brief: string) => `Material 3 Expressive 디자인으로 구현해 주세요: ${title}.${brief ? ` ${trimEnd(brief)}.` : ""}`,
     titleOnly: (name: string) => `${name} 화면`,
     titleAll: (n: number) => (n > 1 ? "이 앱" : "이 화면"),
-    target: (vp: Viewport, pl: Platform, dark: boolean, both: boolean) => `${vp === "watch" ? "원형 스마트워치 화면(Google Pixel Watch / Wear OS, 384×384dp)을 대상으로 하며" : vp === "phone" ? "세로형 휴대전화 화면(412×892dp)을 대상으로 하며" : vp === "desktop" ? `${pl === "web" ? "데스크톱 브라우저" : "가로형 태블릿"} 화면(1280×800 기준)을 대상으로 하며` : vp === "mixed" ? `세로형 휴대전화(412×892), ${pl === "web" ? "데스크톱 브라우저" : "가로형 태블릿"}(1280×800), 스마트워치(384×384) 등 다양한 폼팩터를 지원하며, 이름이 같은 화면은 반응형으로 구현하고` : "레이아웃은 자유 배치이며"}, ${both ? "라이트 모드와 다크 모드를 모두 지원하고 기기의 시스템 설정을 따른다" : `${dark ? "다크" : "라이트"} 모드만 지원한다`}.`,
+    target: (vp: Viewport, pl: Platform, dark: boolean, both: boolean) => `${vp === "watch" ? "원형 스마트워치 화면(Google Pixel Watch / Wear OS, 384×384dp)을 대상으로 하며" : vp === "tab" ? "태블릿 화면(800×1280dp)을 대상으로 하며" : vp === "phone" ? "세로형 휴대전화 화면(412×892dp)을 대상으로 하며" : vp === "desktop" ? `${pl === "web" ? "데스크톱 브라우저" : "가로형 태블릿"} 화면(1280×800 기준)을 대상으로 하며` : vp === "mixed" ? `세로형 휴대전화(412×892), 태블릿(800×1280), ${pl === "web" ? "데스크톱 브라우저" : "가로형 태블릿"}(1280×800), 스마트워치(384×384) 등 다양한 폼팩터를 지원하며, 이름이 같은 화면은 반응형으로 구현하고` : "레이아웃은 자유 배치이며"}, ${both ? "라이트 모드와 다크 모드를 모두 지원하고 기기의 시스템 설정을 따른다" : `${dark ? "다크" : "라이트"} 모드만 지원한다`}.`,
     platform: (pl: Platform) => (pl === "web" ? "브라우저에서 실행되는 웹 앱으로 구현한다." : "Android 네이티브 앱으로 구현한다."),
     schemeHead: (dark: boolean) => (dark ? "다크 색상 구성:" : "라이트 색상 구성:"),
     sketch: "아래 화면 구성은 의도를 전달하는 대략적인 스케치이며 완성 사양이 아니다. 정적인 그림처럼 복제하지 말고 이 종류의 제품에 일반적으로 필요한 기능을 갖춘 실제 사용 가능한 앱으로 완성한다.",
@@ -1325,6 +1425,7 @@ const PH = {
     hLayout: "## 화면 구성",
     empty: "화면에 아직 부품이 없습니다.",
     screens: (names: string[]) => `화면은 ${names.length}개이며 ${names.join(", ")}입니다.`,
+    placement: (place: Place) => (place === "center" ? "본문 부품은 화면 세로 가운데에 모아 배치한다." : place === "bottom" ? "본문 부품은 화면 아래쪽(내비게이션 바 위)에 붙여 배치한다." : "본문 부품은 화면 높이에 걸쳐 같은 간격으로 배치한다(한 줄뿐이면 세로 가운데)."),
     screenHead: (name: string, bg: string | undefined, has: boolean, size?: string) => `${name} 화면${size || bg ? `(${[size, bg ? `배경 ${bg}` : ""].filter(Boolean).join(", ")})` : ""}. ${has ? "위에서부터 다음과 같습니다. 겹친 부품은 별도로 표시합니다." : "아직 비어 있습니다."}`,
     loose: "화면 밖에 놓인 부품(공통 부품 또는 참고):",
     freeform: "화면을 위에서부터 설명합니다.",
@@ -1336,6 +1437,7 @@ const PH = {
 };
 
 export function buildPrompt(doc: Doc, widths: Record<string, number>, onlyFrameId?: string, lang: Lang = getLang()): string {
+  doc = { ...doc, groups: constrainModalRails(doc.groups) };
   const th = normalizeTheme(doc.theme);
   const pal = paletteOf(doc.paletteKey, doc.customPalette, th);
   const phone = doc.frame === "phone";
@@ -1363,13 +1465,19 @@ export function buildPrompt(doc: Doc, widths: Record<string, number>, onlyFrameI
 
   const kindsUsed: Kind[] = [];
   let sheet = false;
+  let wideRail = false;
+  let legacyRail = false;
   for (const g of groups)
     for (const it of g.items) {
       if (!kindsUsed.includes(it.kind)) kindsUsed.push(it.kind);
       if (it.kind === "box" && it.checked) sheet = true;
+      if (it.kind === "navRail") {
+        if (isWideRail(it)) wideRail = true;
+        else legacyRail = true;
+      }
     }
   const styleNotes = kindsUsed
-    .map((k) => (k === "box" && sheet ? STYLE_NOTES[lang].boxSheet : (platform === "web" && STYLE_NOTES_WEB[lang][k]) || STYLE_NOTES[lang][k]))
+    .map((k) => (k === "navRail" && wideRail ? `${legacyRail ? `${STYLE_NOTES[lang].navRail} ` : ""}${WIDE_RAIL_STYLE[lang]}` : k === "box" && sheet ? STYLE_NOTES[lang].boxSheet : (platform === "web" && STYLE_NOTES_WEB[lang][k]) || STYLE_NOTES[lang][k]))
     .filter((s): s is string => !!s);
 
   const title = only ? ph.titleOnly(q(only.name || ph.screen)) : doc.title.trim() || ph.titleAll(frames.length);
@@ -1408,6 +1516,7 @@ export function buildPrompt(doc: Doc, widths: Record<string, number>, onlyFrameI
       if (i > 0 || frames.length > 1) lines.push("");
       if (hasText(f.note)) lines.push(lang === "ja" || lang === "zh" ? `${trimEnd(f.note!)}。` : `${trimEnd(f.note!)}.`);
       lines.push(ph.screenHead(q(f.name || ph.screen), f.bg && f.bg !== "surface" ? f.bg : undefined, gs.length > 0, sizeLabel(f, viewport, lang)));
+      if (gs.length > 0 && f.place && f.place !== "top") lines.push(ph.placement(f.place));
       describeScreen(lines, gs, frameRect(f), widths, lang);
     });
     if (loose.length && !only) {

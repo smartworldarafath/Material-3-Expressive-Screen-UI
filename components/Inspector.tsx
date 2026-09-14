@@ -24,24 +24,47 @@ import {
   VARIANTS,
   Variant,
   actionSlotsOf,
+  TRACK_DEFAULT,
+  TRACK_MAX,
+  TRACK_MIN,
+  maxRingThickness,
+  progressThickness,
   contentWidth,
   defaultTabsFor,
   framePresetOf,
+  CardAlign,
+  cardContentAlignOf,
+  cardDefaultFillOf,
   cardFillOf,
+  cardImageMaxOf,
+  cardImagePosOf,
+  cardImageSizeOf,
+  cardLayoutOf,
+  cardLayoutPatch,
+  cardTextColorOf,
+  CARD_IMAGE_MIN,
   frameSizeOf,
   halfWidth,
   frameIconOf,
+  isPhoneFrame,
+  isWideRail,
+  onToken,
   toggleIcon,
   iconSlotsOf,
   setIconSlot,
+  removeTabPatch,
+  tabCountPatch,
   variantStyle,
+  scaleR,
+  Place,
+  AlignKind,
 } from "@/lib/tokens";
 import { IconPicker } from "./IconPicker";
 import { Icon } from "./M3Node";
-import { ButtonRun, CornerIcon, Field, IconBtn, Section, Segmented, SizePresets, Slider, TidyButton, TidyState, Toggle, TokenChips } from "./ui";
+import { ButtonRun, CardLayoutPicker, CornerIcon, Field, IconBtn, Section, Segmented, SizePresets, Slider, TextTokenChips, TidyButton, TidyState, Toggle, TokenChips } from "./ui";
 import { AiWriteBtn } from "./AiPanel";
 import { popHistory } from "@/lib/ai";
-import { KIND_TEXT, SWIPE_TEXT, TRANSITION_TEXT, t, useLang } from "@/lib/i18n";
+import { KIND_TEXT, SWIPE_TEXT, TRANSITION_TEXT, UIKey, t, useLang } from "@/lib/i18n";
 
 /** A text field for a web address: what is typed stays in the box, and only a complete
  *  http(s) address (or an emptied box) reaches the part. */
@@ -189,6 +212,7 @@ export function FrameSizePicker({
       options={[
         { key: "phone", icon: "smartphone", label: compact ? undefined : t("phoneFrame", lang), title: t("phoneFrame", lang) },
         { key: "watch", icon: "watch", label: compact ? undefined : t("watchFrame", lang), title: t("watchFrame", lang) },
+        { key: "tab", icon: "tablet_android", label: compact ? undefined : t("tabFrame", lang), title: t("tabFrame", lang) },
         { key: "desktop", icon: "desktop_windows", label: compact ? undefined : t("desktopFrame", lang), title: t("desktopFrame", lang) },
       ]}
       value={framePresetOf(frame)}
@@ -349,6 +373,7 @@ export function FrameInspector({
   frames,
   tidy,
   onTidy,
+  onPlace,
   ai,
   onSize,
 }: {
@@ -364,6 +389,8 @@ export function FrameInspector({
   /** what the tidy button offers: tidy the screen, undo the last tidy, or nothing (already tidy) */
   tidy: TidyState;
   onTidy: () => void;
+  /** sets where Tidy puts the body of this screen, and tidies */
+  onPlace: (place: Place) => void;
   ai: AiHooks;
   onSize: (preset: FramePreset) => void;
 }) {
@@ -435,7 +462,7 @@ export function FrameInspector({
         <TokenChips value={frame.bg ?? "surface"} onChange={(bg) => onChange({ bg })} p={p} />
       </Section>
       <Section id="frame-tidy" icon="align_space_even" title={t("tidy", lang)} p={p}>
-        <TidyButton state={tidy} onClick={onTidy} p={p} />
+        <TidyButton state={tidy} onClick={onTidy} p={p} place={frame.place} onPlace={onPlace} />
       </Section>
       {frames.length > 1 && (
         <Section id="frame-swipe" icon="swipe" title={t("swipeTo", lang)} p={p}>
@@ -511,6 +538,79 @@ export function FrameInspector({
   );
 }
 
+/** A small picture of what an alignment does: a dashed box for the reference (the screen's
+ *  body for one part, the selection for several) and two bars placed the way the parts will be;
+ *  spacing evenly shows three bars with equal gaps. */
+function AlignGlyph({ kind, color, faint }: { kind: AlignKind; color: string; faint: string }) {
+  const bars: [number, number, number, number][] =
+    kind === "left" ? [[4, 7, 16, 6], [4, 15, 10, 6]]
+    : kind === "centerH" ? [[12, 7, 16, 6], [15, 15, 10, 6]]
+    : kind === "right" ? [[20, 7, 16, 6], [26, 15, 10, 6]]
+    : kind === "distributeH" ? [[4, 8, 6, 12], [17, 8, 6, 12], [30, 8, 6, 12]]
+    : kind === "top" ? [[12, 4, 6, 14], [22, 4, 6, 8]]
+    : kind === "centerV" ? [[12, 7, 6, 14], [22, 10, 6, 8]]
+    : kind === "bottom" ? [[12, 10, 6, 14], [22, 16, 6, 8]]
+    : [[14, 4, 12, 4], [14, 12, 12, 4], [14, 20, 12, 4]];
+  return (
+    <svg width={40} height={28} viewBox="0 0 40 28" aria-hidden>
+      <rect x={1} y={1} width={38} height={26} rx={3} fill="none" stroke={faint} strokeWidth={1} strokeDasharray="3 2" />
+      {bars.map(([x, y, w, h], i) => (
+        <rect key={i} x={x} y={y} width={w} height={h} rx={1.5} fill={color} />
+      ))}
+    </svg>
+  );
+}
+
+/** The alignment controls: one row for left / centre / right, one for top / middle / bottom,
+ *  each ending in "space evenly", which needs at least two parts. One part lines up with its
+ *  screen's body; several line up with each other. Each button draws its result. */
+function AlignSection({ single, onAlign, p }: { single: boolean; onAlign: (kind: AlignKind) => void; p: Palette }) {
+  const lang = useLang();
+  const rows: [AlignKind, UIKey][][] = [
+    [["left", "alignLeft"], ["centerH", "alignCenterH"], ["right", "alignRight"], ["distributeH", "distributeH"]],
+    [["top", "alignTop"], ["centerV", "alignCenterV"], ["bottom", "alignBottom"], ["distributeV", "distributeV"]],
+  ];
+  return (
+    <Section id="align" icon="align_horizontal_left" title={t("align", lang)} p={p}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        {rows.map((row, i) => (
+          <ButtonRun key={i}>
+            {row.map(([kind, key], j) => {
+              const off = single && kind.startsWith("distribute");
+              const outer = 22;
+              const inner = 8;
+              return (
+                <button
+                  key={kind}
+                  onClick={() => onAlign(kind)}
+                  disabled={off}
+                  title={t(key, lang)}
+                  aria-label={t(key, lang)}
+                  className="m3-press"
+                  style={{
+                    flex: 1,
+                    height: 44,
+                    border: "none",
+                    borderRadius: `${j === 0 ? outer : inner}px ${j === row.length - 1 ? outer : inner}px ${j === row.length - 1 ? outer : inner}px ${j === 0 ? outer : inner}px`,
+                    background: p.surfaceContainerHigh,
+                    cursor: off ? "default" : "pointer",
+                    display: "grid",
+                    placeItems: "center",
+                    opacity: off ? 0.38 : 1,
+                  }}
+                >
+                  <AlignGlyph kind={kind} color={off ? p.onSurfaceVariant : p.primary} faint={p.outline} />
+                </button>
+              );
+            })}
+          </ButtonRun>
+        ))}
+        <div style={{ fontSize: 12, lineHeight: 1.5, color: p.onSurfaceVariant, padding: "2px 6px 0" }}>{t(single ? "alignHintOne" : "alignHintMany", lang)}</div>
+      </div>
+    </Section>
+  );
+}
+
 export function Inspector({
   ai,
   item,
@@ -522,8 +622,10 @@ export function Inspector({
   onDuplicate,
   multi,
   grouped,
+  railStandalone = false,
   onGroup,
   onUngroup,
+  onAlign,
 }: {
   /** the AI button beside the behavior field */
   ai: AiHooks;
@@ -538,8 +640,12 @@ export function Inspector({
   multi: number;
   /** the selection is exactly one hand-made group */
   grouped?: boolean;
+  /** Modal expansion is available only when this rail owns its group. */
+  railStandalone?: boolean;
   onGroup?: () => void;
   onUngroup?: () => void;
+  /** lines the selected parts up with each other, or spaces them evenly */
+  onAlign?: (kind: AlignKind) => void;
 }) {
   const lang = useLang();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -603,6 +709,7 @@ export function Inspector({
             </span>
             <IconBtn icon="delete" p={p} danger onClick={onDelete} title={t("deleteSelection", lang)} size={32} />
           </div>
+          {onAlign && <AlignSection single={false} onAlign={onAlign} p={p} />}
           {grouped ? bigBtn("ungroup", t("ungroup", lang), onUngroup) : bigBtn("group_work", t("makeGroup", lang), onGroup)}
           <div style={{ marginTop: 10, fontSize: 12, lineHeight: 1.5, color: p.onSurfaceVariant, padding: "0 6px" }}>
             {grouped ? t("groupEditNote", lang) : `${t("groupHint", lang)} (Ctrl+G)`}
@@ -691,12 +798,7 @@ export function Inspector({
   const tabs: NavTab[] = item.tabs ?? [];
   const variants = spec.hasVariant ? variantsOf(item.kind) : [];
 
-  const setTabCount = (n: number) => {
-    const next: NavTab[] = [];
-    const defaults = defaultTabsFor(item.kind);
-    for (let i = 0; i < n; i++) next.push(tabs[i] ? { ...tabs[i] } : { ...defaults[i % defaults.length] });
-    onChange({ tabs: next, selected: item.selected !== undefined && item.selected >= n ? undefined : item.selected });
-  };
+  const setTabCount = (n: number) => onChange(tabCountPatch(item, n, defaultTabsFor(item.kind)));
   /** entries of a tab row have no icon; toolbar buttons have no label */
   const tabIcons = item.kind !== "tabs" && item.kind !== "select";
   const tabLabels = item.kind !== "toolbar";
@@ -706,7 +808,11 @@ export function Inspector({
     onChange({ tabs: tabs.map((t, j) => (j === i ? { ...t, label } : t)) });
   /** bars, rails and tab rows show one destination as selected */
   const isSelect = item.kind === "select";
+  /** options and tab rows grow one row at a time; bars, rails and menus keep the fixed counts M3 allows */
+  const growsFreely = isSelect || item.kind === "tabs";
   const hasSelected = item.kind === "bottomNav" || item.kind === "navRail" || item.kind === "tabs" || isSelect;
+  /** drops one row; the selection and the per-tab tap targets follow their rows */
+  const removeOption = (i: number) => onChange(removeTabPatch(item, i));
   /* a dropdown may start with nothing chosen; bars always show one destination */
   const selectedTab = isSelect && item.selected === undefined ? -1 : Math.min(item.selected ?? 0, Math.max(0, tabs.length - 1));
 
@@ -775,6 +881,8 @@ export function Inspector({
         </div>
       )}
 
+      {onAlign && !editOn && <AlignSection single onAlign={onAlign} p={p} />}
+
       {(spec.hasLabel || spec.hasSupporting) && (
         <Section id="text" icon="title" title={t("text", lang)} p={p}>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -800,27 +908,54 @@ export function Inspector({
               </div>
             )}
             {spec.hasSupporting && !editOn && (
+              /* a card's body is a paragraph: the field wraps and grows with it, and the canvas wraps the text itself */
               <Field
                 value={item.supporting ?? ""}
                 onChange={(supporting) => onChange({ supporting })}
                 placeholder={item.kind === "snackbar" ? t("action", lang) : t("supporting", lang)}
                 p={p}
                 icon="notes"
+                multiline={item.kind === "card"}
+                rows={1}
+                grow={item.kind === "card"}
               />
+            )}
+            {item.kind === "card" && !editOn && (
+              <>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 2 }}>
+                  <span style={{ flex: 1, fontSize: 12, fontWeight: 600, color: p.onSurfaceVariant }}>{t("textPosition", lang)}</span>
+                  <Segmented<CardAlign>
+                    options={[
+                      { key: "start", icon: "vertical_align_top", title: t("textTop", lang) },
+                      { key: "center", icon: "vertical_align_center", title: t("textMiddle", lang) },
+                      { key: "end", icon: "vertical_align_bottom", title: t("textBottom", lang) },
+                    ]}
+                    value={cardContentAlignOf(item)}
+                    onChange={(contentAlign) => onChange({ contentAlign })}
+                    p={p}
+                    height={32}
+                    grow={false}
+                  />
+                </div>
+                <div style={{ fontSize: 12, fontWeight: 600, color: p.onSurfaceVariant }}>{t("textColor", lang)}</div>
+                <TextTokenChips value={item.textColor} auto={cardTextColorOf(item, p)} onChange={(textColor) => onChange({ textColor })} p={p} />
+              </>
             )}
           </div>
         </Section>
       )}
 
       {spec.hasTabs && !editOn && (
-        <Section id="tabs" icon={isSelect ? "list" : "view_column"} title={t(isSelect ? "options" : "tabs", lang)} p={p}>
-          <Segmented
-            options={(item.kind === "toolbar" ? [2, 3, 4, 5, 6] : [2, 3, 4, 5]).map((n) => ({ key: String(n), label: String(n) }))}
-            value={String(tabs.length)}
-            onChange={(k) => setTabCount(Number(k))}
-            p={p}
-            height={36}
-          />
+        <Section id="tabs" icon={isSelect ? "list" : "view_column"} title={t(isSelect ? "options" : "tabs", lang)} p={p} onToggle={(open) => { if (!open && activeSlot?.key.startsWith("tab:")) setPickerOpen(false); }}>
+          {!growsFreely && (
+            <Segmented
+              options={(item.kind === "toolbar" ? [2, 3, 4, 5, 6] : [2, 3, 4, 5]).map((n) => ({ key: String(n), label: String(n) }))}
+              value={String(tabs.length)}
+              onChange={(k) => setTabCount(Number(k))}
+              p={p}
+              height={36}
+            />
+          )}
           <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 10 }}>
             {tabs.map((tab, i) => {
               const on = slotKey === `tab:${i}` && pickerOpen;
@@ -840,10 +975,11 @@ export function Inspector({
                   <button
                     onClick={() => {
                       setSlotKey(`tab:${i}`);
-                      setPickerOpen(true);
+                      setPickerOpen(!on);
                     }}
                     title={t("changeIcon", lang)}
                     aria-label={t("changeIcon", lang)}
+                    aria-expanded={on}
                     className="m3-press"
                     style={{
                       width: 40,
@@ -865,18 +1001,47 @@ export function Inspector({
                   {tabIcons && tab.icon && (
                     <IconBtn icon="close" p={p} size={40} onClick={() => onChange(setIconSlot(item, `tab:${i}`, null))} title={t("noIcon", lang)} />
                   )}
+                  {growsFreely && tabs.length > 1 && (
+                    <IconBtn icon="close" p={p} size={40} onClick={() => removeOption(i)} title={t(isSelect ? "removeOption" : "removeTab", lang)} />
+                  )}
                 </div>
               );
             })}
           </div>
+          {growsFreely && (
+            <button
+              onClick={() => onChange({ tabs: [...tabs, { ...defaultTabsFor(item.kind)[tabs.length % defaultTabsFor(item.kind).length] }] })}
+              className="m3-press"
+              style={{ marginTop: 8, height: 40, width: "100%", borderRadius: 20, border: `1px solid ${p.outline}`, background: "transparent", color: p.primary, fontSize: 13, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}
+            >
+              <Icon name="add" size={18} />
+              {t(isSelect ? "addOption" : "addTab", lang)}
+            </button>
+          )}
+          {hasSelected && !isSelect && (
+            <div style={{ fontSize: 12, lineHeight: 1.5, color: p.onSurfaceVariant, padding: "8px 6px 0" }}>{t("selectedHint", lang)}</div>
+          )}
         </Section>
       )}
 
       {(item.kind === "image" || item.kind === "card") && !editOn && (
         <Section id="image" icon="image" title={t("image", lang)} p={p}>
           {item.kind === "card" && (
-            <div style={{ marginBottom: 10 }}>
-              <Toggle on={!item.noImage} onChange={(on) => onChange({ noImage: on ? undefined : true })} p={p} icon="image" label={t("imageArea", lang)} grow />
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 10 }}>
+              <CardLayoutPicker value={cardLayoutOf(item)} onChange={(layout) => onChange(cardLayoutPatch(layout))} p={p} />
+              {!item.noImage && cardImagePosOf(item) !== "background" && cardImageMaxOf(item) > CARD_IMAGE_MIN && (
+                /* the image area's one free dimension: its height on top, its width at a side; a card too small to leave room hides it */
+                <Slider
+                  icon={cardImagePosOf(item) === "top" ? "height" : "width"}
+                  title={t(cardImagePosOf(item) === "top" ? "height" : "width", lang)}
+                  value={cardImageSizeOf(item)}
+                  min={CARD_IMAGE_MIN}
+                  max={cardImageMaxOf(item)}
+                  step={4}
+                  onChange={(imageSize) => onChange({ imageSize })}
+                  p={p}
+                />
+              )}
             </div>
           )}
           <input
@@ -893,6 +1058,7 @@ export function Inspector({
               } catch {}
             }}
           />
+          {(!item.noImage || item.src) && (<>
           <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
             <button
               onClick={() => fileRef.current?.click()}
@@ -924,11 +1090,12 @@ export function Inspector({
           <div style={{ marginTop: 8 }}>
             <UrlField key={item.id} value={item.src && /^https?:\/\//.test(item.src) ? item.src : ""} onChange={(src) => onChange({ src })} placeholder={t("imageUrl", lang)} p={p} />
           </div>
+          </>)}
         </Section>
       )}
 
       {mainSlots.length > 0 && activeSlot && !item.src && (
-        <Section id="icon" icon="emoji_symbols" title={t("icon", lang)} p={p}>
+        <Section id="icon" icon="emoji_symbols" title={t("icon", lang)} p={p} onToggle={(open) => { if (!open && !activeSlot.key.startsWith("tab:")) setPickerOpen(false); }}>
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
             {mainSlots.map((s) =>
               slotBtn(
@@ -971,12 +1138,13 @@ export function Inspector({
           <IconPicker
             value={activeSlot.value}
             onChange={(icon) => change(setIconSlot(item, activeSlot.key, icon))}
+            onClose={() => setPickerOpen(false)}
             palette={p}
           />
         </div>
       )}
 
-      {variants.length > 0 && (
+      {variants.length > 0 && item.kind !== "card" && (
         <Section id="style" icon="palette" title={t("style", lang)} p={p}>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
             {variants.map((v) => (
@@ -1002,6 +1170,10 @@ export function Inspector({
             none={item.kind === "card"}
             noneOn={item.kind === "card" && !item.fill}
             onNone={() => onChange({ fill: undefined })}
+            noneColor={item.kind === "card" ? p[cardDefaultFillOf(item.variant)] : undefined}
+            noneTextColor={item.kind === "card" ? onToken(cardDefaultFillOf(item.variant), p) : undefined}
+            noneIcon={item.kind === "card" ? "restart_alt" : undefined}
+            noneLabel={item.kind === "card" ? t("defaultColor", lang) : undefined}
           />
           {item.kind === "listItem" && (
             <>
@@ -1081,9 +1253,64 @@ export function Inspector({
         </Section>
       )}
 
+      {item.kind === "navRail" && !editOn && (
+        <Section id="rail" icon="side_navigation" title={t("railState", lang)} p={p}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            {!isWideRail(item) ? (
+              <>
+                <div style={{ fontSize: 12, color: p.onSurfaceVariant }}>{t("railLegacy", lang)}</div>
+                <button
+                  type="button"
+                  onClick={() => onChange({ railExpanded: false })}
+                  className="m3-press"
+                  style={{ height: 40, width: "100%", borderRadius: 20, border: `1px solid ${p.outline}`, background: "transparent", color: p.primary, fontSize: 13, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}
+                >
+                  <Icon name="side_navigation" size={18} />
+                  {t("railUpgrade", lang)}
+                </button>
+              </>
+            ) : (
+              <>
+                <div role="group" aria-label={t("railState", lang)}>
+                  <Segmented
+                    options={[{ key: "collapsed", label: t("railCollapsed", lang) }, { key: "expanded", label: t("railExpanded", lang) }]}
+                    value={item.railExpanded ? "expanded" : "collapsed"}
+                    onChange={(v) => onChange({ railExpanded: v === "expanded" })}
+                    p={p}
+                  />
+                </div>
+                <div role="group" aria-label={t("railPresentation", lang)}>
+                  <div style={{ fontSize: 12, color: p.onSurfaceVariant, marginBottom: 6 }}>{t("railPresentation", lang)}</div>
+                  {railStandalone ? (
+                    <Segmented
+                      options={[{ key: "standard", label: t("railStandard", lang) }, { key: "modal", label: t("railModal", lang) }]}
+                      value={item.railModal ? "modal" : "standard"}
+                      onChange={(v) => onChange({ railExpanded: item.railExpanded ?? false, railModal: v === "modal" })}
+                      p={p}
+                    />
+                  ) : <div style={{ fontSize: 12, color: p.onSurfaceVariant }}>{t("railStandalone", lang)}</div>}
+                </div>
+              </>
+            )}
+          </div>
+        </Section>
+      )}
+
       {(spec.size || hasRadius) && !editOn && (
         <Section id="size" icon="straighten" title={t("size", lang)} p={p}>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {spec.hasWavy && (
+              <Slider
+                icon="line_weight"
+                title={t("trackThickness", lang)}
+                value={progressThickness(item)}
+                min={TRACK_MIN}
+                max={item.kind === "circularProgress" ? maxRingThickness(item.size ?? spec.w) : TRACK_MAX}
+                step={1}
+                onChange={(trackThickness) => onChange({ trackThickness: trackThickness === TRACK_DEFAULT ? undefined : trackThickness })}
+                p={p}
+              />
+            )}
             {spec.size && (
               <>
                 <Slider
@@ -1164,7 +1391,7 @@ export function Inspector({
                 )}
               </>
             )}
-            {hasRadius && (item.kind === "card" || item.kind === "image") && (
+            {hasRadius && item.kind === "image" && (
               <Slider
                 icon="rounded_corner"
                 title={t("cornerRadius", lang)}
@@ -1176,40 +1403,60 @@ export function Inspector({
                 p={p}
               />
             )}
-            {hasRadius && item.kind === "box" && (
-              <Toggle
-                on={!!item.corners}
-                onChange={(each) =>
-                  onChange(
-                    each
-                      ? { corners: { tl: item.radiusTop ?? 0, tr: item.radiusTop ?? 0, bl: item.radiusBottom ?? 0, br: item.radiusBottom ?? 0 } }
-                      : { corners: undefined, radiusTop: item.corners?.tl ?? item.radiusTop, radiusBottom: item.corners?.bl ?? item.radiusBottom },
-                  )
-                }
-                p={p}
-                icon="crop_free"
-                label={t("cornersEach", lang)}
-                grow
-              />
-            )}
-            {hasRadius && item.kind === "box" && item.corners && (
-              <>
-                {(["tl", "tr", "bl", "br"] as const).map((k) => (
-                  <Slider
-                    key={k}
-                    iconNode={<CornerIcon side={k} />}
-                    title={t(k === "tl" ? "cornerTl" : k === "tr" ? "cornerTr" : k === "bl" ? "cornerBl" : "cornerBr", lang)}
-                    value={item.corners![k]}
-                    min={0}
-                    max={40}
-                    step={1}
-                    onChange={(v) => onChange({ corners: { ...item.corners!, [k]: v } })}
+            {hasRadius && (item.kind === "card" || item.kind === "box") && (() => {
+              /* One radius for every corner until the author asks for each. The seeds match what the
+               * canvas draws: a box's unset side is 0, a card's unset radius is the scaled kind default.
+               * A box saved with different top and bottom radii opens straight in per-corner mode. */
+              const isBox = item.kind === "box";
+              const top = item.radiusTop ?? (isBox ? 0 : scaleR(spec.radius));
+              const bottom = isBox ? (item.radiusBottom ?? 0) : top;
+              const corners = item.corners ?? (isBox && top !== bottom ? { tl: top, tr: top, bl: bottom, br: bottom } : undefined);
+              return (
+                <>
+                  {!corners && (
+                    <Slider
+                      icon="rounded_corner"
+                      title={t("cornerRadius", lang)}
+                      value={top}
+                      min={0}
+                      max={48}
+                      step={1}
+                      onChange={(r) => onChange(isBox ? { radiusTop: r, radiusBottom: r } : { radiusTop: r })}
+                      p={p}
+                    />
+                  )}
+                  <Toggle
+                    on={!!corners}
+                    onChange={(each) =>
+                      onChange(
+                        each
+                          ? { corners: { tl: top, tr: top, bl: bottom, br: bottom } }
+                          : { corners: undefined, radiusTop: corners?.tl ?? top, radiusBottom: isBox ? (corners?.tl ?? top) : undefined },
+                      )
+                    }
                     p={p}
+                    icon="crop_free"
+                    label={t("cornersEach", lang)}
+                    grow
                   />
-                ))}
-              </>
-            )}
-            {hasRadius && (item.kind === "bottomNav" || item.kind === "navRail" || item.kind === "topAppBar" || (item.kind === "box" && !item.corners)) && (
+                  {corners &&
+                    (["tl", "tr", "bl", "br"] as const).map((k) => (
+                      <Slider
+                        key={k}
+                        iconNode={<CornerIcon side={k} />}
+                        title={t(k === "tl" ? "cornerTl" : k === "tr" ? "cornerTr" : k === "bl" ? "cornerBl" : "cornerBr", lang)}
+                        value={corners[k]}
+                        min={0}
+                        max={48}
+                        step={1}
+                        onChange={(v) => onChange({ corners: { ...corners, [k]: v } })}
+                        p={p}
+                      />
+                    ))}
+                </>
+              );
+            })()}
+            {hasRadius && (item.kind === "bottomNav" || item.kind === "navRail" || item.kind === "topAppBar") && (
               <>
                 {/* a rail's two sliders are its left and right sides; the fields are shared with the bars */}
                 <Slider
@@ -1242,6 +1489,35 @@ export function Inspector({
         <Section id="action" icon="ads_click" title={t("tapTo", lang)} p={p}>
           {actionSlots.length > 0 ? (
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {item.kind === "tabs" ? (
+                /* a tab row names its destinations in words and may have many: chips that wrap, not one long segment */
+                <div role="radiogroup" aria-label={t("tapTo", lang)} style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                  {actionSlots.map((s) => {
+                    const on = s.key === (actionSlot || actionSlots[0].key);
+                    const set = !!item.actions?.[s.key];
+                    return (
+                      <button
+                        key={s.key}
+                        onClick={() => setActionSlot(s.key)}
+                        title={s.label}
+                        role="radio"
+                        aria-checked={on}
+                        className="m3-press"
+                        style={{
+                          height: 32, padding: "0 12px", borderRadius: 8, maxWidth: "100%", cursor: "pointer", fontSize: 13, fontWeight: 600,
+                          border: `1px solid ${on ? "transparent" : p.outline}`,
+                          background: on ? p.primary : "transparent",
+                          color: on ? p.onPrimary : p.onSurfaceVariant,
+                          display: "inline-flex", alignItems: "center", gap: 6,
+                        }}
+                      >
+                        {set && <Icon name="ads_click" size={16} />}
+                        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : (
               <Segmented<string>
                 options={actionSlots.map((s) => ({
                   key: s.key,
@@ -1255,6 +1531,7 @@ export function Inspector({
                 p={p}
                 height={40}
               />
+              )}
               {(() => {
                 const key = actionSlot || actionSlots[0].key;
                 return (

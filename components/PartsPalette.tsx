@@ -17,13 +17,11 @@ export function PartsPalette({
   favorites,
   onToggleFavorite,
   onPartPointerDown,
-  overBin,
 }: {
   palette: Palette;
   favorites: Kind[];
   onToggleFavorite: (k: Kind) => void;
   onPartPointerDown: (e: React.PointerEvent, kind: Kind) => void;
-  overBin: boolean;
 }) {
   const lang = useLang();
   const [q, setQ] = useState("");
@@ -89,35 +87,6 @@ export function PartsPalette({
         )}
       </div>
 
-      {overBin && (
-        <div
-          style={{
-            position: "absolute",
-            inset: 0,
-            background: "rgba(179,38,30,0.10)",
-            display: "grid",
-            placeItems: "center",
-            pointerEvents: "none",
-            color: p.error,
-            borderRadius: "inherit",
-          }}
-        >
-          <div
-            style={{
-              width: 72,
-              height: 72,
-              borderRadius: 36,
-              background: p.errorContainer,
-              color: p.onErrorContainer,
-              display: "grid",
-              placeItems: "center",
-              boxShadow: "0 4px 14px rgba(0,0,0,0.14)",
-            }}
-          >
-            <Icon name="delete" size={34} />
-          </div>
-        </div>
-      )}
     </div>
   );
 }
