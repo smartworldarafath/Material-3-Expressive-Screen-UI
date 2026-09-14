@@ -1,0 +1,155 @@
+{
+  "groups": [
+    {
+      "id": "seed9",
+      "x": 432,
+      "y": 18,
+      "axis": "x",
+      "items": [
+        {
+          "id": "seed1",
+          "kind": "topAppBar",
+          "label": "Title",
+          "icon": "menu",
+          "variant": "filled",
+          "icon2": "more_vert",
+          "size": 412
+        }
+      ]
+    },
+    {
+      "id": "seed10",
+      "x": 448,
+      "y": 114,
+      "axis": "x",
+      "items": [
+        {
+          "id": "seed2",
+          "kind": "button",
+          "label": "Favorite",
+          "icon": "star",
+          "variant": "filled"
+        },
+        {
+          "id": "seed3",
+          "kind": "button",
+          "label": "Share",
+          "icon": "share",
+          "variant": "tonal"
+        }
+      ]
+    },
+    {
+      "id": "seed11",
+      "x": 448,
+      "y": 202,
+      "axis": "y",
+      "items": [
+        {
+          "id": "seed4",
+          "kind": "listItem",
+          "label": "Inbox",
+          "icon": "inbox",
+          "variant": "filled",
+          "supporting": "Supporting text",
+          "icon2": "chevron_right",
+          "size": 380
+        },
+        {
+          "id": "seed5",
+          "kind": "listItem",
+          "label": "Starred",
+          "icon": "star",
+          "variant": "filled",
+          "supporting": "Supporting text",
+          "icon2": "chevron_right",
+          "size": 380
+        },
+        {
+          "id": "seed6",
+          "kind": "listItem",
+          "label": "Archive",
+          "icon": "archive",
+          "variant": "filled",
+          "supporting": "Supporting text",
+          "icon2": "chevron_right",
+          "size": 380
+        }
+      ]
+    },
+    {
+      "id": "seed12",
+      "x": 772,
+      "y": 734,
+      "axis": "x",
+      "items": [
+        {
+          "id": "seed8",
+          "kind": "fab",
+          "label": "",
+          "icon": "edit",
+          "variant": "tonal",
+          "size": 56
+        }
+      ]
+    },
+    {
+      "id": "seed13",
+      "x": 432,
+      "y": 806,
+      "axis": "x",
+      "items": [
+        {
+          "id": "seed7",
+          "kind": "bottomNav",
+          "label": "",
+          "icon": null,
+          "variant": "filled",
+          "size": 412,
+          "tabs": [
+            {
+              "icon": "home",
+              "label": "Home"
+            },
+            {
+              "icon": "search",
+              "label": "Search"
+            },
+            {
+              "icon": "favorite",
+              "label": "Saved"
+            },
+            {
+              "icon": "settings",
+              "label": "Settings"
+            }
+          ],
+          "radiusTop": 0,
+          "radiusBottom": 0
+        }
+      ]
+    }
+  ],
+  "frames": [
+    {
+      "id": "seedF1",
+      "name": "Home",
+      "x": 432,
+      "y": 18
+    }
+  ],
+  "paletteKey": "purple",
+  "frame": "phone",
+  "title": "",
+  "brief": "",
+  "dynamicColor": false,
+  "theme": {
+    "dark": false,
+    "bothModes": false,
+    "contrast": "standard",
+    "shape": "rounded",
+    "font": "roboto",
+    "emphasized": false,
+    "motion": "standard"
+  }
+}

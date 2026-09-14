@@ -107,6 +107,7 @@ import { ThemeContext, ensureFontLoaded, ensureLangFontLoaded } from "@/lib/them
 import { BottomSheet, MobileActionBar, MobileInspector, MobileLang, MobileSettings } from "@/components/Mobile";
 import { ConfirmDialog, IconBtn, Segmented } from "@/components/ui";
 import { Lang, LangContext, SEED_TEXT, getLang, setGlobalLang, t, translateDefaultFrameName, translateDefaultText } from "@/lib/i18n";
+import { DEFAULT_CANVAS_DOC } from "@/lib/defaultCanvas";
 
 /** the screens while a model drafts: primary, tertiary and primary container, drifting */
 const DRAFT_GRADIENT = (p: Palette) => `linear-gradient(120deg, ${p.primaryContainer}, ${p.tertiaryContainer}, ${p.primary}, ${p.secondaryContainer}, ${p.primaryContainer})`;
@@ -386,12 +387,12 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
   /* ---------- document ---------- */
   const [lang, setLang] = useState<Lang>(initialLang);
   const [editAccess, setEditAccess] = useState<"checking" | "editable" | "readonly">("checking");
-  const [groups, setGroupState] = useState<Group[]>(() => seed(initialLang));
+  const [groups, setGroupState] = useState<Group[]>(() => DEFAULT_CANVAS_DOC.groups as Group[]);
   /* Enforce the standalone-modal rule for imports, grouping, undo and all edits. */
   const setGroups = useCallback((next: Group[] | ((prev: Group[]) => Group[])) => {
     setGroupState((prev) => constrainModalRails(typeof next === "function" ? next(prev) : next));
   }, []);
-  const [frames, setFrames] = useState<Frame[]>(() => [{ ...SEED_FRAMES[0], name: t("home", initialLang) }]);
+  const [frames, setFrames] = useState<Frame[]>(() => DEFAULT_CANVAS_DOC.frames as Frame[]);
   const [paletteKey, setPaletteKey] = useState("purple");
   const [customPalette, setCustomPalette] = useState<Palette | null>(null);
   const [dynamicColor, setDynamicColor] = useState(false);
@@ -693,8 +694,7 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
       setGlobalLang(initialLang);
       initialLangRef.current = initialLang;
       if (!d) {
-        setGroups(seed(initialLang));
-        setFrames([{ ...SEED_FRAMES[0], name: t("home", initialLang) }]);
+        applyDoc(DEFAULT_CANVAS_DOC, true);
         queueMicrotask(() => fitRef.current());
       }
     } catch {}
