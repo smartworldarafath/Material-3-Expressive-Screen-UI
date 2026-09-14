@@ -22,6 +22,8 @@ import {
   frameSizeOf,
   groupBounds,
   isPhoneFrame,
+  isWatchFrame,
+  isDesktopFrame,
   normalizeTheme,
   paletteOf,
 } from "./tokens";
@@ -1147,18 +1149,27 @@ const STYLE_NOTES_WEB: Record<Lang, Partial<Record<Kind, string>>> = {
 
 /* ---------- fixed phrases ---------- */
 
-/** what the screens are drawn for: phones only, desktops only, both, or no screens at all */
-type Viewport = "phone" | "desktop" | "mixed" | "free";
+/** what the screens are drawn for: phones only, desktops only, watches only, both, or no screens at all */
+type Viewport = "phone" | "desktop" | "watch" | "mixed" | "free";
 const viewportOf = (frames: Frame[], phone: boolean): Viewport => {
   if (!phone || frames.length === 0) return "free";
+  const watches = frames.filter(isWatchFrame).length;
+  if (watches === frames.length) return "watch";
   const phones = frames.filter(isPhoneFrame).length;
-  return phones === frames.length ? "phone" : phones === 0 ? "desktop" : "mixed";
+  if (phones === frames.length) return "phone";
+  const desktops = frames.filter(isDesktopFrame).length;
+  if (desktops === frames.length) return "desktop";
+  return "mixed";
 };
 /** a screen's size, written only when the document mixes sizes */
 const sizeLabel = (f: Frame, vp: Viewport, lang: Lang): string | undefined => {
   if (vp !== "mixed") return undefined;
   const { w, h } = frameSizeOf(f);
-  const kind = isPhoneFrame(f) ? { ja: "スマホ", en: "phone", zh: "手机", ko: "휴대전화" } : { ja: "デスクトップ", en: "desktop", zh: "桌面", ko: "데스크톱" };
+  const kind = isWatchFrame(f)
+    ? { ja: "Pixel Watch", en: "watch", zh: "手表", ko: "워치" }
+    : isPhoneFrame(f)
+      ? { ja: "スマホ", en: "phone", zh: "手机", ko: "휴대전화" }
+      : { ja: "デスクトップ", en: "desktop", zh: "桌面", ko: "데스크톱" };
   return `${kind[lang]} ${w}×${h}`;
 };
 
@@ -1170,15 +1181,17 @@ const PH = {
     titleAll: (n: number) => (n > 1 ? "このアプリ" : "この画面"),
     target: (vp: Viewport, pl: Platform, dark: boolean, both: boolean) =>
       `${
-        vp === "phone"
-          ? "想定はスマホの縦画面（412×892dp）で、"
-          : vp === "desktop"
-            ? pl === "web"
-              ? "想定はデスクトップのブラウザ画面（基準 1280×800）で、"
-              : "想定は横向きのタブレット画面（基準 1280×800dp）で、"
-            : vp === "mixed"
-              ? `スマホの縦画面（412×892）と${pl === "web" ? "デスクトップのブラウザ画面" : "横向きのタブレット画面"}（1280×800）の両方を想定し、同じ名前の画面は 1 つの画面の 2 つの幅として、レスポンシブに実装します。`
-              : "レイアウトは自由配置で、"
+        vp === "watch"
+          ? "想定は円形スマートウォッチ画面（Google Pixel Watch / Wear OS、384×384dp）で、"
+          : vp === "phone"
+            ? "想定はスマホの縦画面（412×892dp）で、"
+            : vp === "desktop"
+              ? pl === "web"
+                ? "想定はデスクトップのブラウザ画面（基準 1280×800）で、"
+                : "想定は横向きのタブレット画面（基準 1280×800dp）で、"
+              : vp === "mixed"
+                ? `スマホの縦画面（412×892）や${pl === "web" ? "デスクトップのブラウザ画面" : "横向きのタブレット画面"}（1280×800）、スマートウォッチ画面などを想定し、同じ名前の画面は 1 つの画面の異なる幅として、レスポンシブに実装します。`
+                : "レイアウトは自由配置で、"
       }${both ? "ライトモードとダークモードの両方に対応し、端末のシステム設定に従って切り替えます。" : dark ? "ダークモード固定です。" : "ライトモード固定です。"}`,
     platform: (pl: Platform) => (pl === "web" ? "実装先は Web（ブラウザで動くアプリ）です。" : "実装先は Android（ネイティブアプリ）です。"),
     schemeHead: (dark: boolean) => (dark ? "ダークスキーム:" : "ライトスキーム:"),
@@ -1212,15 +1225,17 @@ const PH = {
     titleAll: (n: number) => (n > 1 ? "this app" : "this screen"),
     target: (vp: Viewport, pl: Platform, dark: boolean, both: boolean) =>
       `${
-        vp === "phone"
-          ? "Target a portrait phone screen (412×892dp)"
-          : vp === "desktop"
-            ? pl === "web"
-              ? "Target a desktop browser viewport (1280×800 reference)"
-              : "Target a landscape tablet screen (1280×800dp reference)"
-            : vp === "mixed"
-              ? `Target both a portrait phone (412×892) and a ${pl === "web" ? "desktop browser viewport" : "landscape tablet"} (1280×800); screens that share a name are one screen at two widths, so build them responsively`
-              : "The layout is free-form"
+        vp === "watch"
+          ? "Target a circular smartwatch screen (Google Pixel Watch / Wear OS, 384×384dp)"
+          : vp === "phone"
+            ? "Target a portrait phone screen (412×892dp)"
+            : vp === "desktop"
+              ? pl === "web"
+                ? "Target a desktop browser viewport (1280×800 reference)"
+                : "Target a landscape tablet screen (1280×800dp reference)"
+              : vp === "mixed"
+                ? `Target multiple form factors (portrait phone 412×892, ${pl === "web" ? "desktop browser viewport" : "landscape tablet"} 1280×800, smartwatch 384×384); screens that share a name are one screen at different form factors, so build them responsively`
+                : "The layout is free-form"
       }, ${both ? "supporting both light and dark mode and following the device's system setting" : `${dark ? "dark" : "light"} mode only`}.`,
     platform: (pl: Platform) => (pl === "web" ? "Build it for the web, as an app that runs in the browser." : "Build it for Android, as a native app."),
     schemeHead: (dark: boolean) => (dark ? "Dark scheme:" : "Light scheme:"),
@@ -1254,15 +1269,17 @@ const PH = {
     titleAll: (n: number) => (n > 1 ? "这个应用" : "这个屏幕"),
     target: (vp: Viewport, pl: Platform, dark: boolean, both: boolean) =>
       `${
-        vp === "phone"
-          ? "目标为竖屏手机（412×892dp）"
-          : vp === "desktop"
-            ? pl === "web"
-              ? "目标为桌面浏览器视口（以 1280×800 为基准）"
-              : "目标为横屏平板（以 1280×800dp 为基准）"
-            : vp === "mixed"
-              ? `同时面向竖屏手机（412×892）和${pl === "web" ? "桌面浏览器视口" : "横屏平板"}（1280×800）；同名的屏幕是同一个屏幕的两种宽度，请做成响应式`
-              : "布局为自由排布"
+        vp === "watch"
+          ? "目标为圆形智能手表屏幕（Google Pixel Watch / Wear OS，384×384dp）"
+          : vp === "phone"
+            ? "目标为竖屏手机（412×892dp）"
+            : vp === "desktop"
+              ? pl === "web"
+                ? "目标为桌面浏览器视口（以 1280×800 为基准）"
+                : "目标为横屏平板（以 1280×800dp 为基准）"
+              : vp === "mixed"
+                ? `同时面向多种形态（竖屏手机 412×892、${pl === "web" ? "桌面浏览器视口" : "横屏平板"} 1280×800、智能手表 384×384）；同名的屏幕是同一个屏幕的不同形态，请做成响应式`
+                : "布局为自由排布"
       }，${both ? "同时支持浅色和深色模式，并跟随设备的系统设置切换" : `只做${dark ? "深色" : "浅色"}模式`}。`,
     platform: (pl: Platform) => (pl === "web" ? "实现目标是 Web（在浏览器中运行的应用）。" : "实现目标是 Android（原生应用）。"),
     schemeHead: (dark: boolean) => (dark ? "深色配色：" : "浅色配色："),
@@ -1294,7 +1311,7 @@ const PH = {
     intro: (title: string, brief: string) => `Material 3 Expressive 디자인으로 구현해 주세요: ${title}.${brief ? ` ${trimEnd(brief)}.` : ""}`,
     titleOnly: (name: string) => `${name} 화면`,
     titleAll: (n: number) => (n > 1 ? "이 앱" : "이 화면"),
-    target: (vp: Viewport, pl: Platform, dark: boolean, both: boolean) => `${vp === "phone" ? "세로형 휴대전화 화면(412×892dp)을 대상으로 하며" : vp === "desktop" ? `${pl === "web" ? "데스크톱 브라우저" : "가로형 태블릿"} 화면(1280×800 기준)을 대상으로 하며` : vp === "mixed" ? `세로형 휴대전화(412×892)와 ${pl === "web" ? "데스크톱 브라우저" : "가로형 태블릿"}(1280×800)을 모두 지원하며, 이름이 같은 화면은 서로 다른 너비의 동일한 화면이므로 반응형으로 구현하고` : "레이아웃은 자유 배치이며"}, ${both ? "라이트 모드와 다크 모드를 모두 지원하고 기기의 시스템 설정을 따른다" : `${dark ? "다크" : "라이트"} 모드만 지원한다`}.`,
+    target: (vp: Viewport, pl: Platform, dark: boolean, both: boolean) => `${vp === "watch" ? "원형 스마트워치 화면(Google Pixel Watch / Wear OS, 384×384dp)을 대상으로 하며" : vp === "phone" ? "세로형 휴대전화 화면(412×892dp)을 대상으로 하며" : vp === "desktop" ? `${pl === "web" ? "데스크톱 브라우저" : "가로형 태블릿"} 화면(1280×800 기준)을 대상으로 하며` : vp === "mixed" ? `세로형 휴대전화(412×892), ${pl === "web" ? "데스크톱 브라우저" : "가로형 태블릿"}(1280×800), 스마트워치(384×384) 등 다양한 폼팩터를 지원하며, 이름이 같은 화면은 반응형으로 구현하고` : "레이아웃은 자유 배치이며"}, ${both ? "라이트 모드와 다크 모드를 모두 지원하고 기기의 시스템 설정을 따른다" : `${dark ? "다크" : "라이트"} 모드만 지원한다`}.`,
     platform: (pl: Platform) => (pl === "web" ? "브라우저에서 실행되는 웹 앱으로 구현한다." : "Android 네이티브 앱으로 구현한다."),
     schemeHead: (dark: boolean) => (dark ? "다크 색상 구성:" : "라이트 색상 구성:"),
     sketch: "아래 화면 구성은 의도를 전달하는 대략적인 스케치이며 완성 사양이 아니다. 정적인 그림처럼 복제하지 말고 이 종류의 제품에 일반적으로 필요한 기능을 갖춘 실제 사용 가능한 앱으로 완성한다.",

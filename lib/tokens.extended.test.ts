@@ -21,6 +21,9 @@ import {
   DESKTOP_H,
   PHONE_R,
   DESKTOP_R,
+  WATCH_W,
+  WATCH_H,
+  WATCH_R,
   R_FULL,
   R_INNER,
   RAIL_W,
@@ -37,10 +40,13 @@ import {
   isExpanded,
   frameSizeOf,
   isPhoneFrame,
+  isWatchFrame,
+  isDesktopFrame,
   framePresetOf,
   framePresetPatch,
   frameRect,
   frameRadius,
+  frameIconOf,
   carryItemSize,
   connectSpecOf,
   canJoin,
@@ -140,6 +146,7 @@ describe("isExpanded", () => {
 describe("frame helpers", () => {
   const phone: Frame = { id: "p", name: "P", x: 0, y: 0 };
   const desktop: Frame = { id: "d", name: "D", x: 100, y: 100, w: DESKTOP_W, h: DESKTOP_H };
+  const watch: Frame = { id: "w", name: "W", x: 50, y: 50, w: WATCH_W, h: WATCH_H };
 
   it("frameSizeOf fills in phone defaults when w/h are missing", () => {
     expect(frameSizeOf(phone)).toEqual({ w: PHONE_W, h: PHONE_H });
@@ -147,31 +154,55 @@ describe("frame helpers", () => {
 
   it("frameSizeOf uses explicit w/h when present", () => {
     expect(frameSizeOf(desktop)).toEqual({ w: DESKTOP_W, h: DESKTOP_H });
+    expect(frameSizeOf(watch)).toEqual({ w: WATCH_W, h: WATCH_H });
   });
 
-  it("isPhoneFrame detects phone vs desktop dimensions", () => {
+  it("isPhoneFrame detects phone vs desktop vs watch dimensions", () => {
     expect(isPhoneFrame(phone)).toBe(true);
     expect(isPhoneFrame(desktop)).toBe(false);
+    expect(isPhoneFrame(watch)).toBe(false);
   });
 
-  it("framePresetOf maps to phone/desktop string", () => {
+  it("isWatchFrame detects watch dimensions", () => {
+    expect(isWatchFrame(watch)).toBe(true);
+    expect(isWatchFrame(phone)).toBe(false);
+    expect(isWatchFrame(desktop)).toBe(false);
+  });
+
+  it("isDesktopFrame detects desktop dimensions", () => {
+    expect(isDesktopFrame(desktop)).toBe(true);
+    expect(isDesktopFrame(phone)).toBe(false);
+    expect(isDesktopFrame(watch)).toBe(false);
+  });
+
+  it("framePresetOf maps to phone/desktop/watch string", () => {
     expect(framePresetOf(phone)).toBe("phone");
     expect(framePresetOf(desktop)).toBe("desktop");
+    expect(framePresetOf(watch)).toBe("watch");
   });
 
   it("framePresetPatch returns the right w/h pair", () => {
     expect(framePresetPatch("phone")).toEqual({ w: undefined, h: undefined });
     expect(framePresetPatch("desktop")).toEqual({ w: DESKTOP_W, h: DESKTOP_H });
+    expect(framePresetPatch("watch")).toEqual({ w: WATCH_W, h: WATCH_H });
   });
 
   it("frameRect maps x/y to l/t and adds w/h to r/b", () => {
     expect(frameRect(phone)).toEqual({ l: 0, t: 0, r: PHONE_W, b: PHONE_H });
     expect(frameRect(desktop)).toEqual({ l: 100, t: 100, r: 100 + DESKTOP_W, b: 100 + DESKTOP_H });
+    expect(frameRect(watch)).toEqual({ l: 50, t: 50, r: 50 + WATCH_W, b: 50 + WATCH_H });
   });
 
-  it("frameRadius returns PHONE_R for phones and DESKTOP_R otherwise", () => {
+  it("frameRadius returns PHONE_R for phones, WATCH_R for watch, and DESKTOP_R otherwise", () => {
     expect(frameRadius(phone)).toBe(PHONE_R);
     expect(frameRadius(desktop)).toBe(DESKTOP_R);
+    expect(frameRadius(watch)).toBe(WATCH_R);
+  });
+
+  it("frameIconOf returns watch, smartphone, or desktop_windows", () => {
+    expect(frameIconOf(watch)).toBe("watch");
+    expect(frameIconOf(phone)).toBe("smartphone");
+    expect(frameIconOf(desktop)).toBe("desktop_windows");
   });
 });
 
