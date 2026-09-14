@@ -67,6 +67,7 @@ A phone screen is **412 × 892**; a desktop screen is **1280 × 800** (set `w` a
 - `note` (optional): what the screen is for, in a sentence. It goes into the prompt.
 - `bg` (optional): background token, one of `surface | surfaceContainerLow | surfaceContainer | surfaceContainerHigh | surfaceContainerHighest | primaryContainer | secondaryContainer | tertiaryContainer | primary | inverseSurface`.
 - `swipe` (optional): screens reached by swiping `left | right | up | down`.
+- `place` (optional): where the body rows sit between the bars when the screen is tidied: `top` (default) | `center` | `bottom` | `spread`. Goes into the prompt too.
 
 ### Parts (`groups`)
 
@@ -99,8 +100,8 @@ Sizes are in dp; `size` is the width unless noted. Content width inside the phon
 |---|---|---|---|
 | `topAppBar` | top app bar | `label` title, `icon` leading, `icon2` trailing, `actions` with keys `icon` / `icon2` | 412 × 88, at the top |
 | `bottomNav` | navigation bar | `tabs` (3–5 of `{icon,label}`), `selected` index, `actions` with keys `tab:0`… | 412 × 104, at the bottom |
-| `navRail` | navigation rail (desktop) | `tabs`, `selected` | 80 wide, full height |
-| `tabs` | tab row | `tabs`, `selected` | 412 × 48 |
+| `navRail` | navigation rail (desktop) | `tabs`, `selected`, `railExpanded` false / true for M3 Expressive collapsed / expanded, `railModal` for modal expansion, `size2` height | 96 collapsed / 220 expanded; omit both rail fields for the original 80-wide rail |
+| `tabs` | tab row | `tabs` (any count; six or more scroll horizontally), `selected` | 412 × 48 |
 | `searchBar` | search bar | `label` placeholder, `icon2` trailing | 380 × 56 |
 | `button` | button | `label`, `icon`, `variant`, `action`, `toggle`, `size` width (omit for text-sized; 380 fills the content width, 182 is half) | text-sized × 56 |
 | `iconButton` | icon button | `icon`, `variant`, `action` | 48 × 48 |
@@ -128,8 +129,11 @@ Sizes are in dp; `size` is the width unless noted. Content width inside the phon
 | `divider` | divider | | 380 × 16 |
 | `badge` | badge | `label` (empty for a dot) | |
 | `loadingIndicator` | M3 Expressive loading indicator | `contained` | 48 × 48 |
-| `linearProgress` | linear progress | `value` or omit for indeterminate, `wavy` | 380 × 24 |
-| `circularProgress` | circular progress | `value` or omit, `wavy` | 48 × 48 |
+| `linearProgress` | linear progress | `value` or omit for indeterminate, `wavy`, `trackThickness` 2 to 16 (omit for 4) | 380 × 24 |
+| `circularProgress` | circular progress | `value` or omit, `wavy`, `trackThickness` 2 to 16, capped at a sixth of `size` | 48 × 48 |
+
+For `navRail`, `railExpanded` is the initial state; the preview's menu button toggles it. With `railModal: true`, an expanded rail covers the content with a scrim while the body keeps a 96dp navigation slot. Otherwise, reserve the rail's current width beside the content. Keep `tabs`, `selected`, and `actions` on the same item in either state.
+Modal presentation requires the rail to be the only item in its group. The editor collapses modal rails and switches them to standard presentation when they are grouped with other items, including imported mixed groups. Ungroup the rail before enabling modal presentation again. The editor controls are desktop-only.
 
 Fields that any part may carry:
 

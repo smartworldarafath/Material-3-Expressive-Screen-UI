@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "motion/react";
-import { FrameMode, Palette } from "@/lib/tokens";
+import { FrameMode, Palette, Place } from "@/lib/tokens";
 import { IconBtn, Segmented, TidyButton, TidyState } from "./ui";
 import { ShareButton } from "./ShareMenu";
 import { Icon } from "./M3Node";
@@ -48,6 +48,7 @@ function Pill({ p, children }: { p: Palette; children: React.ReactNode }) {
         gap: 4,
         padding: 6,
         borderRadius: 28,
+        userSelect: "none",
         background: p.surfaceContainerLow,
         boxShadow: "0 2px 10px rgba(0,0,0,0.10), 0 0 0 1px rgba(0,0,0,0.04)",
         pointerEvents: "auto",
@@ -80,6 +81,8 @@ export function Toolbar({
   onLangSheet,
   tidy,
   onTidy,
+  place,
+  onPlace,
   note,
   onSaveProject,
   onOpenProject,
@@ -115,6 +118,8 @@ export function Toolbar({
   /** the tidy button for the screen being worked on; absent when no screen is in play */
   tidy?: TidyState;
   onTidy?: () => void;
+  place?: Place;
+  onPlace?: (place: Place) => void;
   /** a short message shown beside the tidy button for a moment */
   note?: { text: string; icon: string } | null;
   onSaveProject?: () => void;
@@ -182,16 +187,17 @@ export function Toolbar({
   }
   return (
     <>
+      {/* notices sit just under the header pills so they are seen where the eye already is */}
       <div
         style={{
-          position: "fixed",
-          right: rightInset + 22,
-          bottom: 22,
-          zIndex: 40,
-          transition: "right 260ms cubic-bezier(0.2, 0, 0, 1)",
+          position: "absolute",
+          left: 0,
+          right: 0,
+          top: 96,
           display: "flex",
-          gap: 10,
-          alignItems: "center",
+          justifyContent: "center",
+          pointerEvents: "none",
+          zIndex: 40,
         }}
       >
         <div role="status" aria-live="polite" style={{ display: "contents" }}>
@@ -199,9 +205,9 @@ export function Toolbar({
             {note && (
             <motion.div
               key="note"
-              initial={{ opacity: 0, x: 8, scale: 0.96 }}
+              initial={{ opacity: 0, y: -8, scale: 0.96 }}
               animate={{ opacity: 1, x: 0, scale: 1 }}
-              exit={{ opacity: 0, x: 8, scale: 0.96 }}
+              exit={{ opacity: 0, y: -8, scale: 0.96 }}
               transition={{ duration: 0.18, ease: [0.2, 0, 0, 1] }}
               style={{
                 height: 40,
@@ -225,9 +231,22 @@ export function Toolbar({
             )}
           </AnimatePresence>
         </div>
+      </div>
+      <div
+        style={{
+          position: "fixed",
+          right: rightInset + 22,
+          bottom: 22,
+          zIndex: 40,
+          transition: "right 260ms cubic-bezier(0.2, 0, 0, 1)",
+          display: "flex",
+          gap: 10,
+          alignItems: "center",
+        }}
+      >
         {tidy && onTidy && (
           <Pill p={p}>
-            <TidyButton state={tidy} onClick={onTidy} p={p} pill />
+            <TidyButton state={tidy} onClick={onTidy} p={p} pill place={place} onPlace={onPlace} />
           </Pill>
         )}
         <Pill p={p}>

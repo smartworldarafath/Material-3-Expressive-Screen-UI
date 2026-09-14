@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { isProject, projectFileName, readProject } from "./project";
-import { KIND_ORDER, VARIANTS, type Doc, type Item } from "./tokens";
+import { updateRail } from "./rail";
+import { KIND_ORDER, VARIANTS, railExpansionSide, type Doc, type Item } from "./tokens";
 
 const item = (): Item => ({ id: "item", kind: "button", label: "Save", icon: null, variant: "filled" });
 const doc = (): Doc => ({
@@ -50,9 +51,15 @@ describe("isProject", () => {
     expect(isProject(withItem({ variant: key }))).toBe(true);
   });
 
+  it.each([true, false])("accepts a group lock set to %s", (locked) => {
+    const value = doc();
+    expect(isProject({ ...value, groups: [{ ...value.groups[0], locked }] })).toBe(true);
+  });
+
   it.each([
     { id: 1 }, { x: NaN }, { x: Infinity }, { x: "0" }, { y: -Infinity }, { y: null },
     { axis: "z" }, { axis: undefined }, { items: [] }, { items: null }, { items: {} }, { items: [null] },
+    { locked: "yes" }, { locked: 1 }, { locked: null },
   ])("rejects invalid group fields %# %o", (patch) => {
     const value = doc();
     expect(isProject({ ...value, groups: [{ ...value.groups[0], ...patch }] })).toBe(false);
@@ -75,6 +82,16 @@ describe("isProject", () => {
     expect(isProject(withItem({ tabs: [] }))).toBe(true);
   });
 
+  it("accepts card layout customization fields", () => {
+    expect(isProject(withItem({
+      kind: "card",
+      imagePos: "trailing",
+      imageSize: 96,
+      contentAlign: "center",
+      textColor: "primary",
+    }))).toBe(true);
+  });
+
   it.each([
     { id: undefined }, { id: 1 }, { kind: "unknown" }, { kind: null }, { label: 1 },
     { icon: undefined }, { icon: 1 }, { variant: "unknown" }, { variant: undefined },
@@ -83,6 +100,7 @@ describe("isProject", () => {
     { corners: { tl: "0", tr: 0, bl: 0, br: 0 } }, { corners: { tl: 0, tr: 0, bl: 0, br: Infinity } },
     { tabs: null }, { tabs: {} }, { tabs: [null] }, { tabs: [{ icon: "home" }] },
     { tabs: [{ label: 1 }] }, { tabs: [{ label: "Home", icon: 1 }] },
+    { imagePos: "bottom" }, { imageSize: 0 }, { imageSize: NaN }, { contentAlign: "top" }, { textColor: "pink" },
   ])("rejects invalid item fields %# %o", (patch) => {
     expect(isProject(withItem(patch))).toBe(false);
   });
@@ -94,6 +112,16 @@ describe("isProject", () => {
   ])("rejects invalid frame fields %# %o", (patch) => {
     const value = doc();
     expect(isProject({ ...value, frames: [{ ...value.frames[0], ...patch }] })).toBe(false);
+  });
+
+  it.each(["top", "center", "bottom", "spread"])("accepts the body placement %s", (place) => {
+    const value = doc();
+    expect(isProject({ ...value, frames: [{ ...value.frames[0], place }] })).toBe(true);
+  });
+
+  it.each(["middle", "", 0, null])("rejects an unknown body placement %j", (place) => {
+    const value = doc();
+    expect(isProject({ ...value, frames: [{ ...value.frames[0], place }] })).toBe(false);
   });
 
   it("accepts positive fractional frame dimensions and an empty note", () => {
@@ -115,6 +143,48 @@ describe("projectFileName", () => {
 });
 
 describe("readProject", () => {
+  it.each(["left", "right"])("does not persist the runtime %s expansion edge", async (side) => {
+    const authored: Item = { ...item(), kind: "navRail", railExpanded: false, railModal: true, size2: 800,
+      selected: 1, tabs: [{ icon: "home", label: "Home" }, { icon: "star", label: "Saved" }], note: "Keep my destinations",
+    };
+    const original = doc();
+    original.frames = [{ ...original.frames[0], w: 1280, h: 800 }];
+    original.groups = [{ ...original.groups[0], x: side === "left" ? 0 : 1184, y: -10, items: [authored] }];
+    const project = { ...original, groups: updateRail(original.groups, original.frames, {}, authored.id, { railExpanded: true }) };
+    const expanded = project.groups[0].items[0];
+    expect(expanded[railExpansionSide]).toBe(side);
+    expect(Reflect.ownKeys(expanded)).toContain(railExpansionSide);
+    const json = JSON.stringify(project);
+    const saved = await readProject(new File([json], "rail.json"));
+    const expectedItem = { ...authored, railExpanded: true };
+    expect(saved).not.toBeNull();
+    expect(Reflect.ownKeys(saved!.groups[0].items[0])).toEqual(Reflect.ownKeys(expectedItem));
+    expect(saved).toEqual({ ...original, groups: [{ ...original.groups[0], x: side === "left" ? 0 : 1060, items: [expectedItem] }] });
+  });
+
+  it.each([undefined, false, true])("accepts optional navigation rail booleans %s without changing them", (value) => {
+    const project = withItem({ kind: "navRail", railExpanded: value, railModal: value });
+    const before = structuredClone(project);
+    expect(isProject(project)).toBe(true);
+    expect(project).toEqual(before);
+  });
+
+  it.each(["railExpanded", "railModal"])("rejects non-boolean navigation rail field %s", (field) => {
+    for (const value of [null, 0, 1, "true", "false", {}, []]) {
+      expect(isProject(withItem({ kind: "navRail", [field]: value }))).toBe(false);
+    }
+  });
+
+  it.each([undefined, 2, 4, 8, 16])("preserves progress thickness %s in project files", async (trackThickness) => {
+    const value = withItem({ kind: "linearProgress", wavy: true, trackThickness });
+    await expect(readProject(new File([JSON.stringify(value)], "progress.json"))).resolves.toEqual(value);
+  });
+
+  it.each([0, 1, 17, 4.5, -8, "8", null])("rejects invalid progress thickness %j", async (trackThickness) => {
+    const value = withItem({ kind: "circularProgress", trackThickness });
+    await expect(readProject(new File([JSON.stringify(value)], "progress.json"))).resolves.toBeNull();
+  });
+
   it("reads a real File as JSON without relying on its name or MIME type", async () => {
     const value = doc();
     await expect(readProject(new File([JSON.stringify(value)], "sketch.txt", { type: "text/plain" }))).resolves.toEqual(value);

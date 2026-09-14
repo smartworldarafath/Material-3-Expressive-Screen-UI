@@ -63,9 +63,31 @@ describe("shareable", () => {
     const value = { ...doc(), groups: [], frames: [] };
     expect(shareable(value)).toEqual(value);
   });
+
+  it("keeps a group's lock flag", () => {
+    const value = { ...doc(), groups: [{ ...doc().groups[0], locked: true }] };
+    expect(shareable(value).groups[0].locked).toBe(true);
+  });
 });
 
 describe("shareLink and readShareHash", () => {
+  it("preserves navigation rail states through compressed and plain share links", async () => {
+    const value = doc();
+    value.groups[0].items = [
+      { id: "legacy", kind: "navRail", label: "", icon: null, variant: "filled" },
+      { id: "collapsed", kind: "navRail", label: "", icon: null, variant: "filled", railExpanded: false, railModal: false },
+      { id: "expanded", kind: "navRail", label: "", icon: null, variant: "filled", railExpanded: true, railModal: true },
+      { id: "modal-only", kind: "navRail", label: "", icon: null, variant: "filled", railModal: true },
+    ];
+    const link = await shareLink(value, "https://example.test/canvas/");
+    const result = await readShareHash(new URL(link).hash);
+    expect(result?.groups[0].items).toEqual(value.groups[0].items);
+    expect(result?.groups[0].items[0]).not.toHaveProperty("railExpanded");
+    expect(result?.groups[0].items[0]).not.toHaveProperty("railModal");
+    const plain = await readShareHash(plainHash(value));
+    expect(plain?.groups[0].items).toEqual(value.groups[0].items);
+  });
+
   it("keeps the public wire parameter names stable", () => {
     expect(DOC_PARAM).toBe("doc");
     expect(DOCZ_PARAM).toBe("docz");

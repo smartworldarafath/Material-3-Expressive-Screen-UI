@@ -1,6 +1,6 @@
 "use client";
 
-import { motion } from "motion/react";
+import { motion, useReducedMotion } from "motion/react";
 import {
   FAB_MENU_GAP,
   FAB_MENU_ITEM_H,
@@ -13,21 +13,37 @@ import {
   Radii,
   STATUS_BAR_H,
   baseRadii,
+  CARD_MEDIA_GAP,
+  CARD_PADDING,
+  CARD_TEXT_GAP,
+  cardContentAlignOf,
   cardFillOf,
+  cardImagePosOf,
+  cardImageSizeOf,
+  cardBodyColorOf,
+  cardScrimOf,
+  cardTextColorOf,
   onToken,
   scaleR,
   sizeOf,
   variantShadow,
   variantStyle,
   SETTLE_MS,
-  RAIL_W,
+  progressThickness,
   RAIL_TOP,
+  RAIL_W,
   RAIL_ITEM_H,
   RAIL_GAP,
+  isWideRail,
+  railMetrics,
+  isScrollableTabs,
+  tabScrollOffset,
+  SCROLL_TAB_W,
 } from "@/lib/tokens";
 import { CircularProgress, LinearProgress, LoadingIndicator } from "./Loading";
 import { t, useLang } from "@/lib/i18n";
 import { useTheme } from "@/lib/theme";
+import { railSelectedLabelColor } from "@/lib/color";
 
 /** weight of a heading or label: heavier under the emphasized type setting */
 const useWeight = () => {
@@ -392,7 +408,7 @@ export function MeasuredContent({ item, p }: { item: Item; p: Palette }) {
   }
 }
 
-function Body({ item, p }: { item: Item; p: Palette }) {
+function Body({ item, p, tabScroll }: { item: Item; p: Palette; tabScroll?: number }) {
   const lang = useLang();
   const w = useWeight();
   const hasLabel = item.label.trim().length > 0;
@@ -472,47 +488,77 @@ function Body({ item, p }: { item: Item; p: Palette }) {
       );
 
     case "card": {
-      const cw = item.size ?? 320;
-      return (
+      const pos = cardImagePosOf(item);
+      const hasImage = !item.noImage;
+      const padding = CARD_PADDING;
+      const align = cardContentAlignOf(item);
+      const justifyContent = { start: "flex-start", center: "center", end: "flex-end" }[align] as React.CSSProperties["justifyContent"];
+      const ink = cardTextColorOf(item, p);
+      const body = cardBodyColorOf(item, p);
+      const picture = item.src ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={item.src} alt="" draggable={false} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+      ) : (
+        item.icon && <Icon name={item.icon} size={34} />
+      );
+      const media = (style: React.CSSProperties) => (
         <div
           style={{
-            padding: 12,
-            height: "100%",
-            display: "flex",
-            flexDirection: "column",
-            gap: 8,
-            boxSizing: "border-box",
+            borderRadius: scaleR(14),
+            background: p.primaryContainer,
+            color: p.onPrimaryContainer,
+            display: "grid",
+            placeItems: "center",
+            flex: "0 0 auto",
+            overflow: "hidden",
+            ...style,
           }}
         >
-          {!item.noImage && (
-            <div
-              style={{
-                height: Math.round(cw * 0.28),
-                borderRadius: scaleR(14),
-                background: p.primaryContainer,
-                color: p.onPrimaryContainer,
-                display: "grid",
-                placeItems: "center",
-                flex: "0 0 auto",
-                overflow: "hidden",
-              }}
-            >
-              {item.src ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={item.src} alt="" draggable={false} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
-              ) : (
-                item.icon && <Icon name={item.icon} size={34} />
-              )}
-            </div>
-          )}
+          {picture}
+        </div>
+      );
+      const text = (
+        <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: CARD_TEXT_GAP, justifyContent }}>
           {hasLabel && (
-            <div style={{ fontSize: 16, fontWeight: w(600, 700), color: item.fill ? onToken(item.fill, p) : p.onSurface, ...ellipsis }}>{item.label}</div>
+            <div style={{ fontSize: 16, fontWeight: w(600, 700), color: ink, ...ellipsis }}>{item.label}</div>
           )}
           {hasSupporting && (
-            <div style={{ fontSize: 13, lineHeight: 1.5, color: item.fill ? onToken(item.fill, p) : p.onSurfaceVariant, opacity: item.fill ? 0.8 : 1, overflow: "hidden" }}>
+            <div style={{ fontSize: 13, lineHeight: 1.5, color: body.color, opacity: body.opacity, overflow: "hidden" }}>
               {item.supporting}
             </div>
           )}
+        </div>
+      );
+      if (hasImage && pos === "background") {
+        /* Full-bleed media behind the text. A photo, or a chosen text color that the placeholder's
+         * container may not carry, gets a scrim on the text's side: dark under light text, light under dark. */
+        const scrim = item.src || item.textColor ? cardScrimOf(ink, align) : undefined;
+        return (
+          <div style={{ position: "relative", height: "100%", boxSizing: "border-box" }}>
+            <div style={{ position: "absolute", inset: 0, background: p.primaryContainer, color: p.onPrimaryContainer, display: "grid", placeItems: "center" }}>
+              {picture}
+            </div>
+            {scrim && <div style={{ position: "absolute", inset: 0, background: scrim }} />}
+            <div style={{ position: "relative", height: "100%", boxSizing: "border-box", padding, display: "flex", flexDirection: "column" }}>{text}</div>
+          </div>
+        );
+      }
+      /* top: the image band above the text; leading / trailing: a full-height column beside it */
+      const side = hasImage && (pos === "leading" || pos === "trailing");
+      return (
+        <div
+          style={{
+            padding,
+            height: "100%",
+            display: "flex",
+            flexDirection: side ? "row" : "column",
+            gap: CARD_MEDIA_GAP,
+            boxSizing: "border-box",
+          }}
+        >
+          {hasImage && pos !== "trailing" && media(side ? { width: cardImageSizeOf(item), alignSelf: "stretch" } : { height: cardImageSizeOf(item) })}
+          {text}
+          {hasImage && pos === "trailing" && media({ width: cardImageSizeOf(item), alignSelf: "stretch" })}
         </div>
       );
     }
@@ -866,6 +912,26 @@ function Body({ item, p }: { item: Item; p: Palette }) {
 
     case "navRail": {
       const tabs = item.tabs ?? [];
+      const wide = isWideRail(item);
+      const expanded = !!item.railExpanded;
+      const rail = railMetrics(item);
+      if (wide) return (
+        <div style={{ position: "relative", height: "100%" }}>
+          <div className="m3-rail-geometry" style={{ position: "absolute", left: rail.headerLeft, top: RAIL_TOP, width: 48, height: 48, display: "grid", placeItems: "center", color: p.onSurfaceVariant }}>
+            <Icon name={expanded ? "menu_open" : "menu"} size={24} />
+          </div>
+          {tabs.map((tab, i) => {
+            const on = i === Math.min(item.selected ?? 0, Math.max(0, tabs.length - 1));
+            return <div key={i} className="m3-rail-geometry" style={{ position: "absolute", left: rail.inset, top: rail.top + i * (rail.itemHeight + rail.gap), width: rail.width - rail.inset * 2, height: rail.itemHeight }}>
+              <div className="m3-rail-geometry" style={{ position: "absolute", left: expanded ? 0 : 8, top: 0, width: expanded ? rail.width - rail.inset * 2 : 56, height: expanded ? 56 : 32, borderRadius: expanded ? 28 : 16, background: on ? p.secondaryContainer : "transparent" }} />
+              <div className="m3-rail-geometry" style={{ position: "absolute", left: 0, top: 0, width: 24, height: 24, transform: `translate(${expanded ? 16 : 24}px, ${expanded ? 16 : 4}px)`, color: on ? p.onSecondaryContainer : p.onSurfaceVariant }}>
+                {tab.icon && <Icon name={tab.icon} size={24} fill={on} />}
+              </div>
+              {tab.label.trim() && <span className="m3-rail-geometry" style={{ position: "absolute", left: expanded ? 48 : 0, top: expanded ? 18 : 36, width: expanded ? rail.width - 88 : 72, textAlign: expanded ? "left" : "center", fontSize: expanded ? 14 : 12, lineHeight: "20px", fontWeight: on ? w(600, 700) : w(400, 500), color: on ? railSelectedLabelColor(p, expanded) : p.onSurfaceVariant, ...ellipsis }}>{tab.label}</span>}
+            </div>;
+          })}
+        </div>
+      );
       return (
         <div
           style={{
@@ -999,6 +1065,7 @@ function Body({ item, p }: { item: Item; p: Palette }) {
           color={p.primary}
           trackColor={p.secondaryContainer}
           wavy={item.wavy}
+          trackThickness={progressThickness(item)}
           value={item.value === undefined ? undefined : item.value / 100}
         />
       );
@@ -1011,6 +1078,7 @@ function Body({ item, p }: { item: Item; p: Palette }) {
             color={p.primary}
             trackColor={p.secondaryContainer}
             wavy={item.wavy}
+            trackThickness={progressThickness(item)}
             value={item.value === undefined ? undefined : item.value / 100}
           />
         </div>
@@ -1093,15 +1161,19 @@ function Body({ item, p }: { item: Item; p: Palette }) {
 
     case "tabs": {
       const tabs = item.tabs ?? [];
+      const scroll = isScrollableTabs(item);
+      const offset = tabScroll ?? tabScrollOffset(item, sizeOf(item, {}).w);
       return (
-        <div style={{ display: "flex", alignItems: "stretch", height: "100%", position: "relative" }}>
+        <div style={{ display: "flex", alignItems: "stretch", height: "100%", position: "relative", overflow: "hidden" }}>
           {tabs.map((tab, i) => {
             const on = i === Math.min(item.selected ?? 0, Math.max(0, tabs.length - 1));
             return (
               <div
                 key={i}
                 style={{
-                  flex: 1,
+                  flex: scroll ? "none" : 1,
+                  width: scroll ? SCROLL_TAB_W : undefined,
+                  marginLeft: scroll && i === 0 ? -offset : undefined,
                   minWidth: 0,
                   display: "flex",
                   flexDirection: "column",
@@ -1218,6 +1290,8 @@ function boxStyle(item: Item, p: Palette): React.CSSProperties {
 function shadowOf(item: Item): string {
   if (NO_BOX.includes(item.kind)) return "none";
   switch (item.kind) {
+    case "navRail":
+      return item.railModal && item.railExpanded ? "0 2px 6px rgba(0,0,0,0.16), 0 1px 2px rgba(0,0,0,0.10)" : "none";
     case "button":
     case "iconButton":
     case "extendedFab":
@@ -1250,8 +1324,10 @@ export function M3Node({
   pressed,
   dragging,
   selected,
+  inRun = false,
   interactive = true,
   onPointerDown,
+  tabScroll,
 }: {
   item: Item;
   palette: Palette;
@@ -1260,9 +1336,16 @@ export function M3Node({
   pressed?: boolean;
   dragging?: boolean;
   selected?: boolean;
+  /** the part sits in a connected run (non-free group, or a hidden run inside a free group) */
+  inRun?: boolean;
   interactive?: boolean;
   onPointerDown?: (e: React.PointerEvent) => void;
+  /** how far a scrollable tab row is scrolled in the preview; the canvas uses the resting position */
+  tabScroll?: number;
 }) {
+  const reducedMotion = useReducedMotion();
+  const instantRail = reducedMotion && item.kind === "navRail" && isWideRail(item);
+  const radiusTransition = instantRail ? { duration: 0 } : RADIUS_TWEEN;
   const r = radii ?? baseRadii(item);
   const size = sizeOf(item, widths);
   const measured = MEASURED.includes(item.kind) && !((item.kind === "switch" || item.kind === "button") && item.size);
@@ -1272,6 +1355,7 @@ export function M3Node({
     <motion.div
       data-node={item.id}
       data-kind={item.kind}
+      data-wide-rail={item.kind === "navRail" && isWideRail(item) ? "true" : undefined}
       onPointerDown={onPointerDown}
       initial={false}
       animate={{
@@ -1282,11 +1366,11 @@ export function M3Node({
         scale: pressed ? 0.97 : 1,
       }}
       transition={{
-        borderTopLeftRadius: RADIUS_TWEEN,
-        borderBottomLeftRadius: RADIUS_TWEEN,
-        borderTopRightRadius: RADIUS_TWEEN,
-        borderBottomRightRadius: RADIUS_TWEEN,
-        scale: { type: "spring", stiffness: 700, damping: 30, mass: 0.5 },
+        borderTopLeftRadius: radiusTransition,
+        borderBottomLeftRadius: radiusTransition,
+        borderTopRightRadius: radiusTransition,
+        borderBottomRightRadius: radiusTransition,
+        scale: instantRail ? { duration: 0 } : { type: "spring", stiffness: 700, damping: 30, mass: 0.5 },
       }}
       style={{
         ...boxStyle(item, palette),
@@ -1295,6 +1379,12 @@ export function M3Node({
         display: measured ? "inline-flex" : "block",
         alignItems: "center",
         overflow: clips ? "hidden" : "visible",
+        /* the selection ring sticks out 5px (3px offset + 2px ring); in a run the next
+           sibling sits 3px away and would overpaint that edge — lift the selected part.
+           Runs never overlap, so the lift only beats the sibling that hides the ring.
+           Lone parts in free groups may overlap by design: keep their layer order. */
+        position: selected && inRun ? "relative" : undefined,
+        zIndex: selected && inRun ? 1 : undefined,
         cursor: !interactive ? "default" : dragging ? "grabbing" : "grab",
         userSelect: "none",
         touchAction: "none",
@@ -1307,7 +1397,7 @@ export function M3Node({
         flex: "0 0 auto",
       }}
     >
-      <Body item={item} p={palette} />
+      <Body item={item} p={palette} tabScroll={tabScroll} />
     </motion.div>
   );
 }

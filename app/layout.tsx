@@ -6,6 +6,8 @@ const BASE = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_ORIGIN ?? "https://smartworldarafath.github.io"),
   title: "Material 3 Expressive Screen UI",
+  applicationName: "Material 3 Expressive Screen UI",
+  alternates: { canonical: `${BASE}/` },
   description:
     "Design interactive Material 3 Expressive screens in the browser and convert them directly into prompts for AI coding tools.",
   openGraph: {
@@ -21,6 +23,7 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
+  themeColor: "#6750A4",
 };
 
 export default function RootLayout({

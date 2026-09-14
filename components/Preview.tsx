@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Item } from "@/lib/tokens";
-import { AnimatePresence, animate, motion, useMotionValue, useTransform } from "motion/react";
+import { AnimatePresence, animate, motion, useMotionValue, useTransform, useReducedMotion, useIsPresent } from "motion/react";
 import type { TargetAndTransition, Variants } from "motion/react";
 import {
   Action,
@@ -32,19 +32,24 @@ import {
   groupsInFrame,
   isPhoneFrame,
   isWatchFrame,
+  isTabFrame,
   frameIconOf,
   normalizeTheme,
   toggleIcon,
   uniformRadii,
-  RAIL_W,
   RAIL_TOP,
-  RAIL_ITEM_H,
-  RAIL_GAP,
+  isWideRail,
+  railMetrics,
   sizeOf,
+  isScrollableTabs,
+  tabScrollOffset,
+  SCROLL_TAB_W,
 } from "@/lib/tokens";
 import { Icon, M3Node } from "./M3Node";
 import { IconBtn } from "./ui";
 import { t, useLang } from "@/lib/i18n";
+import { constrainModalRails, modalRailOf, updateRail } from "@/lib/rail";
+import { railMotionTargets } from "@/lib/railView";
 
 const EASE = [0.2, 0, 0, 1] as const;
 const SLIDE_MS = 0.42;
@@ -150,6 +155,8 @@ function Tappable({
   onPick,
   menuOpen,
   onMenu,
+  onRailToggle,
+  railAnimating,
 }: {
   item: Item;
   p: Palette;
@@ -157,7 +164,7 @@ function Tappable({
   widths: Record<string, number>;
   onTap?: () => void;
   /** per-slot targets on bars */
-  onSlot?: (slot: string) => void;
+  onSlot?: (slot: string, animate?: boolean) => void;
   /** live value for sliders */
   onValue?: (v: number) => void;
   /** an option chosen from a dropdown's menu */
@@ -165,10 +172,55 @@ function Tappable({
   /** whether this dropdown's menu is the open one; the screen keeps at most one open */
   menuOpen?: boolean;
   onMenu?: (open: boolean) => void;
+  onRailToggle?: (animate: boolean) => void;
+  railAnimating?: boolean;
 }) {
+  const lang = useLang();
   const [pressed, setPressed] = useState(false);
   const [hot, setHot] = useState<string | null>(null);
   const menu = !!menuOpen;
+  /* a tab row with more tabs than fit scrolls: by wheel, touch, or dragging the row; a chosen tab is brought into view */
+  const scrollTabs = isScrollableTabs(item);
+  const rowW = sizeOf(item, widths).w;
+  const [tabScroll, setTabScroll] = useState(() => tabScrollOffset(item, rowW));
+  const scrollRef = useRef<HTMLDivElement>(null);
+  /** the click that ends a drag of the row must not pick a tab */
+  const swallowClick = useRef(false);
+  const settled = useRef(false);
+  const tabCount = item.tabs?.length ?? 0;
+  const restOffset = tabScrollOffset(item, rowW);
+  /* the row is brought to the chosen tab only when the choice or the row itself changes, not on every
+     render of the screen, so a position the visitor scrolled to by hand stays */
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!scrollTabs || !el) return;
+    el.scrollTo({ left: restOffset, behavior: settled.current ? "smooth" : "auto" });
+    settled.current = true;
+  }, [scrollTabs, item.id, item.selected, tabCount, restOffset]);
+  /** a mouse or pen drags the row; touch pans it natively, so it is left to the browser */
+  const dragRow = (e: React.PointerEvent<HTMLDivElement>) => {
+    swallowClick.current = false;
+    if (e.pointerType === "touch" || e.button !== 0) return;
+    const el = e.currentTarget;
+    const x0 = e.clientX;
+    const left0 = el.scrollLeft;
+    let moved = false;
+    const move = (ev: PointerEvent) => {
+      const dx = ev.clientX - x0;
+      if (Math.abs(dx) > 4) moved = true;
+      if (moved) el.scrollLeft = left0 - dx;
+    };
+    const end = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", end);
+      window.removeEventListener("pointercancel", end);
+      swallowClick.current = moved;
+      if (moved) setHot(null);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", end);
+    window.addEventListener("pointercancel", end);
+  };
   const live = !!onTap || !!onPick || (TAPPABLE.includes(item.kind) && item.kind !== "text");
   const ref = useRef<HTMLDivElement>(null);
 
@@ -203,15 +255,21 @@ function Tappable({
     if (item.icon) slots.push({ key: "icon", style: { left: 4, top: inset + 8, width: 48, height: 48, borderRadius: 24 } });
     if (item.icon2) slots.push({ key: "icon2", style: { right: 4, top: inset + 8, width: 48, height: 48, borderRadius: 24 } });
   }
-  if (onSlot && (item.kind === "bottomNav" || item.kind === "tabs")) {
+  if (onSlot && scrollTabs) {
+    /* hit areas sit inside the scrolling layer, one per tab, so they move with the row */
+    const n = item.tabs?.length ?? 0;
+    for (let i = 0; i < n; i++) slots.push({ key: `tab:${i}`, style: { left: i * SCROLL_TAB_W, width: SCROLL_TAB_W, top: 0, bottom: 0, borderRadius: 16 } });
+  } else if (onSlot && (item.kind === "bottomNav" || item.kind === "tabs")) {
     const n = item.tabs?.length ?? 0;
     for (let i = 0; i < n; i++)
       slots.push({ key: `tab:${i}`, style: { left: `${(i / n) * 100}%`, width: `${100 / n}%`, top: 0, bottom: item.kind === "bottomNav" ? NAV_BAR_H : 0, borderRadius: 16 } });
   }
   if (onSlot && item.kind === "navRail") {
+    const rail = railMetrics(item);
+    if (onRailToggle) slots.push({ key: "railToggle", style: { left: rail.headerLeft, top: RAIL_TOP, width: 48, height: 48, borderRadius: 24 } });
     const n = item.tabs?.length ?? 0;
     for (let i = 0; i < n; i++)
-      slots.push({ key: `tab:${i}`, style: { left: 6, width: RAIL_W - 12, top: RAIL_TOP + i * (RAIL_ITEM_H + RAIL_GAP), height: RAIL_ITEM_H, borderRadius: 16 } });
+      slots.push({ key: `tab:${i}`, style: { left: rail.inset, width: rail.width - 2 * rail.inset, top: rail.top + i * (rail.itemHeight + rail.gap), height: rail.itemHeight, borderRadius: item.railExpanded ? 28 : 16 } });
   }
   if (onSlot && item.kind === "toolbar") {
     const n = item.tabs?.length ?? 0;
@@ -226,6 +284,7 @@ function Tappable({
   return (
     <div
       ref={ref}
+      data-rail-animate={railAnimating ? "item" : undefined}
       onPointerDown={(e) => {
         if (onValue) {
           e.stopPropagation();
@@ -243,9 +302,9 @@ function Tappable({
       onPointerCancel={() => setPressed(false)}
       onPointerLeave={() => !onValue && setPressed(false)}
       onClick={onPick ? () => onMenu?.(!menu) : onTap}
-      style={{ cursor: live || onValue ? "pointer" : "default", display: "flex", position: "relative", touchAction: "none" }}
+      style={{ cursor: live || onValue ? "pointer" : "default", display: "flex", position: "relative", touchAction: scrollTabs ? "pan-x" : "none" }}
     >
-      <M3Node item={item} palette={p} widths={widths} radii={radii} interactive={false} pressed={pressed && !onValue} />
+      <M3Node item={item} palette={p} widths={widths} radii={radii} interactive={false} pressed={pressed && !onValue} tabScroll={scrollTabs ? tabScroll : undefined} />
       {live && (
         <motion.div
           aria-hidden
@@ -264,9 +323,17 @@ function Tappable({
           }}
         />
       )}
-      {slots.map((s) => (
-        <div
+      {(() => {
+      const slotNodes = slots.map((s) => {
+        const Slot = onRailToggle ? "button" : "div";
+        return <Slot
           key={s.key}
+          type={onRailToggle ? "button" : undefined}
+          className={onRailToggle ? "m3-rail-hit" : undefined}
+          data-rail-toggle={s.key === "railToggle" ? item.id : undefined}
+          aria-label={onRailToggle ? (s.key === "railToggle" ? t(item.railExpanded ? "collapseNavigation" : "expandNavigation", lang) : item.tabs?.[Number(s.key.slice(4))]?.label) : undefined}
+          aria-expanded={s.key === "railToggle" ? !!item.railExpanded : undefined}
+          aria-current={onRailToggle && s.key === `tab:${item.selected ?? 0}` ? "page" : undefined}
           onPointerDown={(e) => {
             e.stopPropagation();
             setHot(s.key);
@@ -276,17 +343,42 @@ function Tappable({
           onPointerLeave={() => setHot(null)}
           onClick={(e) => {
             e.stopPropagation();
-            onSlot!(s.key);
+            if (s.key === "railToggle") onRailToggle?.(e.detail !== 0);
+            else onSlot!(s.key, e.detail !== 0);
           }}
           style={{
             position: "absolute",
+            border: "none",
+            padding: 0,
+            color: p.primary,
             cursor: "pointer",
             background: hot === s.key ? `color-mix(in srgb, ${p.onSurface} 12%, transparent)` : "transparent",
             transition: "background 120ms",
             ...s.style,
           }}
-        />
-      ))}
+        />;
+      });
+      if (!scrollTabs) return slotNodes;
+      const n = item.tabs?.length ?? 0;
+      return (
+        <div
+          ref={scrollRef}
+          className="m3-hidden-scrollbar"
+          onScroll={(e) => setTabScroll(e.currentTarget.scrollLeft)}
+          onPointerDownCapture={dragRow}
+          onClickCapture={(e) => {
+            if (swallowClick.current) {
+              e.stopPropagation();
+              e.preventDefault();
+            }
+            swallowClick.current = false;
+          }}
+          style={{ position: "absolute", inset: 0, overflowX: "auto", overflowY: "hidden", touchAction: "pan-x", cursor: "grab" }}
+        >
+          <div style={{ position: "relative", width: n * SCROLL_TAB_W, height: "100%" }}>{slotNodes}</div>
+        </div>
+      );
+      })()}
       {onPick && menu && (
         /* the dropdown's menu, under the field: surfaceContainer, 48dp items, the chosen one tinted */
         <div
@@ -298,6 +390,8 @@ function Tappable({
             top: "100%",
             marginTop: 4,
             padding: "8px 0",
+            maxHeight: 48 * 6 + 16,
+            overflowY: "auto",
             borderRadius: 4,
             background: p.surfaceContainer,
             color: p.onSurface,
@@ -336,6 +430,7 @@ function Tappable({
 const ellipsisText: React.CSSProperties = { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" };
 
 function Screen({
+  active = true,
   frame,
   groups,
   widths,
@@ -346,6 +441,7 @@ function Screen({
   values,
   onValue,
 }: {
+  active?: boolean;
   frame: Frame;
   groups: Group[];
   widths: Record<string, number>;
@@ -359,19 +455,149 @@ function Screen({
 }) {
   /* the dropdown whose menu is open, if any; its group is lifted above the rest */
   const [menuId, setMenuId] = useState<string | null>(null);
+  const [railStates, setRailStates] = useState<Record<string, boolean>>({});
+  const [railMotion, setRailMotion] = useState<(ReturnType<typeof railMotionTargets> & { animate: boolean }) | null>(null);
+  const lang = useLang();
+  const reducedMotion = useReducedMotion();
+  const isPresent = useIsPresent();
+  const interactive = active && isPresent;
+  const interactiveRef = useRef(interactive);
+  interactiveRef.current = interactive;
+  const screenRef = useRef<HTMLDivElement>(null);
+  const shownGroups = useMemo(() => Object.entries(railStates).reduce(
+    (current, [id, railExpanded]) => updateRail(current, [frame], widths, id, { railExpanded }), constrainModalRails(groups),
+  ), [groups, frame, widths, railStates]);
+  const modalIds = new Set(shownGroups.flatMap((g) => { const rail = modalRailOf(g); return rail ? [rail.id] : []; }));
+  const hasModal = modalIds.size > 0;
+  const modalActive = interactive && hasModal;
+  const changeRail = (id: string, railExpanded: boolean, animate: boolean) => {
+    const next = updateRail(shownGroups, [frame], widths, id, { railExpanded });
+    setRailMotion({ ...railMotionTargets(shownGroups, next, widths, id), animate: animate && !reducedMotion });
+    setRailStates((prev) => ({ ...prev, [id]: railExpanded }));
+  };
+  const closeRails = (animate = false) => {
+    if (!hasModal) return;
+    const next = [...modalIds].reduce((current, id) => updateRail(current, [frame], widths, id, { railExpanded: false }), shownGroups);
+    setRailMotion({ ...railMotionTargets(shownGroups, next, widths, [...modalIds][0]), animate: animate && !reducedMotion });
+    setRailStates((prev) => ({ ...prev, ...Object.fromEntries([...modalIds].map((id) => [id, false])) }));
+  };
+  useEffect(() => {
+    if (!railMotion) return;
+    if (!railMotion.animate) {
+      // Keep transition suppression through the immediate geometry paint only.
+      // Removing it in the same render would restore M3Node's inline transition.
+      let nextFrame = 0;
+      const firstFrame = requestAnimationFrame(() => {
+        nextFrame = requestAnimationFrame(() => setRailMotion(null));
+      });
+      return () => {
+        cancelAnimationFrame(firstFrame);
+        cancelAnimationFrame(nextFrame);
+      };
+    }
+    const timer = window.setTimeout(() => setRailMotion(null), 260);
+    return () => window.clearTimeout(timer);
+  }, [railMotion]);
+  useEffect(() => { setRailMotion(null); }, [groups, frame, widths]);
+  /* The editor behind the preview is inert while it is up, so focus has nowhere else to
+   * go: a screen that becomes the one on show takes it when nothing inside the preview
+   * holds it, and a modal screen giving way to a plain one leaves the keyboard on the new
+   * screen rather than on the body. */
+  useEffect(() => {
+    if (!interactive) return;
+    const focused = document.activeElement;
+    if (!focused || focused === document.body || focused.closest("[inert]")) screenRef.current?.focus();
+  }, [interactive]);
+  useEffect(() => {
+    if (!modalActive) return;
+    const previous = document.activeElement as HTMLElement | null;
+    screenRef.current?.querySelector<HTMLButtonElement>(`[data-rail-modal] [data-rail-toggle]`)?.focus();
+    return () => {
+      // An exiting screen must not take focus back from its replacement. On unmount the
+      // ref is already detached, so both branches stand down and the preview's own
+      // restore to its opener is the one that runs.
+      if (!interactiveRef.current) return;
+      /* only a control of this screen is worth returning to: anything else is the page
+       * behind the preview or a screen that has since left */
+      if (previous?.isConnected && screenRef.current?.contains(previous) && !previous.closest("[inert]")) previous.focus();
+      else screenRef.current?.focus();
+    };
+  }, [modalActive]);
+  useEffect(() => {
+    /* focus outside this screen, or inside it but off the modal, both belong on the toggle */
+    if (modalActive && (!screenRef.current?.contains(document.activeElement) || !document.activeElement?.closest("[data-rail-modal]"))) {
+      screenRef.current?.querySelector<HTMLButtonElement>("[data-rail-modal] [data-rail-toggle]")?.focus();
+    }
+  }, [shownGroups, modalActive]);
+  /* Registered on every render, in the capture phase: the preview's own Escape and
+   * Backspace handler listens in the bubble phase, so registration order never matters. */
+  useEffect(() => {
+    if (!modalActive) return;
+    const onKey = (e: KeyboardEvent) => {
+      /* the preview's own controls, such as an open screen menu, keep their keys */
+      if (!screenRef.current?.contains(document.activeElement)) return;
+      if (e.key === "Tab") {
+        e.stopImmediatePropagation();
+        const buttons = Array.from(screenRef.current?.querySelectorAll<HTMLButtonElement>("[data-rail-modal] button") ?? []);
+        const index = buttons.indexOf(document.activeElement as HTMLButtonElement);
+        if (index < 0 || (!e.shiftKey && index === buttons.length - 1) || (e.shiftKey && index === 0)) {
+          e.preventDefault();
+          buttons[e.shiftKey ? buttons.length - 1 : 0]?.focus();
+        }
+        return;
+      }
+      if (e.key !== "Escape") return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      closeRails();
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  });
+
   return (
-    <div style={{ position: "absolute", inset: 0, background: p[frame.bg ?? "surface"], overflow: "hidden" }}>
-      {groups.map((g) => (
+    <div
+      ref={screenRef}
+      inert={!interactive}
+      aria-hidden={!interactive || undefined}
+      data-rail-motion={railMotion?.animate ? "true" : undefined}
+      role={modalActive ? "dialog" : "group"}
+      aria-modal={modalActive ? true : undefined}
+      aria-label={modalActive ? t("railState", lang) : frame.name || t("screen", lang)}
+      tabIndex={-1}
+      /* the scrim and the pointer guard follow the rail itself, so a peek shows the modal
+       * state as authored; the root's inert keeps a non-interactive screen from acting on it */
+      onPointerDown={(e) => { if (hasModal) e.stopPropagation(); }}
+      style={{ position: "absolute", inset: 0, background: p[frame.bg ?? "surface"], overflow: "hidden", outline: "none" }}
+    >
+      <AnimatePresence>
+        {hasModal && <motion.button
+          key="rail-scrim"
+          data-rail-scrim
+          aria-label={t("collapseNavigation", lang)}
+          tabIndex={-1}
+          onClick={(e) => closeRails(e.detail !== 0)}
+          initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+          transition={{ duration: reducedMotion ? 0 : 0.18 }}
+          style={{ position: "absolute", inset: 0, border: 0, padding: 0, background: "rgba(0,0,0,0.32)", zIndex: 3 }}
+        />}
+      </AnimatePresence>
+      {shownGroups.map((g) => (
         <div
           key={g.id}
+          className="m3-preview-group"
+          data-preview-group={g.id}
+          data-rail-animate={railMotion?.groups.has(g.id) ? "group" : undefined}
+          data-rail-modal={g.items.some((it) => modalIds.has(it.id)) ? "true" : undefined}
+          inert={hasModal && !g.items.some((it) => modalIds.has(it.id))}
           style={
             g.free
-              ? { position: "absolute", left: g.x - frame.x, top: g.y - frame.y, zIndex: g.items.some((it) => it.id === menuId) ? 2 : undefined }
+              ? { position: "absolute", left: g.x - frame.x, top: g.y - frame.y, zIndex: g.items.some((it) => modalIds.has(it.id)) ? 4 : g.items.some((it) => it.id === menuId) ? 2 : undefined }
               : {
                   position: "absolute",
                   left: g.x - frame.x,
                   top: g.y - frame.y,
-                  zIndex: g.items.some((it) => it.id === menuId) ? 2 : undefined,
+                  zIndex: g.items.some((it) => modalIds.has(it.id)) ? 4 : g.items.some((it) => it.id === menuId) ? 2 : undefined,
                   display: "flex",
                   flexDirection: g.axis === "x" ? "row" : "column",
                   alignItems: g.axis === "x" ? "center" : "stretch",
@@ -409,6 +635,8 @@ function Screen({
             /* bars with the same destinations are one bar to the visitor: the choice follows them across screens */
             const navKey = navKind ? `nav:${it.kind}:${(it.tabs ?? []).map((t) => t.label).join("|")}` : "";
             if (navKind && values[navKey] !== undefined && values[navKey] >= 0) shown = { ...shown, selected: values[navKey] };
+            /* a row whose selection the author never set shows the destination the visitor tapped to open this screen */
+            else if (navKind && it.selected === undefined && values[`${navKey}:opened:${frame.id}`] !== undefined) shown = { ...shown, selected: values[`${navKey}:opened:${frame.id}`] };
             const tap =
               act || flips(it)
                 ? () => {
@@ -424,14 +652,20 @@ function Screen({
                 p={p}
                 radii={radii}
                 widths={widths}
+                railAnimating={railMotion?.items.has(it.id)}
                 onTap={tap}
                 onSlot={
                   slotActions || navKind
-                    ? (slot) => {
+                    ? (slot, animate) => {
                         /* a tapped destination lights up where it opens nothing; where it opens a
-                           screen, that screen's bar shows its own selected destination */
+                           screen, that screen's bar shows the destination its author chose, or the
+                           tapped one when the author chose none */
                         const a = slotActions?.[slot];
-                        if (navKind && slot.startsWith("tab:")) onValue(navKey, a ? -1 : Number(slot.slice(4)));
+                        if (navKind && slot.startsWith("tab:")) {
+                          onValue(navKey, a ? -1 : Number(slot.slice(4)));
+                          if (a) onValue(`${navKey}:opened:${a.to}`, Number(slot.slice(4)));
+                        }
+                        if (modalIds.has(it.id)) closeRails(animate);
                         if (a) onAction(a);
                       }
                     : undefined
@@ -440,6 +674,7 @@ function Screen({
                 onPick={it.kind === "select" ? (i) => onValue(it.id, i) : undefined}
                 menuOpen={menuId === it.id}
                 onMenu={it.kind === "select" ? (open) => setMenuId(open ? it.id : null) : undefined}
+                onRailToggle={it.kind === "navRail" && isWideRail(it) ? (animate) => changeRail(it.id, !it.railExpanded, animate) : undefined}
               />
             );
             if (!g.free) return node;
@@ -598,14 +833,24 @@ export function Preview({
     [frames, back, spring, sameSize],
   );
 
+  const [picker, setPicker] = useState(false);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") {
+        /* an open menu is the thing Escape dismisses */
+        if (picker) setPicker(false);
+        else onClose();
+      }
       if (e.key === "Backspace" || e.key === "ArrowLeft") back();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [back, onClose]);
+  }, [back, onClose, picker]);
+  /* The control that opened the preview gets the keyboard back when it closes, whichever
+   * screens were shown in between; a screen's own restore only covers its modal rail. Read
+   * during the first render, before a screen's effect moves focus onto its rail. */
+  const [opener] = useState(() => (typeof document === "undefined" ? null : (document.activeElement as HTMLElement | null)));
+  useEffect(() => () => { if (opener?.isConnected && !opener.closest("[inert]")) opener.focus(); }, [opener]);
 
   const groupsFor = useCallback((f: Frame) => groupsInFrame(doc.groups, f, frames, widths), [doc.groups, frames, widths]);
   const groups = useMemo(() => (current ? groupsFor(current) : []), [current, groupsFor]);
@@ -715,8 +960,14 @@ export function Preview({
     };
   }, [frames, scale, prog, axisMV, enterMV, exitMV]);
 
-  const [picker, setPicker] = useState(false);
   const pickerRef = useRef<HTMLDivElement>(null);
+  const pickerButton = useRef<HTMLButtonElement>(null);
+  /* A menu hands focus back to its button when it closes; a chosen screen is then one Tab
+   * away. The chosen item is still in the tree here because the menu animates out. */
+  useEffect(() => {
+    const focused = document.activeElement;
+    if (!picker && focused !== pickerButton.current && pickerRef.current?.contains(focused)) pickerButton.current?.focus();
+  }, [picker]);
   useEffect(() => {
     if (!picker) return;
     const onDown = (e: PointerEvent) => {
@@ -816,6 +1067,23 @@ export function Preview({
               }}
             />
           )}
+          {isTabFrame(current) && (
+            <div
+              style={{
+                position: "absolute",
+                left: "50%",
+                top: 4,
+                transform: "translateX(-50%)",
+                width: 6,
+                height: 6,
+                borderRadius: "50%",
+                background: "#111",
+                border: "1px solid rgba(255,255,255,0.12)",
+                boxShadow: "0 1px 2px rgba(0,0,0,0.5)",
+                pointerEvents: "none",
+              }}
+            />
+          )}
           <motion.div
             onClickCapture={(e) => {
               if (swiped.current) {
@@ -832,6 +1100,7 @@ export function Preview({
               borderRadius: screenRadius,
               overflow: "hidden",
               background: p[current.bg ?? "surface"],
+              boxShadow: isWatchFrame(current) ? "inset 0 0 24px rgba(0,0,0,0.55), inset 0 0 6px rgba(0,0,0,0.85)" : undefined,
               fontFamily: fontFamilyOf(theme.font, lang),
               touchAction: "none",
             }}
@@ -871,7 +1140,7 @@ export function Preview({
                   pointerEvents: "none",
                 }}
               >
-                <Screen frame={peekFrame} groups={peekGroups} {...screenProps} />
+                <Screen {...screenProps} active={false} frame={peekFrame} groups={peekGroups} />
               </motion.div>
             )}
           </motion.div>
@@ -916,6 +1185,7 @@ export function Preview({
           </button>
           <div ref={pickerRef} style={{ position: "relative", minWidth: 0 }}>
             <button
+              ref={pickerButton}
               onClick={() => setPicker((v) => !v)}
               title={t("screens", lang)}
               aria-expanded={picker}

@@ -1,4 +1,4 @@
-import { Doc, KIND_ORDER, Kind, VARIANTS, isPlatform } from "./tokens";
+import { Doc, KIND_ORDER, Kind, VARIANTS, isCardAlign, isCardImagePos, isPlace, isTextToken, isPlatform, isTrackThickness } from "./tokens";
 
 /* A project file is the Doc as JSON, nothing more. Reading one back only checks
  * the shape the editor relies on; the same migrations that run on a saved
@@ -16,6 +16,13 @@ const validCorners = (c: unknown) => c === undefined || (isRecord(c) && ["tl", "
 const validItem = (item: unknown) =>
   isRecord(item) &&
   validCorners(item.corners) &&
+  (item.railExpanded === undefined || typeof item.railExpanded === "boolean") &&
+  (item.railModal === undefined || typeof item.railModal === "boolean") &&
+  (item.trackThickness === undefined || isTrackThickness(item.trackThickness)) &&
+  (item.imagePos === undefined || isCardImagePos(item.imagePos)) &&
+  (item.imageSize === undefined || (Number.isFinite(item.imageSize) && (item.imageSize as number) > 0)) &&
+  (item.contentAlign === undefined || isCardAlign(item.contentAlign)) &&
+  (item.textColor === undefined || isTextToken(item.textColor)) &&
   typeof item.id === "string" &&
   typeof item.kind === "string" &&
   KINDS.has(item.kind as Kind) &&
@@ -33,6 +40,7 @@ const validGroup = (group: unknown) =>
   Number.isFinite(group.x) &&
   Number.isFinite(group.y) &&
   (group.axis === "x" || group.axis === "y") &&
+  (group.locked === undefined || typeof group.locked === "boolean") &&
   Array.isArray(group.items) &&
   group.items.length > 0 &&
   group.items.every(validItem);
@@ -45,7 +53,8 @@ const validFrame = (frame: unknown) =>
   Number.isFinite(frame.y) &&
   (frame.w === undefined || (Number.isFinite(frame.w) && (frame.w as number) > 0)) &&
   (frame.h === undefined || (Number.isFinite(frame.h) && (frame.h as number) > 0)) &&
-  (frame.note === undefined || typeof frame.note === "string");
+  (frame.note === undefined || typeof frame.note === "string") &&
+  (frame.place === undefined || isPlace(frame.place));
 
 /** whether a parsed file has the shape of a document the editor can open */
 export const isProject = (value: unknown): value is Doc =>

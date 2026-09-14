@@ -117,7 +117,8 @@ export function MobileInspector({
   useEffect(() => {
     setSlotKey(iconSlotsOf(item)[0]?.key ?? "icon");
     setPickerOpen(false);
-  }, [item.id]);
+    setTabSlot(null);
+  }, [item.id, item.kind, item.tabs?.length]);
   const activeSlot = slots.find((s) => s.key === slotKey) ?? slots[0];
   const variants = spec.hasVariant ? variantsOf(item.kind) : [];
   const tabs: NavTab[] = item.tabs ?? [];
@@ -180,13 +181,15 @@ export function MobileInspector({
 
       {spec.hasTabs && (
         <Row icon={isSelect ? "list" : "view_column"} label={t(isSelect ? "options" : "tabs", lang)} p={p}>
-          <Segmented
-            options={(item.kind === "toolbar" ? [2, 3, 4, 5, 6] : [2, 3, 4, 5]).map((n) => ({ key: String(n), label: String(n) }))}
-            value={String(tabs.length)}
-            onChange={(k) => setTabCount(Number(k))}
-            p={p}
-            height={44}
-          />
+          {!isSelect && item.kind !== "tabs" && (
+            <Segmented
+              options={(item.kind === "toolbar" ? [2, 3, 4, 5, 6] : [2, 3, 4, 5]).map((n) => ({ key: String(n), label: String(n) }))}
+              value={String(tabs.length)}
+              onChange={(k) => setTabCount(Number(k))}
+              p={p}
+              height={44}
+            />
+          )}
           <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 8 }}>
             {tabs.map((tab, i) => (
               <div key={i} style={{ display: "flex", gap: 6, alignItems: "center" }}>
@@ -201,17 +204,36 @@ export function MobileInspector({
                   />
                 )}
                 {item.kind !== "tabs" && !isSelect && (
-                  <IconBtn icon={tab.icon || "add"} p={p} size={48} on={tabSlot === i} onClick={() => setTabSlot(tabSlot === i ? null : i)} title={t("changeIcon", lang)} />
+                  <IconBtn icon={tab.icon || "add"} p={p} size={48} on={tabSlot === i} onClick={() => { setTabSlot(tabSlot === i ? null : i); setPickerOpen(false); }} title={t("changeIcon", lang)} />
                 )}
                 {item.kind !== "toolbar" && (
                   <Field value={tab.label} onChange={(label) => onChange({ tabs: tabs.map((x, j) => (j === i ? { ...x, label } : x)) })} placeholder={t("label", lang)} p={p} height={48} />
                 )}
+                {isSelect && tabs.length > 1 && (
+                  <IconBtn
+                    icon="close"
+                    p={p}
+                    size={48}
+                    onClick={() => onChange({ tabs: tabs.filter((_, j) => j !== i), selected: item.selected === undefined ? undefined : item.selected === i ? undefined : item.selected > i ? item.selected - 1 : item.selected })}
+                    title={t("removeOption", lang)}
+                  />
+                )}
               </div>
             ))}
           </div>
+          {isSelect && (
+            <button
+              onClick={() => onChange({ tabs: [...tabs, { ...defaultTabsFor(item.kind)[tabs.length % defaultTabsFor(item.kind).length] }] })}
+              className="m3-press"
+              style={{ marginTop: 8, height: 48, width: "100%", borderRadius: 24, border: `1px solid ${p.outline}`, background: "transparent", color: p.primary, fontSize: 14, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}
+            >
+              <Icon name="add" size={20} />
+              {t("addOption", lang)}
+            </button>
+          )}
           {tabSlot !== null && tabs[tabSlot] && (
             <div style={{ marginTop: 8 }}>
-              <IconPicker value={tabs[tabSlot].icon || null} onChange={(icon) => onChange(setIconSlot(item, `tab:${tabSlot}`, icon))} palette={p} />
+              <IconPicker value={tabs[tabSlot].icon || null} onChange={(icon) => onChange(setIconSlot(item, `tab:${tabSlot}`, icon))} onClose={() => setTabSlot(null)} palette={p} />
             </div>
           )}
         </Row>
@@ -226,6 +248,7 @@ export function MobileInspector({
                 <button
                   key={s.key}
                   onClick={() => {
+                    setTabSlot(null);
                     setSlotKey(s.key);
                     setPickerOpen(!(on && pickerOpen));
                   }}
@@ -279,7 +302,7 @@ export function MobileInspector({
           </div>
           {pickerOpen && (
             <div style={{ marginTop: 8 }}>
-              <IconPicker value={activeSlot.value} onChange={(icon) => onChange(setIconSlot(item, activeSlot.key, icon))} palette={p} />
+              <IconPicker value={activeSlot.value} onChange={(icon) => onChange(setIconSlot(item, activeSlot.key, icon))} onClose={() => setPickerOpen(false)} palette={p} />
             </div>
           )}
         </Row>
