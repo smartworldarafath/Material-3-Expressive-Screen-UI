@@ -232,17 +232,6 @@ function migrateGroups(groups: Group[], frames: Frame[]): Group[] {
 /* shown when an edit is refused because the group is locked */
 const lockedGroupMsg = () => t("lockedGroup", getLang());
 
-const isLegacySeed = (raw: string | null) => {
-  if (!raw) return false;
-  try {
-    const d = JSON.parse(raw) as Partial<Doc>;
-    if (d.frames && d.frames.length > 1 && d.frames.some((f) => f.id === "seedF2")) {
-      return true;
-    }
-  } catch {}
-  return false;
-};
-
 const seed = (lang: Lang = getLang()): Group[] => {
   const text = SEED_TEXT[lang];
   let n = 0;
@@ -575,7 +564,40 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
 
   /* ---------- persistence ---------- */
   useEffect(() => {
-    setEditAccess("editable");
+    /* The first tab keeps this promise pending for its lifetime. Later tabs get
+       `null` immediately and stay read-only until they are reloaded. Where the
+       browser has no locks (an insecure origin, an old WebKit) the editor works
+       as it always did, without the guard. */
+    if (!navigator.locks) {
+      setEditAccess("editable");
+      return;
+    }
+    let active = true;
+    let releaseLock: (() => void) | undefined;
+    /* Wait until React has finished its development-only effect replay. This
+       prevents the discarded setup from briefly competing with the real one. */
+    queueMicrotask(() => {
+      if (!active) return;
+      void navigator.locks
+        .request(DOC_LOCK, { ifAvailable: true }, async (lock) => {
+          if (!active) return;
+          if (!lock) {
+            setEditAccess("readonly");
+            return;
+          }
+          setEditAccess("editable");
+          await new Promise<void>((resolve) => {
+            releaseLock = resolve;
+          });
+        })
+        .catch(() => {
+          if (active) setEditAccess("editable");
+        });
+    });
+    return () => {
+      active = false;
+      releaseLock?.();
+    };
   }, []);
 
   /** Puts a stored or opened document into the editor. Fields a partial document
@@ -647,7 +669,7 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
       }
       setGlobalLang(initialLang);
       initialLangRef.current = initialLang;
-      if (!d || isLegacySeed(d)) {
+      if (!d) {
         setGroups(seed(initialLang));
         setFrames([{ ...SEED_FRAMES[0], name: t("home", initialLang) }]);
       }
