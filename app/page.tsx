@@ -34,6 +34,7 @@ import {
   frameOfGroup,
   framePresetPatch,
   frameRadius,
+  isWatchFrame,
   frameRect,
   frameSizeOf,
   carryItemSize,
@@ -2126,6 +2127,8 @@ export default function Page() {
       name: `${t("screenN")} ${framesRef.current.length + 1}`,
       x: nextFrameX(),
       y: base?.y ?? 0,
+      w: base?.w,
+      h: base?.h,
     };
     setFrames((fs) => [...fs, f]);
     setSelectedFrameId(f.id);
@@ -3284,6 +3287,23 @@ export default function Page() {
                           )}
                         </div>
                       </div>
+                      {isWatchFrame(f) && (
+                        <div
+                          style={{
+                            position: "absolute",
+                            left: w + BEZEL - 2,
+                            top: h / 2 - 14,
+                            width: 6,
+                            height: 28,
+                            borderRadius: "2px 4px 4px 2px",
+                            background: "linear-gradient(to right, #2a2a2a, #555, #111)",
+                            boxShadow: "0 2px 4px rgba(0,0,0,0.4)",
+                            pointerEvents: "none",
+                            zIndex: 1,
+                            transition: SIZE_TRANSITION,
+                          }}
+                        />
+                      )}
                     </div>
                   );
                 })}

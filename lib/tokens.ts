@@ -24,6 +24,10 @@ export const PHONE_R = 40;
 export const DESKTOP_W = 1280;
 export const DESKTOP_H = 800;
 export const DESKTOP_R = 28;
+/* Google Pixel Watch (Wear OS circular display: 384x384 dp, 192 dp circular radius) */
+export const WATCH_W = 384;
+export const WATCH_H = 384;
+export const WATCH_R = 192;
 /** M3 window size classes: a screen this wide is "expanded", where the navigation bar becomes a rail */
 export const EXPANDED_W = 840;
 export const isExpanded = (w: number) => w >= EXPANDED_W;
@@ -1312,21 +1316,37 @@ export type Frame = {
   swipe?: Partial<Record<SwipeDir, string>>;
 };
 
-export type FramePreset = "phone" | "desktop";
+export type FramePreset = "phone" | "desktop" | "watch";
 export const frameSizeOf = (f: Frame) => ({ w: f.w ?? PHONE_W, h: f.h ?? PHONE_H });
 export const isPhoneFrame = (f: Frame) => {
   const { w, h } = frameSizeOf(f);
   return w === PHONE_W && h === PHONE_H;
 };
-export const framePresetOf = (f: Frame): FramePreset => (isPhoneFrame(f) ? "phone" : "desktop");
-export const framePresetPatch = (preset: FramePreset): Pick<Frame, "w" | "h"> =>
-  preset === "desktop" ? { w: DESKTOP_W, h: DESKTOP_H } : { w: undefined, h: undefined };
+export const isWatchFrame = (f: Frame) => {
+  const { w, h } = frameSizeOf(f);
+  return w === WATCH_W && h === WATCH_H;
+};
+export const isDesktopFrame = (f: Frame) => {
+  const { w, h } = frameSizeOf(f);
+  return w === DESKTOP_W && h === DESKTOP_H;
+};
+export const framePresetOf = (f: Frame): FramePreset => {
+  if (isWatchFrame(f)) return "watch";
+  return isPhoneFrame(f) ? "phone" : "desktop";
+};
+export const framePresetPatch = (preset: FramePreset): Pick<Frame, "w" | "h"> => {
+  if (preset === "watch") return { w: WATCH_W, h: WATCH_H };
+  if (preset === "desktop") return { w: DESKTOP_W, h: DESKTOP_H };
+  return { w: undefined, h: undefined };
+};
 export const frameRect = (f: Frame) => {
   const { w, h } = frameSizeOf(f);
   return { l: f.x, t: f.y, r: f.x + w, b: f.y + h };
 };
-/** the corner radius of a screen: a phone's rounded glass, a flatter window for the desktop */
-export const frameRadius = (f: Frame) => (isPhoneFrame(f) ? PHONE_R : DESKTOP_R);
+/** the corner radius of a screen: a phone's rounded glass, a flatter window for the desktop, full circular for watch */
+export const frameRadius = (f: Frame) => (isWatchFrame(f) ? WATCH_R : isPhoneFrame(f) ? PHONE_R : DESKTOP_R);
+/** the icon representing the frame form factor */
+export const frameIconOf = (f: Frame) => (isWatchFrame(f) ? "watch" : isPhoneFrame(f) ? "smartphone" : "desktop_windows");
 
 /** parts that span the screen edge to edge and follow its width when it changes */
 export const FULL_WIDTH: Kind[] = ["topAppBar", "bottomNav", "tabs"];

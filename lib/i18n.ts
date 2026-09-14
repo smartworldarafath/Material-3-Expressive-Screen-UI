@@ -291,6 +291,7 @@ export const UI = {
   copySuffix: { ja: " コピー", en: " copy", zh: " 副本" },
   frameSize: { ja: "画面サイズ", en: "Screen size", zh: "屏幕尺寸" },
   phoneFrame: { ja: "スマホ", en: "Phone", zh: "手机" },
+  watchFrame: { ja: "Pixel Watch", en: "Watch", zh: "手表" },
   desktopFrame: { ja: "デスクトップ", en: "Desktop", zh: "桌面" },
   // mobile
   mobileNote: { ja: "フル機能は PC のブラウザで使えます", en: "Full features on a desktop browser", zh: "完整功能请在电脑浏览器中使用" },
@@ -379,7 +380,7 @@ export type UIKey = keyof typeof UI;
 
 /** exported for the parity tests only; read strings through t() */
 export const KO: Record<UIKey, string> = {
-  frameSize: "화면 크기", phoneFrame: "휴대전화", desktopFrame: "데스크톱", columnWidth: "휴대전화 한 화면 너비", cornerLeft: "왼쪽 모서리", cornerRight: "오른쪽 모서리", cornersEach: "모서리별로 지정", cornerTl: "왼쪽 위", cornerTr: "오른쪽 위", cornerBl: "왼쪽 아래", cornerBr: "오른쪽 아래",
+  frameSize: "화면 크기", phoneFrame: "휴대전화", watchFrame: "워치", desktopFrame: "데스크톱", columnWidth: "휴대전화 한 화면 너비", cornerLeft: "왼쪽 모서리", cornerRight: "오른쪽 모서리", cornersEach: "모서리별로 지정", cornerTl: "왼쪽 위", cornerTr: "오른쪽 위", cornerBl: "왼쪽 아래", cornerBr: "오른쪽 아래",
   filled: "채움", tonal: "색조", elevated: "그림자", outlined: "윤곽선", standard: "표준", vibrant: "선명함",
   parts: "부품", layers: "레이어", edit: "편집", prompt: "프롬프트", closePanel: "패널 닫기",
   search: "검색", favorites: "즐겨찾기", addFavorite: "즐겨찾기에 추가", removeFavorite: "즐겨찾기에서 제거", clear: "지우기", language: "언어",

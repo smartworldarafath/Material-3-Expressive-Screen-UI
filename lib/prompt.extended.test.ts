@@ -26,6 +26,8 @@ import {
   Palette,
   PHONE_W,
   PHONE_H,
+  WATCH_W,
+  WATCH_H,
   makeItem,
 } from "./tokens";
 
@@ -313,3 +315,15 @@ describe("integration with makeItem", () => {
     expect(out.length).toBeGreaterThan(200);
   });
 });
+
+describe("buildPrompt — watch viewport", () => {
+  it("targets circular smartwatch screen when all frames are watch size", () => {
+    const watchFrame: Frame = { id: "wf1", name: "WatchHome", x: 0, y: 0, w: WATCH_W, h: WATCH_H };
+    const doc = baseDoc({ frames: [watchFrame] });
+    const enPrompt = buildPrompt(doc, widths, undefined, "en");
+    expect(enPrompt).toContain("Target a circular smartwatch screen (Google Pixel Watch / Wear OS, 384×384dp)");
+    const jaPrompt = buildPrompt(doc, widths, undefined, "ja");
+    expect(jaPrompt).toContain("Google Pixel Watch / Wear OS、384×384dp");
+  });
+});
+

@@ -30,7 +30,7 @@ import {
   cardFillOf,
   frameSizeOf,
   halfWidth,
-  isPhoneFrame,
+  frameIconOf,
   toggleIcon,
   iconSlotsOf,
   setIconSlot,
@@ -188,6 +188,7 @@ export function FrameSizePicker({
     <Segmented<FramePreset>
       options={[
         { key: "phone", icon: "smartphone", label: compact ? undefined : t("phoneFrame", lang), title: t("phoneFrame", lang) },
+        { key: "watch", icon: "watch", label: compact ? undefined : t("watchFrame", lang), title: t("watchFrame", lang) },
         { key: "desktop", icon: "desktop_windows", label: compact ? undefined : t("desktopFrame", lang), title: t("desktopFrame", lang) },
       ]}
       value={framePresetOf(frame)}
@@ -271,7 +272,7 @@ function FrameChips({
     <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
       {chip(null, t("none", lang), "block")}
       {back && chip(BACK_TARGET, t("goBack", lang), "arrow_back")}
-      {frames.map((f) => chip(f.id, f.name || t("screen", lang), isPhoneFrame(f) ? "smartphone" : "desktop_windows"))}
+      {frames.map((f) => chip(f.id, f.name || t("screen", lang), frameIconOf(f)))}
     </div>
   );
 }
@@ -415,7 +416,7 @@ export function FrameInspector({
           color: p.onSecondaryContainer,
         }}
       >
-        <Icon name={isPhoneFrame(frame) ? "smartphone" : "desktop_windows"} size={20} />
+        <Icon name={frameIconOf(frame)} size={20} />
         <span style={{ fontSize: 14, fontWeight: 600, flex: 1, minWidth: 0 }}>{t("screen", lang)}</span>
         <IconBtn icon="play_arrow" p={p} onClick={onPreview} title={t("previewFrom", lang)} size={32} fill />
         <IconBtn icon="content_copy" p={p} onClick={onDuplicate} title={t("duplicate", lang)} size={32} />
@@ -425,7 +426,7 @@ export function FrameInspector({
         <FrameSizePicker frame={frame} palette={p} onChange={onSize} />
       </Section>
       <Section id="frame-name" icon="label" title={t("name", lang)} p={p}>
-        <Field value={frame.name} onChange={(name) => onChange({ name })} placeholder={t("screenName", lang)} p={p} icon={isPhoneFrame(frame) ? "smartphone" : "desktop_windows"} />
+        <Field value={frame.name} onChange={(name) => onChange({ name })} placeholder={t("screenName", lang)} p={p} icon={frameIconOf(frame)} />
       </Section>
       <Section id="frame-note" icon="notes" title={t("description", lang)} p={p}>
         <AiField ai={ai} history={frame.noteHistory} onRestore={() => onChange(popHistory(frame.note, frame.noteHistory, "note", "noteHistory"))} p={p} value={frame.note ?? ""} onChange={(note) => onChange({ note: note || undefined })} placeholder={t("screenDescription", lang)} />

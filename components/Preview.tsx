@@ -31,6 +31,8 @@ import {
   frameSizeOf,
   groupsInFrame,
   isPhoneFrame,
+  isWatchFrame,
+  frameIconOf,
   normalizeTheme,
   toggleIcon,
   uniformRadii,
@@ -798,6 +800,22 @@ export function Preview({
             boxShadow: "0 30px 80px rgba(0,0,0,0.22)",
           }}
         >
+          {isWatchFrame(current) && (
+            <div
+              style={{
+                position: "absolute",
+                right: -4,
+                top: "50%",
+                transform: "translateY(-50%)",
+                width: 6,
+                height: 28,
+                borderRadius: "2px 4px 4px 2px",
+                background: "linear-gradient(to right, #2a2a2a, #555, #111)",
+                boxShadow: "0 2px 4px rgba(0,0,0,0.4)",
+                pointerEvents: "none",
+              }}
+            />
+          )}
           <motion.div
             onClickCapture={(e) => {
               if (swiped.current) {
@@ -909,7 +927,7 @@ export function Preview({
                 maxWidth: wide ? undefined : 200,
               }}
             >
-              <Icon name={phone ? "smartphone" : "desktop_windows"} size={20} />
+              <Icon name={frameIconOf(current)} size={20} />
               <span style={{ ...label, flex: wide ? 1 : undefined, textAlign: "left" }}>{current.name || t("screen", lang)}</span>
               <Icon name={wide ? (picker ? "chevron_right" : "chevron_left") : picker ? "expand_more" : "expand_less"} size={18} />
             </button>
@@ -969,7 +987,7 @@ export function Preview({
                         }}
                       >
                         <span style={{ width: 18, display: "inline-flex" }}>
-                          {on ? <Icon name="check" size={18} /> : <Icon name={isPhoneFrame(f) ? "smartphone" : "desktop_windows"} size={18} />}
+                          {on ? <Icon name="check" size={18} /> : <Icon name={frameIconOf(f)} size={18} />}
                         </span>
                         {f.name || t("screen", lang)}
                       </button>
