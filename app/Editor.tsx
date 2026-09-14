@@ -212,7 +212,7 @@ function translateSnapshot(snap: Snapshot, lang: Lang): Snapshot {
   };
 }
 
-const SEED_FRAMES: Frame[] = [{ id: "seedF1", name: "Home", x: 0, y: 0 }];
+const SEED_FRAMES: Frame[] = [{ id: "seedF1", name: "Home", x: 432, y: 18 }];
 
 /** Documents saved before the bars grew their system insets have the navigation
  *  bar flush with the old 80dp bottom; keep it on the bottom edge. */
@@ -235,8 +235,8 @@ const isLegacySeed = (raw: string | null) => {
   if (!raw) return false;
   try {
     const d = JSON.parse(raw) as Partial<Doc>;
-    const items = d.groups?.flatMap((g) => g.items) ?? [];
-    if (d.frames?.some((f) => f.id === "seedF2") || (items.some((i) => i.id?.startsWith("seed")) && !items.some((i) => i.icon2 === "chevron_right"))) {
+    const frame = d.frames?.[0];
+    if (d.frames?.length !== 1 || frame?.x !== 432 || frame?.y !== 18) {
       return true;
     }
   } catch {}
@@ -245,39 +245,70 @@ const isLegacySeed = (raw: string | null) => {
 
 const seed = (lang: Lang = getLang()): Group[] => {
   const text = SEED_TEXT[lang];
-  let n = 0;
-  const sid = () => `seed${++n}`;
-  const mk = (k: Kind) => ({ ...makeItem(k), id: sid() });
-  const bar = mk("topAppBar");
-  const a = mk("button");
-  const b = mk("button");
-  a.label = text.favorite;
-  a.icon = "star";
-  b.label = text.share;
-  b.icon = "share";
-  b.variant = "tonal";
-  const rows = [text.inbox, text.starred, text.archive].map((t, i) => {
-    const it = mk("listItem");
-    it.label = t;
-    it.icon = ["inbox", "star", "archive"][i];
-    it.supporting = text.supporting;
-    it.icon2 = "chevron_right";
-    return it;
-  });
-  const nav = mk("bottomNav");
-  const fab = mk("fab");
+  const fx = SEED_FRAMES[0].x;
+  const fy = SEED_FRAMES[0].y;
+  const mk = (k: Kind) => makeItem(k);
+
+  const bar = {
+    ...mk("topAppBar"),
+    id: "seed1",
+    size: PHONE_W,
+  };
+
+  const a = {
+    ...mk("button"),
+    id: "seed2",
+    label: text.favorite,
+    icon: "star",
+    variant: "filled" as const,
+  };
+
+  const b = {
+    ...mk("button"),
+    id: "seed3",
+    label: text.share,
+    icon: "share",
+    variant: "tonal" as const,
+  };
+
+  const rows = [
+    { label: text.inbox, icon: "inbox" },
+    { label: text.starred, icon: "star" },
+    { label: text.archive, icon: "archive" },
+  ].map((row, i) => ({
+    ...mk("listItem"),
+    id: `seed${4 + i}`,
+    label: row.label,
+    icon: row.icon,
+    supporting: text.supporting,
+    icon2: "chevron_right",
+    size: 380,
+  }));
+
+  const fab = {
+    ...mk("fab"),
+    id: "seed8",
+    size: 56,
+  };
+
+  const nav = {
+    ...mk("bottomNav"),
+    id: "seed7",
+    size: PHONE_W,
+  };
+
   return [
-    { id: sid(), x: 0, y: 0, axis: "x", items: [bar] },
-    { id: sid(), x: PHONE_MARGIN, y: 96, axis: "x", items: [a, b] },
-    { id: sid(), x: PHONE_MARGIN, y: 184, axis: "y", items: rows },
+    { id: "seed9", x: fx, y: fy, axis: "x", items: [bar] },
+    { id: "seed10", x: fx + PHONE_MARGIN, y: fy + 96, axis: "x", items: [a, b] },
+    { id: "seed11", x: fx + PHONE_MARGIN, y: fy + 184, axis: "y", items: rows },
     {
-      id: sid(),
-      x: PHONE_W - 56 - PHONE_MARGIN,
-      y: PHONE_H - KIND_SPEC.bottomNav.h - 56 - PHONE_MARGIN,
+      id: "seed12",
+      x: fx + PHONE_W - 56 - PHONE_MARGIN,
+      y: fy + PHONE_H - KIND_SPEC.bottomNav.h - 56 - PHONE_MARGIN,
       axis: "x",
       items: [fab],
     },
-    { id: sid(), x: 0, y: PHONE_H - KIND_SPEC.bottomNav.h, axis: "x", items: [nav] },
+    { id: "seed13", x: fx, y: fy + PHONE_H - KIND_SPEC.bottomNav.h, axis: "x", items: [nav] },
   ];
 };
 
