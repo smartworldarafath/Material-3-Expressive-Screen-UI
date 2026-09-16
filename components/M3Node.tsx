@@ -35,6 +35,7 @@ import {
   CARD_PADDING,
   CARD_TEXT_GAP,
   cardContentAlignOf,
+  cardTextAlignOf,
   cardFillOf,
   cardImagePosOf,
   cardImageSizeOf,
@@ -331,13 +332,13 @@ function SwitchContent({ item, p }: { item: Item; p: Palette }) {
   return (
     <span style={{ display: "inline-flex", alignItems: "center", gap: 14, height: H - 8, whiteSpace: "nowrap", width: item.size ? "100%" : undefined, justifyContent: item.size ? "space-between" : undefined }}>
       {hasLabel && <span style={{ fontSize: 16, color: p.onSurface, overflow: "hidden", textOverflow: "ellipsis" }}>{item.label}</span>}
-      <SwitchControl on={!!item.checked} noCheck={!!item.noCheck} p={p} />
+      <SwitchControl on={!!item.checked} p={p} />
     </span>
   );
 }
 
 /** the M3 switch track and handle, 52 × 32 */
-function SwitchControl({ on, noCheck, p }: { on: boolean; noCheck?: boolean; p: Palette }) {
+function SwitchControl({ on, p }: { on: boolean; p: Palette }) {
   return (
     <span
         style={{
@@ -368,7 +369,7 @@ function SwitchControl({ on, noCheck, p }: { on: boolean; noCheck?: boolean; p: 
             transition: "left 160ms, width 160ms, height 160ms",
           }}
         >
-          {on && !noCheck && <Icon name="check" size={16} weight={600} />}
+          {on && <Icon name="check" size={16} weight={600} />}
         </span>
       </span>
   );
@@ -969,6 +970,9 @@ function Body({ item, p, tabScroll, menuShown }: { item: Item; p: Palette; tabSc
       const padding = CARD_PADDING;
       const align = cardContentAlignOf(item);
       const justifyContent = { start: "flex-start", center: "center", end: "flex-end" }[align] as React.CSSProperties["justifyContent"];
+      const across = cardTextAlignOf(item);
+      const alignItems = { start: "flex-start", center: "center", end: "flex-end" }[across] as React.CSSProperties["alignItems"];
+      const textAlign = { start: "start", center: "center", end: "end" }[across] as React.CSSProperties["textAlign"];
       const ink = cardTextColorOf(item, p);
       const body = cardBodyColorOf(item, p);
       const picture = item.src ? (
@@ -994,9 +998,10 @@ function Body({ item, p, tabScroll, menuShown }: { item: Item; p: Palette; tabSc
         </div>
       );
       const text = (
-        <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: CARD_TEXT_GAP, justifyContent }}>
+        /* the column may shrink under a large picture: what does not fit is clipped, never pushed out of the card */
+        <div style={{ flex: 1, minWidth: 0, minHeight: 0, overflow: "hidden", display: "flex", flexDirection: "column", gap: CARD_TEXT_GAP, justifyContent, alignItems, textAlign }}>
           {hasLabel && (
-            <div style={{ fontSize: 16, fontWeight: w(600, 700), color: ink, ...ellipsis }}>{item.label}</div>
+            <div style={{ fontSize: 16, fontWeight: w(600, 700), color: ink, maxWidth: "100%", ...ellipsis }}>{item.label}</div>
           )}
           {hasSupporting && (
             <div style={{ fontSize: 13, lineHeight: 1.5, color: body.color, opacity: body.opacity, overflow: "hidden" }}>
@@ -1019,8 +1024,9 @@ function Body({ item, p, tabScroll, menuShown }: { item: Item; p: Palette; tabSc
           </div>
         );
       }
-      /* top: the image band above the text; leading / trailing: a full-height column beside it */
+      /* top / bottom: the image band above or under the text; leading / trailing: a full-height column beside it */
       const side = hasImage && (pos === "leading" || pos === "trailing");
+      const after = pos === "trailing" || pos === "bottom";
       return (
         <div
           style={{
@@ -1030,11 +1036,12 @@ function Body({ item, p, tabScroll, menuShown }: { item: Item; p: Palette; tabSc
             flexDirection: side ? "row" : "column",
             gap: CARD_MEDIA_GAP,
             boxSizing: "border-box",
+            overflow: "hidden",
           }}
         >
-          {hasImage && pos !== "trailing" && media(side ? { width: cardImageSizeOf(item), alignSelf: "stretch" } : { height: cardImageSizeOf(item) })}
+          {hasImage && !after && media(side ? { width: cardImageSizeOf(item), alignSelf: "stretch" } : { height: cardImageSizeOf(item) })}
           {text}
-          {hasImage && pos === "trailing" && media({ width: cardImageSizeOf(item), alignSelf: "stretch" })}
+          {hasImage && after && media(side ? { width: cardImageSizeOf(item), alignSelf: "stretch" } : { height: cardImageSizeOf(item) })}
         </div>
       );
     }
@@ -1065,7 +1072,7 @@ function Body({ item, p, tabScroll, menuShown }: { item: Item; p: Palette; tabSc
               <div style={{ fontSize: 13, color: p.onSurfaceVariant, ...ellipsis }}>{item.supporting}</div>
             )}
           </div>
-          {item.switch ? <SwitchControl on={!!item.checked} noCheck={!!item.noCheck} p={p} /> : item.icon2 && <Icon name={item.icon2} size={22} color={p.onSurfaceVariant} />}
+          {item.switch ? <SwitchControl on={!!item.checked} p={p} /> : item.icon2 && <Icon name={item.icon2} size={22} color={p.onSurfaceVariant} />}
         </div>
       );
     }
@@ -1323,9 +1330,11 @@ function Body({ item, p, tabScroll, menuShown }: { item: Item; p: Palette; tabSc
       );
 
     case "camera":
-      /* a viewfinder: the live feed is dark, with focus brackets and a shutter row */
+      /* a viewfinder: the live feed is dark, with focus brackets and a shutter row. The body
+         paints the dark ground itself, on a layer of its own, so a box resized in a hurry never
+         shows the screen through it while the clipped box behind it catches up. */
       return (
-        <div style={{ position: "relative", height: "100%", color: p.inverseOnSurface }}>
+        <div style={{ position: "relative", height: "100%", color: p.inverseOnSurface, background: p.inverseSurface, transform: "translateZ(0)" }}>
           {(["left", "right"] as const).map((side) =>
             (["top", "bottom"] as const).map((edge) => (
               <div
@@ -1356,9 +1365,10 @@ function Body({ item, p, tabScroll, menuShown }: { item: Item; p: Palette; tabSc
       );
 
     case "map":
-      /* a stylised city: blocks on a light ground, two main roads and a river, one pin */
+      /* a stylised city: blocks on a light ground, two main roads and a river, one pin. Painted
+         on its own layer, like the camera, so a quick resize never leaves it see-through. */
       return (
-        <div style={{ position: "relative", height: "100%", overflow: "hidden" }}>
+        <div style={{ position: "relative", height: "100%", overflow: "hidden", background: p.surfaceContainerLow, transform: "translateZ(0)" }}>
           <svg width="100%" height="100%" viewBox="0 0 400 300" preserveAspectRatio="xMidYMid slice" style={{ position: "absolute", inset: 0 }} aria-hidden>
             <rect width="400" height="300" fill={p.surfaceContainerLow} />
             <path d="M-20 210 C 80 170, 140 260, 240 220 S 380 150, 430 190 L 430 240 C 380 200, 300 260, 240 250 S 120 230, -20 250 Z" fill={p.primaryContainer} opacity={0.6} />
@@ -1678,7 +1688,8 @@ export function contentColor(item: Item, p: Palette): string {
   return typeof c === "string" ? c : p.onSurface;
 }
 
-function boxStyle(item: Item, p: Palette): React.CSSProperties {
+/** how the part's box is painted: the panel paints its style cells with the same answer */
+export function boxStyle(item: Item, p: Palette): React.CSSProperties {
   if (NO_BOX.includes(item.kind) || menuOpen(item)) return { background: "transparent", border: "none" };
   switch (item.kind) {
     case "box": {
@@ -1713,7 +1724,9 @@ function boxStyle(item: Item, p: Palette): React.CSSProperties {
     case "tabs":
       return { background: p.surface, border: "none", color: p.onSurface };
     case "searchBar":
-      return { background: p.surfaceContainerHigh, border: "none", color: p.onSurface };
+      return item.variant === "outlined"
+        ? { background: p.surface, border: `1px solid ${p.outline}`, color: p.onSurface }
+        : { background: p.surfaceContainerHigh, border: "none", color: p.onSurface };
     case "dialog":
       return { background: p.surfaceContainerHigh, border: "none", color: p.onSurface };
     case "datePicker":

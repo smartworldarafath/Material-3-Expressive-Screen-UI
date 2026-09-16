@@ -24,11 +24,15 @@ export function IconPicker({
   onChange,
   onClose,
   palette,
+  extras = [],
 }: {
   value: string | null;
   onChange: (icon: string | null) => void;
   onClose: () => void;
   palette: Palette;
+  /** choices that are not icons but stand where one would -- a switch at the end of a list
+   *  item -- drawn beside "no icon" in the same dashed frame */
+  extras?: { icon: string; title: string }[];
 }) {
   const lang = useLang();
   const [icons, setIcons] = useState<IconMeta[] | null>(cache);
@@ -264,6 +268,31 @@ export function IconPicker({
               </svg>
             </button>
           )}
+          {!q &&
+            extras.map((x) => (
+              <button
+                key={x.icon}
+                title={x.title}
+                aria-label={x.title}
+                aria-pressed={value === x.icon}
+                onClick={() => onChange(x.icon)}
+                style={{
+                  aspectRatio: "1",
+                  minWidth: 0,
+                  display: "grid",
+                  placeItems: "center",
+                  borderRadius: 12,
+                  border: `1.5px dashed ${value === x.icon ? "transparent" : palette.outline}`,
+                  background: value === x.icon ? palette.primary : "transparent",
+                  color: value === x.icon ? palette.onPrimary : palette.onSurfaceVariant,
+                  cursor: "pointer",
+                }}
+              >
+                <span className="msr" style={{ fontSize: 22 }}>
+                  {x.icon}
+                </span>
+              </button>
+            ))}
           {visible.map((i, idx) => (
             <button
               key={i.n}

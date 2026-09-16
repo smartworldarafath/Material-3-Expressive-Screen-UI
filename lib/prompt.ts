@@ -11,9 +11,6 @@ import {
   carouselCountOf,
   carouselLayoutOf,
   dateLayoutOf,
-  dayOf,
-  hourOf,
-  minuteOf,
   timeLayoutOf,
   LINK_TARGET,
   MENU_TARGET,
@@ -41,6 +38,7 @@ import {
   frameRect,
   frameSizeOf,
   cardImagePosOf,
+  isCardImageBand,
   cardImageSizeOf,
   groupBounds,
   isPhoneFrame,
@@ -75,7 +73,8 @@ function cardImage(it: Item, lang: Lang): string {
   const size = pos !== "background" && it.imageSize !== undefined ? cardImageSizeOf(it) : undefined;
   if (lang === "ja") {
     const what = url ? ` ${url} の画像` : it.src ? "指定の画像" : `${it.icon ? `${it.icon} アイコンの` : ""}プレースホルダー画像`;
-    const sized = size ? `（${pos === "top" ? "高さ" : "幅"} ${size}dp）` : "";
+    const sized = size ? `（${isCardImageBand(pos) ? "高さ" : "幅"} ${size}dp）` : "";
+    if (pos === "bottom") return `下部に${what}${sized}、`;
     if (pos === "leading") return `先頭側（全高）に${what}${sized}、`;
     if (pos === "trailing") return `末尾側（全高）に${what}${sized}、`;
     if (pos === "background") return `背景全面に${what}（テキストの背後にスクリム）、`;
@@ -83,7 +82,8 @@ function cardImage(it: Item, lang: Lang): string {
   }
   if (lang === "zh") {
     const what = url ? ` ${url} 的图片` : it.src ? "指定的图片" : `${it.icon ? `${it.icon} 图标的` : ""}占位图片`;
-    const sized = size ? `（${pos === "top" ? "高" : "宽"} ${size}dp）` : "";
+    const sized = size ? `（${isCardImageBand(pos) ? "高" : "宽"} ${size}dp）` : "";
+    if (pos === "bottom") return `底部是${what}${sized}，`;
     if (pos === "leading") return `左侧（全高）是${what}${sized}，`;
     if (pos === "trailing") return `右侧（全高）是${what}${sized}，`;
     if (pos === "background") return `整张卡片的背景是${what}（文字后方加渐变遮罩），`;
@@ -91,14 +91,16 @@ function cardImage(it: Item, lang: Lang): string {
   }
   if (lang === "ko") {
     const what = url ? `${url}의 이미지` : it.src ? "지정한 이미지" : `${it.icon ? `${it.icon} 아이콘의 ` : ""}자리표시자 이미지`;
-    const sized = size ? `(${pos === "top" ? "높이" : "너비"} ${size}dp)` : "";
+    const sized = size ? `(${isCardImageBand(pos) ? "높이" : "너비"} ${size}dp)` : "";
+    if (pos === "bottom") return `아래쪽에 ${what}${sized}, `;
     if (pos === "leading") return `앞쪽(전체 높이)에 ${what}${sized}, `;
     if (pos === "trailing") return `뒤쪽(전체 높이)에 ${what}${sized}, `;
     if (pos === "background") return `배경 전체에 ${what}(텍스트 뒤에 스크림), `;
     return `위쪽에 ${what}${sized}, `;
   }
   const what = url ? `an image from ${url}` : it.src ? "the provided image" : `a placeholder image${it.icon ? ` (${it.icon} icon)` : ""}`;
-  const sized = size ? ` (${size}dp ${pos === "top" ? "tall" : "wide"})` : "";
+  const sized = size ? ` (${size}dp ${isCardImageBand(pos) ? "tall" : "wide"})` : "";
+  if (pos === "bottom") return `with ${what}${sized} along the bottom, `;
   if (pos === "leading") return `with ${what}${sized} filling the leading side, `;
   if (pos === "trailing") return `with ${what}${sized} filling the trailing side, `;
   if (pos === "background") return `with ${what} as a full-bleed background behind a scrim under the text, `;
@@ -113,6 +115,11 @@ function cardText(it: Item, lang: Lang): string {
   if (align && align !== auto) {
     const pos = lang === "ja" ? { start: "上", center: "中央", end: "下" } : lang === "zh" ? { start: "顶部", center: "垂直居中", end: "底部" } : lang === "ko" ? { start: "위", center: "가운데", end: "아래" } : { start: "top", center: "middle", end: "bottom" };
     parts.push(lang === "ja" ? `文字は${pos[align]}寄せ` : lang === "zh" ? `文字${pos[align]}对齐` : lang === "ko" ? `텍스트 ${pos[align]} 정렬` : `text aligned to the ${pos[align]}`);
+  }
+  const across = it.textAlign;
+  if (across && across !== "start") {
+    const word = lang === "ja" ? { center: "文字は中央揃え", end: "文字は右揃え" } : lang === "zh" ? { center: "文字居中", end: "文字右对齐" } : lang === "ko" ? { center: "텍스트 가운데 정렬", end: "텍스트 오른쪽 정렬" } : { center: "text centred", end: "text aligned to the end" };
+    parts.push(word[across]);
   }
   if (it.textColor) parts.push(lang === "ja" ? `文字色 ${it.textColor}` : lang === "zh" ? `文字颜色 ${it.textColor}` : lang === "ko" ? `텍스트 색상 ${it.textColor}` : `text in ${it.textColor}`);
   if (!parts.length) return "";
@@ -135,6 +142,11 @@ const imageSrc = (it: Item) => (it.src && /^https?:\/\//.test(it.src) ? it.src :
 const viewSize = (it: Item, ratio: number) => {
   const w = it.size ?? CONTENT_W;
   return `${w}×${it.size2 ?? Math.round(w * ratio)}dp`;
+};
+/** a picture's box: square until it was given a height of its own */
+const imageDims = (it: Item) => {
+  const w = it.size ?? 200;
+  return `${w}×${it.size2 ?? w}dp`;
 };
 
 /** which destination of a bar, rail or tab row is selected, in words */
@@ -244,11 +256,6 @@ const TIME_TEXT: Record<Lang, Record<TimeLayout, string>> = {
   zh: { dial: "表盘", input: "输入框" },
   ko: { dial: "시계판", input: "입력란" },
 };
-/** the clock a time picker is set to, as a 12-hour reading with its half of the day */
-function clockText(it: Item): string {
-  const h = hourOf(it);
-  return `${String(h % 12 || 12).padStart(2, "0")}:${String(minuteOf(it)).padStart(2, "0")} ${h >= 12 ? "PM" : "AM"}`;
-}
 
 /** a chip drawn at anything but the 32dp M3 asks for says so */
 function chipHeightText(it: Item, lang: Lang): string {
@@ -294,9 +301,9 @@ function itemJa(it: Item): string {
     case "carousel":
       return `${CAROUSEL_TEXT.ja[carouselLayoutOf(it)]}レイアウトのカルーセル（カード ${carouselCountOf(it)} 枚、高さ ${it.size2 ?? 180}dp、各カードは角丸 16dp、横スクロール${carouselCardsText(it, "ja")}）`;
     case "datePicker":
-      return `${DATE_TEXT.ja[dateLayoutOf(it)]}の日付ピッカー（${dayOf(it)} 日を選択中${dateLayoutOf(it) === "input" ? "" : "、月のグリッドとキャンセル／OK"}）`;
+      return `${DATE_TEXT.ja[dateLayoutOf(it)]}の日付ピッカー（今日の日付を選択中${dateLayoutOf(it) === "input" ? "" : "、月のグリッドとキャンセル／OK"}）`;
     case "timePicker":
-      return `${TIME_TEXT.ja[timeLayoutOf(it)]}の時刻ピッカー（${clockText(it)}、AM/PM 切り替えとキャンセル／OK）`;
+      return `${TIME_TEXT.ja[timeLayoutOf(it)]}の時刻ピッカー（現在時刻を選択中、AM/PM 切り替えとキャンセル／OK）`;
     case "iconButton":
       return `${it.icon ?? "空"} アイコンの${v}アイコンボタン${iconButtonSize(it, "ja")}`;
     case "fab":
@@ -316,7 +323,7 @@ function itemJa(it: Item): string {
       return `${tabs.length}項目のナビゲーションレール（${tabs.join("、")}。${selectedText(it, "ja")}）${railStateText(it, "ja")}`;
     }
     case "searchBar":
-      return `プレースホルダー${q(it.label)}の検索バー${it.icon2 ? `（右端に ${it.icon2} アイコン）` : ""}`;
+      return `プレースホルダー${q(it.label)}の${it.variant === "outlined" ? "枠線スタイルの" : ""}検索バー${it.icon2 ? `（右端に ${it.icon2} アイコン）` : ""}`;
     case "card": {
       const style = it.variant === "elevated" ? "エレベーテッド" : it.variant === "outlined" ? "アウトライン" : "塗りつぶし";
       return `${style}カード${it.size2 ? `（高さ ${it.size2}dp）` : ""}${cardLook(it, "ja")}。${cardImage(it, "ja")}見出し${q(it.label)}${hasText(it.supporting) ? `、本文${q(it.supporting!)}` : ""}${cardText(it, "ja")}`;
@@ -335,7 +342,7 @@ function itemJa(it: Item): string {
       return `ラベル${q(it.label)}の${it.variant === "filled" ? "塗りつぶし" : "アウトライン"}ドロップダウン（タップでメニューを開いて 1 つ選ぶ。選択肢は${opts.join("、")}${initial}）${it.icon ? `（先頭に ${it.icon} アイコン）` : ""}${hasText(it.supporting) ? `。補助テキストは${q(it.supporting!)}` : ""}`;
     }
     case "switch":
-      return `${q(it.label)}のスイッチ（初期状態は${it.checked ? "オン" : "オフ"}${it.noCheck ? "、オン時のハンドルにチェックアイコンなし" : ""}）`;
+      return `${q(it.label)}のスイッチ（初期状態は${it.checked ? "オン" : "オフ"}）`;
     case "checkbox":
       return `${q(it.label)}のチェックボックス（初期状態は${it.checked ? "チェック済み" : "未チェック"}）`;
     case "slider":
@@ -343,7 +350,7 @@ function itemJa(it: Item): string {
     case "text":
       return `${it.bold ? "太字の" : ""}テキスト${q(it.label)}（${it.size ?? 28}sp）`;
     case "image":
-      return `${it.size ?? 200}dp 角の画像${imageSrc(it) ? `（${imageSrc(it)} の画像を表示）` : it.src ? "（指定の画像を表示）" : "プレースホルダー"}`;
+      return `${imageDims(it)} の画像${imageSrc(it) ? `（${imageSrc(it)} の画像を表示）` : it.src ? "（指定の画像を表示）" : "プレースホルダー"}`;
     case "camera":
       return `${viewSize(it, 4 / 3)} のカメラプレビュー`;
     case "map":
@@ -389,9 +396,9 @@ function itemEn(it: Item): string {
     case "carousel":
       return `a ${CAROUSEL_TEXT.en[carouselLayoutOf(it)]} carousel of ${carouselCountOf(it)} cards (${it.size2 ?? 180}dp tall, each card with 16dp corners, scrolling sideways${carouselCardsText(it, "en")})`;
     case "datePicker":
-      return `a date picker as a ${DATE_TEXT.en[dateLayoutOf(it)]} (day ${dayOf(it)} selected${dateLayoutOf(it) === "input" ? "" : ", with the month grid and Cancel / OK"})`;
+      return `a date picker as a ${DATE_TEXT.en[dateLayoutOf(it)]} (today's date selected${dateLayoutOf(it) === "input" ? "" : ", with the month grid and Cancel / OK"})`;
     case "timePicker":
-      return `a time picker on a ${TIME_TEXT.en[timeLayoutOf(it)]} set to ${clockText(it)}, with the AM/PM toggle and Cancel / OK`;
+      return `a time picker on a ${TIME_TEXT.en[timeLayoutOf(it)]} set to the current time, with the AM/PM toggle and Cancel / OK`;
     case "iconButton":
       return `a ${v} icon button with the ${it.icon ?? "empty"} icon${iconButtonSize(it, "en")}`;
     case "fab":
@@ -411,7 +418,7 @@ function itemEn(it: Item): string {
       return `a navigation rail with ${tabs.length} destinations: ${tabs.join(", ")}; ${selectedText(it, "en")}${railStateText(it, "en")}`;
     }
     case "searchBar":
-      return `a search bar with the placeholder ${q(it.label)}${it.icon2 ? ` and a ${it.icon2} icon at the end` : ""}`;
+      return `${it.variant === "outlined" ? "an outlined" : "a"} search bar with the placeholder ${q(it.label)}${it.icon2 ? ` and a ${it.icon2} icon at the end` : ""}`;
     case "card": {
       const style = it.variant === "elevated" ? "an elevated" : it.variant === "outlined" ? "an outlined" : "a filled";
       return `${style} card${it.size2 ? ` (${it.size2}dp tall)` : ""}${cardLook(it, "en")} ${cardImage(it, "en") || "with "}the headline ${q(it.label)}${hasText(it.supporting) ? ` and the body ${q(it.supporting!)}` : ""}${cardText(it, "en")}`;
@@ -430,7 +437,7 @@ function itemEn(it: Item): string {
       return `${it.variant === "filled" ? "a filled" : "an outlined"} dropdown labeled ${q(it.label)} that opens a menu to pick one option (options ${opts.join(", ")}${initial})${it.icon ? `, with a leading ${it.icon} icon` : ""}${hasText(it.supporting) ? `; supporting text ${q(it.supporting!)}` : ""}`;
     }
     case "switch":
-      return `a switch ${q(it.label)} (initially ${it.checked ? "on" : "off"}${it.noCheck ? "; no check icon on the handle when on" : ""})`;
+      return `a switch ${q(it.label)} (initially ${it.checked ? "on" : "off"})`;
     case "checkbox":
       return `a checkbox ${q(it.label)} (initially ${it.checked ? "checked" : "unchecked"})`;
     case "slider":
@@ -438,7 +445,7 @@ function itemEn(it: Item): string {
     case "text":
       return `${it.bold ? "bold " : ""}text ${q(it.label)} at ${it.size ?? 28}sp`;
     case "image":
-      return `a ${it.size ?? 200}dp square image${imageSrc(it) ? ` (load it from ${imageSrc(it)})` : it.src ? " (use the provided image)" : " placeholder"}`;
+      return `a ${imageDims(it)} image${imageSrc(it) ? ` (load it from ${imageSrc(it)})` : it.src ? " (use the provided image)" : " placeholder"}`;
     case "camera":
       return `a ${viewSize(it, 4 / 3)} camera preview`;
     case "map":
@@ -484,9 +491,9 @@ function itemZh(it: Item): string {
     case "carousel":
       return `${CAROUSEL_TEXT.zh[carouselLayoutOf(it)]}布局的轮播（${carouselCountOf(it)} 张卡片，高 ${it.size2 ?? 180}dp，每张卡片圆角 16dp，横向滚动${carouselCardsText(it, "zh")}）`;
     case "datePicker":
-      return `${DATE_TEXT.zh[dateLayoutOf(it)]}形式的日期选择器（已选中 ${dayOf(it)} 日${dateLayoutOf(it) === "input" ? "" : "，含月份网格与取消／确定"}）`;
+      return `${DATE_TEXT.zh[dateLayoutOf(it)]}形式的日期选择器（已选中今天的日期${dateLayoutOf(it) === "input" ? "" : "，含月份网格与取消／确定"}）`;
     case "timePicker":
-      return `${TIME_TEXT.zh[timeLayoutOf(it)]}形式的时间选择器（${clockText(it)}，含 AM/PM 切换与取消／确定）`;
+      return `${TIME_TEXT.zh[timeLayoutOf(it)]}形式的时间选择器（已选中当前时间，含 AM/PM 切换与取消／确定）`;
     case "iconButton":
       return `${it.icon ?? "空"} 图标的${v}图标按钮${iconButtonSize(it, "zh")}`;
     case "fab":
@@ -506,7 +513,7 @@ function itemZh(it: Item): string {
       return `${tabs.length}个项目的侧边导航栏（${tabs.join("、")}，${selectedText(it, "zh")}）${railStateText(it, "zh")}`;
     }
     case "searchBar":
-      return `占位文字为${q(it.label)}的搜索栏${it.icon2 ? `（右端有 ${it.icon2} 图标）` : ""}`;
+      return `占位文字为${q(it.label)}的${it.variant === "outlined" ? "描边" : ""}搜索栏${it.icon2 ? `（右端有 ${it.icon2} 图标）` : ""}`;
     case "card": {
       const style = it.variant === "elevated" ? "浮起" : it.variant === "outlined" ? "描边" : "填充";
       return `${style}卡片${it.size2 ? `（高 ${it.size2}dp）` : ""}${cardLook(it, "zh")}。${cardImage(it, "zh")}标题${q(it.label)}${hasText(it.supporting) ? `，正文${q(it.supporting!)}` : ""}${cardText(it, "zh")}`;
@@ -525,7 +532,7 @@ function itemZh(it: Item): string {
       return `标签为${q(it.label)}的${it.variant === "filled" ? "填充" : "描边"}下拉菜单（点击展开菜单选择一项，选项为${opts.join("、")}${initial}）${it.icon ? `（左侧显示 ${it.icon} 图标）` : ""}${hasText(it.supporting) ? `，辅助文本为${q(it.supporting!)}` : ""}`;
     }
     case "switch":
-      return `${q(it.label)}开关（初始状态为${it.checked ? "开" : "关"}${it.noCheck ? "，开启时手柄上不显示勾选图标" : ""}）`;
+      return `${q(it.label)}开关（初始状态为${it.checked ? "开" : "关"}）`;
     case "checkbox":
       return `${q(it.label)}复选框（初始状态为${it.checked ? "已勾选" : "未勾选"}）`;
     case "slider":
@@ -533,7 +540,7 @@ function itemZh(it: Item): string {
     case "text":
       return `${it.bold ? "粗体" : ""}文本${q(it.label)}（${it.size ?? 28}sp）`;
     case "image":
-      return `${it.size ?? 200}dp 见方的图片${imageSrc(it) ? `（显示 ${imageSrc(it)} 的图片）` : it.src ? "（显示指定的图片）" : "占位符"}`;
+      return `${imageDims(it)} 的图片${imageSrc(it) ? `（显示 ${imageSrc(it)} 的图片）` : it.src ? "（显示指定的图片）" : "占位符"}`;
     case "camera":
       return `${viewSize(it, 4 / 3)} 的相机预览`;
     case "map":
@@ -576,8 +583,8 @@ function itemKo(it: Item): string {
   switch (it.kind) {
     case "button": return `${hasText(it.label) ? q(it.label) : "레이블 없는"} ${v} 버튼${it.icon ? `(${it.icon} 아이콘 포함)` : ""}${buttonSize(it, "ko")}`;
     case "carousel": return `${CAROUSEL_TEXT.ko[carouselLayoutOf(it)]} 레이아웃 캐러셀(카드 ${carouselCountOf(it)}장, 높이 ${it.size2 ?? 180}dp, 카드마다 모서리 16dp, 가로 스크롤${carouselCardsText(it, "ko")})`;
-    case "datePicker": return `${DATE_TEXT.ko[dateLayoutOf(it)]} 형태의 날짜 선택기(${dayOf(it)}일 선택됨${dateLayoutOf(it) === "input" ? "" : ", 월 그리드와 취소 / 확인"})`;
-    case "timePicker": return `${TIME_TEXT.ko[timeLayoutOf(it)]} 형태의 시간 선택기(${clockText(it)}, AM/PM 전환과 취소 / 확인)`;
+    case "datePicker": return `${DATE_TEXT.ko[dateLayoutOf(it)]} 형태의 날짜 선택기(오늘 날짜 선택됨${dateLayoutOf(it) === "input" ? "" : ", 월 그리드와 취소 / 확인"})`;
+    case "timePicker": return `${TIME_TEXT.ko[timeLayoutOf(it)]} 형태의 시간 선택기(현재 시각 선택됨, AM/PM 전환과 취소 / 확인)`;
     case "iconButton": return `${it.icon ?? "빈"} 아이콘의 ${v} 아이콘 버튼${iconButtonSize(it, "ko")}`;
     case "fab": return `${it.icon ?? "빈"} 아이콘의 ${v} FAB${it.size && it.size >= 96 ? "(대형)" : it.size && it.size <= 40 ? "(소형)" : ""}${fabMenuText(it, "ko")}`;
     case "extendedFab": return `${q(it.label)}${it.icon ? ` 및 ${it.icon} 아이콘` : ""} 확장 FAB(${v}${it.size2 && it.size2 !== 56 ? `, 높이 ${it.size2}dp` : ""})${fabMenuText(it, "ko")}`;
@@ -591,7 +598,7 @@ function itemKo(it: Item): string {
       const tabs = (it.tabs ?? []).map((t) => `${q(t.label || "레이블 없음")}(${t.icon || "아이콘 없음"})`);
       return `${tabs.length}개 항목의 내비게이션 레일(${tabs.join(", ")}, ${selectedText(it, "ko")})${railStateText(it, "ko")}`;
     }
-    case "searchBar": return `자리표시자가 ${q(it.label)}인 검색창${it.icon2 ? `(오른쪽 끝에 ${it.icon2} 아이콘)` : ""}`;
+    case "searchBar": return `자리표시자가 ${q(it.label)}인 ${it.variant === "outlined" ? "윤곽선 " : ""}검색창${it.icon2 ? `(오른쪽 끝에 ${it.icon2} 아이콘)` : ""}`;
     case "card": {
       const style = it.variant === "elevated" ? "돌출" : it.variant === "outlined" ? "윤곽선" : "채움";
       return `${style} 카드${it.size2 ? `(높이 ${it.size2}dp)` : ""}${cardLook(it, "ko")}. ${cardImage(it, "ko")}제목 ${q(it.label)}${hasText(it.supporting) ? `, 본문 ${q(it.supporting!)}` : ""}${cardText(it, "ko")}`;
@@ -605,11 +612,11 @@ function itemKo(it: Item): string {
       const initial = it.selected !== undefined && it.tabs?.[it.selected] ? `, 초깃값은 ${q(it.tabs[it.selected].label)}` : ", 초깃값은 없음";
       return `레이블이 ${q(it.label)}인 ${it.variant === "filled" ? "채움" : "윤곽선"} 드롭다운(탭하면 메뉴가 열려 하나를 고른다. 선택지는 ${opts.join(", ")}${initial})${it.icon ? `(앞쪽 ${it.icon} 아이콘)` : ""}${hasText(it.supporting) ? `. 보조 텍스트는 ${q(it.supporting!)}` : ""}`;
     }
-    case "switch": return `${q(it.label)} 스위치(초기 상태 ${it.checked ? "켜짐" : "꺼짐"}${it.noCheck ? ", 켜졌을 때 핸들에 체크 아이콘 없음" : ""})`;
+    case "switch": return `${q(it.label)} 스위치(초기 상태 ${it.checked ? "켜짐" : "꺼짐"})`;
     case "checkbox": return `${q(it.label)} 체크박스(초기 상태 ${it.checked ? "선택됨" : "선택 안 됨"})`;
     case "slider": return `슬라이더(초깃값 ${it.value ?? 40}%)`;
     case "text": return `${it.bold ? "굵은 " : ""}텍스트 ${q(it.label)}(${it.size ?? 28}sp)`;
-    case "image": return `${it.size ?? 200}dp 정사각형 이미지${imageSrc(it) ? `(${imageSrc(it)}의 이미지 표시)` : it.src ? "(지정한 이미지 표시)" : " 자리표시자"}`;
+    case "image": return `${imageDims(it)} 이미지${imageSrc(it) ? `(${imageSrc(it)}의 이미지 표시)` : it.src ? "(지정한 이미지 표시)" : " 자리표시자"}`;
     case "camera": return `${viewSize(it, 4 / 3)} 카메라 미리보기`;
     case "map": return `${viewSize(it, 3 / 4)} 지도`;
     case "divider": return "구분선";
@@ -1088,8 +1095,8 @@ const STYLE_NOTES: Record<Lang, Partial<Record<Kind | "boxSheet", string>>> = {
       "ナビゲーションバー: 高さ 80dp、背景は surfaceContainer。背景は画面下端のジェスチャーナビゲーション領域まで伸ばし、その分（システムインセット）だけ下に余白を取る。選択中の項目は secondaryContainer のピル型インジケータ（幅 64dp・高さ 32dp）で示し、アイコンは塗りつぶし、ラベルは labelMedium。",
     navRail:
       "ナビゲーションレール: 幅 80dp、画面の左端に上から下まで、背景は surfaceContainer。項目は上から縦に並べ、選択中の項目は secondaryContainer のピル型インジケータ（幅 56dp・高さ 32dp）で示し、アイコンは塗りつぶし、その下に labelMedium のラベル。本文はレールの右に置く。",
-    searchBar: "検索バー: 高さ 56dp、角は完全な丸、背景は surfaceContainerHigh。先頭に検索アイコン、末尾に指定のアイコン。",
-    card: "カード: 角丸 20dp。画像領域は各カードの記述に従い、上部・先頭側・末尾側・背景全面のいずれかに置く（背景の場合はテキストの側からスクリムをかける。明るい文字なら黒、暗い文字なら白のフェード）。画像はアスペクト比を保って中央でクロップし、領域いっぱいに表示する。塗りつぶしは surfaceContainerHighest、エレベーテッドは surfaceContainerLow に Level 1 の影、アウトラインは outlineVariant の 1dp 枠。見出しは titleMedium、本文は bodyMedium。内側余白は 20dp、見出しと本文の間は 4dp、画像とテキストの間は 12dp。",
+    searchBar: "検索バー: 高さ 56dp、角は完全な丸、背景は surfaceContainerHigh（枠線スタイルは surface に outline の枠）。先頭に検索アイコン、末尾に指定のアイコン。",
+    card: "カード: 角丸 20dp。画像領域は各カードの記述に従い、上部・下部・先頭側・末尾側・背景全面のいずれかに置く（背景の場合はテキストの側からスクリムをかける。明るい文字なら黒、暗い文字なら白のフェード）。画像はアスペクト比を保って中央でクロップし、領域いっぱいに表示する。塗りつぶしは surfaceContainerHighest、エレベーテッドは surfaceContainerLow に Level 1 の影、アウトラインは outlineVariant の 1dp 枠。見出しは titleMedium、本文は bodyMedium。内側余白は 20dp、見出しと本文の間は 4dp、画像とテキストの間は 12dp。",
     listItem:
       "リスト項目: 高さ 72dp、先頭アイコンは 24dp（指定がなければ primaryContainer の 40dp の円の上）、主テキストは bodyLarge、サブテキストは bodyMedium の onSurfaceVariant。背景は指定のロール（指定がなければ surfaceContainerLow）。上下に連結したリストは 3dp の隙間で並べ、外側の角を 28dp、隣り合う内側の角を 8dp にする（M3 Expressive のリスト表現）。",
     dialog: "ダイアログ: 幅 312dp、角丸 28dp、背景は surfaceContainerHigh。見出しは headlineSmall、本文は bodyMedium、下部右寄せにテキストボタン。",
@@ -1143,8 +1150,8 @@ const STYLE_NOTES: Record<Lang, Partial<Record<Kind | "boxSheet", string>>> = {
       "Navigation bar: 80dp tall on surfaceContainer, with its background extended down through the gesture navigation area (pad the bottom by the system inset). The active destination shows a secondaryContainer pill indicator (64×32dp), a filled icon and a labelMedium label.",
     navRail:
       "Navigation rail: 80dp wide on surfaceContainer, running the full height of the left edge. Destinations stack from the top; the active one shows a secondaryContainer pill indicator (56×32dp) with a filled icon and a labelMedium label below it. The content sits to the right of the rail.",
-    searchBar: "Search bar: 56dp tall, fully rounded, on surfaceContainerHigh, with a leading search icon and the specified trailing icon.",
-    card: "Cards: 20dp corners. Place each card's image area where its line says — on top, filling the leading or trailing side, or as a full-bleed background (a scrim fades in from the text's side: dark under light text, light under dark text). Images keep their aspect ratio and are center-cropped to fill their area. Filled uses surfaceContainerHighest, elevated uses surfaceContainerLow with a level 1 shadow, outlined has a 1dp outlineVariant border. Headline in titleMedium, body in bodyMedium. 20dp padding, 4dp between headline and body, 12dp between the image and the text.",
+    searchBar: "Search bar: 56dp tall, fully rounded, on surfaceContainerHigh (an outlined one sits on surface with an outline border), with a leading search icon and the specified trailing icon.",
+    card: "Cards: 20dp corners. Place each card's image area where its line says — on top, along the bottom, filling the leading or trailing side, or as a full-bleed background (a scrim fades in from the text's side: dark under light text, light under dark text). Images keep their aspect ratio and are center-cropped to fill their area. Filled uses surfaceContainerHighest, elevated uses surfaceContainerLow with a level 1 shadow, outlined has a 1dp outlineVariant border. Headline in titleMedium, body in bodyMedium. 20dp padding, 4dp between headline and body, 12dp between the image and the text.",
     listItem:
       "List items: 72dp tall, 24dp leading icon (on a 40dp primaryContainer circle unless stated), headline in bodyLarge, supporting text in bodyMedium on onSurfaceVariant, on the specified background role (surfaceContainerLow unless stated). A stacked list is a vertical run with 3dp gaps, 28dp outer corners and 8dp inner corners (the M3 Expressive list treatment).",
     dialog: "Dialogs: 312dp wide, 28dp corners, on surfaceContainerHigh. Headline in headlineSmall, body in bodyMedium, text buttons aligned right at the bottom.",
@@ -1197,8 +1204,8 @@ const STYLE_NOTES: Record<Lang, Partial<Record<Kind | "boxSheet", string>>> = {
       "导航栏：高 80dp，背景为 surfaceContainer。背景延伸到屏幕底部的手势导航区域，并按系统内边距在底部留出空间。选中项用 secondaryContainer 的胶囊指示器（宽 64dp、高 32dp）表示，图标为填充样式，标签用 labelMedium。",
     navRail:
       "侧边导航栏：宽 80dp，贴着屏幕左缘通高，背景为 surfaceContainer。项目从上往下排列，选中项用 secondaryContainer 的胶囊指示器（宽 56dp、高 32dp）表示，图标为填充样式，下方为 labelMedium 标签。内容放在导航栏右侧。",
-    searchBar: "搜索栏：高 56dp，完全圆角，背景为 surfaceContainerHigh。左侧显示搜索图标，右侧显示指定图标。",
-    card: "卡片：圆角 20dp。图片区域按每张卡片的描述放在顶部、左侧、右侧或作为整卡背景（背景时从文字一侧加渐变遮罩：浅色文字用黑色，深色文字用白色）。图片保持宽高比并居中裁剪以填满区域。填充用 surfaceContainerHighest，浮起用 surfaceContainerLow 加 Level 1 阴影，描边用 1dp 的 outlineVariant 边框。标题用 titleMedium，正文用 bodyMedium。内边距 20dp，标题与正文间距 4dp，图片与文字间距 12dp。",
+    searchBar: "搜索栏：高 56dp，完全圆角，背景为 surfaceContainerHigh（描边样式为 surface 背景加 outline 边框）。左侧显示搜索图标，右侧显示指定图标。",
+    card: "卡片：圆角 20dp。图片区域按每张卡片的描述放在顶部、底部、左侧、右侧或作为整卡背景（背景时从文字一侧加渐变遮罩：浅色文字用黑色，深色文字用白色）。图片保持宽高比并居中裁剪以填满区域。填充用 surfaceContainerHighest，浮起用 surfaceContainerLow 加 Level 1 阴影，描边用 1dp 的 outlineVariant 边框。标题用 titleMedium，正文用 bodyMedium。内边距 20dp，标题与正文间距 4dp，图片与文字间距 12dp。",
     listItem:
       "列表项：高 72dp，左侧图标 24dp（未指定时放在 40dp 的 primaryContainer 圆形上），主文本用 bodyLarge，辅助文本用 bodyMedium 的 onSurfaceVariant，背景为指定的颜色角色（未指定则为 surfaceContainerLow）。上下相连的列表以 3dp 间距排列，外侧圆角 28dp，相邻内侧圆角 8dp（M3 Expressive 的列表样式）。",
     dialog: "对话框：宽 312dp，圆角 28dp，背景为 surfaceContainerHigh。标题用 headlineSmall，正文用 bodyMedium，底部右对齐放文字按钮。",
@@ -1245,8 +1252,8 @@ const STYLE_NOTES: Record<Lang, Partial<Record<Kind | "boxSheet", string>>> = {
       "칩: 기본 높이 32dp, 모서리 8dp. 높이가 지정된 칩은 M3 크기(XS 32dp / S 40dp / M 56dp)를 따라 좌우 여백, 글자 크기, 아이콘 크기를 그 크기의 값으로 한다. 선택 상태는 secondaryContainer로 채우고 앞쪽에 체크 아이콘을 표시한다. 연결 칩 그룹은 간격 3dp, 맞닿는 안쪽 모서리 4dp, 바깥쪽 모서리는 둥글게 유지하며 하나의 높이를 공유하고, 넘치면 가로 스크롤한다.",
     topAppBar: "상단 앱 바: 높이 64dp, 배경 surface. 상태 표시줄 뒤까지 배경을 늘리고 시스템 인셋만큼 위쪽 여백을 둔다. 제목은 titleLarge, 양쪽 아이콘 버튼은 48dp를 사용한다. 중간/대형으로 지정된 바는 M3 flexible top app bar로 높이 112dp/152dp, 아이콘은 위 64dp 줄에, 제목은 아래 별도 줄(headlineSmall/headlineMedium)에 두고 스크롤하면 작은 바로 줄어든다.",
     bottomNav: "내비게이션 바: 높이 80dp, 배경 surfaceContainer. 제스처 내비게이션 영역까지 배경을 늘리고 시스템 인셋만큼 아래쪽 여백을 둔다. 선택 항목은 64×32dp secondaryContainer 알약 표시기, 채운 아이콘, labelMedium 레이블로 표시한다.",
-    searchBar: "검색창: 높이 56dp, 완전 둥근 모서리, 배경 surfaceContainerHigh. 앞쪽 검색 아이콘과 지정된 뒤쪽 아이콘을 둔다.",
-    card: "카드: 모서리 20dp. 이미지 영역은 각 카드의 설명에 따라 위쪽·앞쪽·뒤쪽·배경 전체 중 한 곳에 배치한다(배경일 때는 텍스트 쪽에서 스크림을 넣는다. 밝은 텍스트에는 검정, 어두운 텍스트에는 흰색 페이드). 이미지는 비율을 유지한 채 가운데를 기준으로 잘라 영역을 채운다. 채움은 surfaceContainerHighest, 돌출은 surfaceContainerLow와 Level 1 그림자, 윤곽선은 1dp outlineVariant 테두리를 사용한다. 제목 titleMedium, 본문 bodyMedium. 안쪽 여백 20dp, 제목과 본문 사이 4dp, 이미지와 텍스트 사이 12dp.",
+    searchBar: "검색창: 높이 56dp, 완전 둥근 모서리, 배경 surfaceContainerHigh(윤곽선 스타일은 surface 배경에 outline 테두리). 앞쪽 검색 아이콘과 지정된 뒤쪽 아이콘을 둔다.",
+    card: "카드: 모서리 20dp. 이미지 영역은 각 카드의 설명에 따라 위쪽·아래쪽·앞쪽·뒤쪽·배경 전체 중 한 곳에 배치한다(배경일 때는 텍스트 쪽에서 스크림을 넣는다. 밝은 텍스트에는 검정, 어두운 텍스트에는 흰색 페이드). 이미지는 비율을 유지한 채 가운데를 기준으로 잘라 영역을 채운다. 채움은 surfaceContainerHighest, 돌출은 surfaceContainerLow와 Level 1 그림자, 윤곽선은 1dp outlineVariant 테두리를 사용한다. 제목 titleMedium, 본문 bodyMedium. 안쪽 여백 20dp, 제목과 본문 사이 4dp, 이미지와 텍스트 사이 12dp.",
     listItem: "목록 항목: 높이 72dp, 앞쪽 아이콘 24dp(별도 지정이 없으면 40dp primaryContainer 원 위), 주 텍스트 bodyLarge, 보조 텍스트 bodyMedium/onSurfaceVariant. 연결 목록은 간격 3dp, 바깥 모서리 28dp, 안쪽 모서리 8dp.",
     dialog: "대화상자: 너비 312dp, 모서리 28dp, 배경 surfaceContainerHigh. 제목 headlineSmall, 본문 bodyMedium, 텍스트 버튼은 아래쪽 오른쪽 정렬.",
     snackbar: "스낵바: 높이 48dp, 모서리 8dp, inverseSurface 배경과 inverseOnSurface 텍스트. 동작은 inversePrimary 텍스트 버튼으로 하고 아래쪽에서 16dp 띄워 몇 초 뒤 닫는다.",

@@ -1,11 +1,10 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { COLOR_TOKENS, CardLayout, ColorToken, PLACES, Palette, Place, R_INNER, SETTLE_MS, TEXT_TOKENS, TextToken, clamp, draftGradient } from "@/lib/tokens";
+import { COLOR_TOKENS, ColorToken, PLACES, Palette, Place, R_INNER, SETTLE_MS, clamp, draftGradient } from "@/lib/tokens";
 import { AnimatePresence, animate, motion, useReducedMotion } from "motion/react";
-import { COLOR_TOKEN_TEXT, TEXT_TOKEN_TEXT, t, useLang } from "@/lib/i18n";
+import { COLOR_TOKEN_TEXT, t, useLang } from "@/lib/i18n";
 import { Icon } from "./M3Node";
-import { onColorFor } from "@/lib/color";
 
 /** the row of tabs and the clear gap under it, and the band a panel with no tabs fades its top with */
 const PANEL_TABS_H = 48;
@@ -601,6 +600,8 @@ export function Select({
 
 /** how wide the band is that a field wears while a model writes into it */
 const RING = 3;
+/** the room a control standing inside a field takes */
+const LEAD_W = 32;
 
 export function Field({
   value,
@@ -608,6 +609,7 @@ export function Field({
   placeholder,
   p,
   icon,
+  leading,
   multiline,
   rows = 3,
   grow,
@@ -623,6 +625,8 @@ export function Field({
   placeholder?: string;
   p: Palette;
   icon?: string;
+  /** a control standing inside the field after its mark, the words starting after it */
+  leading?: React.ReactNode;
   multiline?: boolean;
   rows?: number;
   /** a control that joins the clear button in a run pinned over the bottom right of a multiline
@@ -781,6 +785,8 @@ export function Field({
    * button takes a column of its own at the trailing edge */
   const pinned = !!(multiline && action);
   const padRight = !pinned && filled ? 40 : 14;
+  /* the words start after the mark, and after whatever stands beside it */
+  const padLeft = (icon ? 42 : 14) + (leading ? LEAD_W : 0);
   /* as tall as the fade, so the line being typed always sits clear of it */
   const padBottom = pinned ? 40 : 12;
   /* one cell of the pinned run: a faint plate behind the button, rounded on the outer side only */
@@ -825,7 +831,7 @@ export function Field({
      * that box would be thicker along the bottom than anywhere else */
     display: "block",
     width: "100%",
-    padding: multiline ? `12px ${padRight}px ${padBottom}px ${icon ? 42 : 14}px` : `0 ${padRight}px 0 ${icon ? 42 : 14}px`,
+    padding: multiline ? `12px ${padRight}px ${padBottom}px ${padLeft}px` : `0 ${padRight}px 0 ${padLeft}px`,
     borderRadius: multiline ? 18 : height / 2,
     border: "none",
     background: p.surfaceContainerHigh,
@@ -882,6 +888,9 @@ export function Field({
         >
           <Icon name={icon} size={20} />
         </span>
+      )}
+      {leading && (
+        <span style={{ position: "absolute", left: icon ? 36 : 6, top: (height - LEAD_W) / 2, width: LEAD_W, height: LEAD_W, display: "grid", placeItems: "center", zIndex: 1 }}>{leading}</span>
       )}
       {multiline ? (
         <textarea
@@ -1220,100 +1229,6 @@ export function SizePresets({
             }}
           >
             {v}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-/** The five card layouts as small pictures of a card: where the image sits, or no image.
- *  A picture reads faster than "leading" or "trailing", so no words are needed beyond the caption. */
-const CARD_LAYOUTS: { key: CardLayout; label: "imageTop" | "imageLeading" | "imageTrailing" | "background" | "noImageLayout" }[] = [
-  { key: "top", label: "imageTop" },
-  { key: "leading", label: "imageLeading" },
-  { key: "trailing", label: "imageTrailing" },
-  { key: "background", label: "background" },
-  { key: "none", label: "noImageLayout" },
-];
-
-function CardLayoutThumb({ layout, on, p }: { layout: CardLayout; on: boolean; p: Palette }) {
-  const ink = on ? p.onPrimaryContainer : p.onSurfaceVariant;
-  const image = on ? p.primary : p.outline;
-  const line = (w: string) => <div style={{ height: 3, width: w, borderRadius: 2, background: ink, opacity: 0.55 }} />;
-  const lines = (
-    <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 3, justifyContent: "center" }}>
-      {line("80%")}
-      {line("55%")}
-    </div>
-  );
-  const box: React.CSSProperties = { width: 44, height: 34, borderRadius: 6, border: `1.5px solid ${ink}`, boxSizing: "border-box", padding: 5, display: "flex", gap: 4, overflow: "hidden", position: "relative" };
-  if (layout === "background") {
-    return (
-      <div style={{ ...box, background: image, alignItems: "flex-end", padding: 5 }}>
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 3 }}>
-          <div style={{ height: 3, width: "80%", borderRadius: 2, background: on ? p.onPrimary : p.surface }} />
-          <div style={{ height: 3, width: "55%", borderRadius: 2, background: on ? p.onPrimary : p.surface, opacity: 0.7 }} />
-        </div>
-      </div>
-    );
-  }
-  const media = <div style={{ background: image, borderRadius: 3, flex: "0 0 auto", ...(layout === "top" ? { height: 10 } : { width: 12 }) }} />;
-  return (
-    <div style={{ ...box, flexDirection: layout === "top" ? "column" : "row" }}>
-      {layout === "top" || layout === "leading" ? media : null}
-      {lines}
-      {layout === "trailing" ? media : null}
-    </div>
-  );
-}
-
-/** Radio row of card layouts drawn as thumbnails, with a short caption under each. */
-export function CardLayoutPicker({ value, onChange, p }: { value: CardLayout; onChange: (layout: CardLayout) => void; p: Palette }) {
-  const lang = useLang();
-  /* one tab stop for the group; the arrow keys move the choice, as a native radio group does */
-  const step = (e: React.KeyboardEvent, i: number) => {
-    const d = e.key === "ArrowRight" || e.key === "ArrowDown" ? 1 : e.key === "ArrowLeft" || e.key === "ArrowUp" ? -1 : 0;
-    if (!d) return;
-    e.preventDefault();
-    const next = CARD_LAYOUTS[(i + d + CARD_LAYOUTS.length) % CARD_LAYOUTS.length].key;
-    onChange(next);
-    (e.currentTarget.parentElement?.querySelector(`[data-layout="${next}"]`) as HTMLElement | null)?.focus();
-  };
-  return (
-    <div role="radiogroup" aria-label={t("cardLayout", lang)} style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 4 }}>
-      {CARD_LAYOUTS.map((o, i) => {
-        const on = o.key === value;
-        const label = t(o.label, lang);
-        return (
-          <button
-            key={o.key}
-            type="button"
-            role="radio"
-            aria-checked={on}
-            aria-label={label}
-            title={label}
-            data-layout={o.key}
-            tabIndex={on ? 0 : -1}
-            onKeyDown={(e) => step(e, i)}
-            onClick={() => onChange(o.key)}
-            className="m3-press"
-            style={{
-              border: "none",
-              borderRadius: 10,
-              padding: "6px 2px 4px",
-              background: on ? p.primaryContainer : "transparent",
-              color: on ? p.onPrimaryContainer : p.onSurfaceVariant,
-              cursor: "pointer",
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              gap: 4,
-              minWidth: 0,
-            }}
-          >
-            <CardLayoutThumb layout={o.key} on={on} p={p} />
-            <span style={{ fontSize: 10, fontWeight: 600, lineHeight: "12px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "100%" }}>{label}</span>
           </button>
         );
       })}
@@ -1714,20 +1629,6 @@ export function TokenChips({
       )}
       {COLOR_TOKENS.map((tk) => (
         <TokenDisc key={tk.key} color={p[tk.key]} label={lang === "en" ? tk.label : COLOR_TOKEN_TEXT[lang][tk.key]} on={!noneOn && tk.key === value} onClick={() => onChange(tk.key)} p={p} />
-      ))}
-    </div>
-  );
-}
-
-/** Chips for a text color role, drawn like the background chips: color discs led by an
- *  automatic chip in the color the card would pick on its own. */
-export function TextTokenChips({ value, auto, onChange, p }: { value?: TextToken; auto: string; onChange: (t?: TextToken) => void; p: Palette }) {
-  const lang = useLang();
-  return (
-    <div role="group" aria-label={t("textColor", lang)} style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-      <TokenDisc color={auto} label={t("autoColor", lang)} on={!value} onClick={() => onChange(undefined)} p={p} icon="restart_alt" iconColor={onColorFor(auto)} />
-      {TEXT_TOKENS.map((tk) => (
-        <TokenDisc key={tk.key} color={p[tk.key]} label={lang === "en" ? tk.label : TEXT_TOKEN_TEXT[lang][tk.key]} on={value === tk.key} onClick={() => onChange(tk.key)} p={p} />
       ))}
     </div>
   );

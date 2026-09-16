@@ -60,8 +60,6 @@ import {
   isTextToken,
   cardImagePosOf,
   cardImageSizeOf,
-  cardLayoutOf,
-  cardLayoutPatch,
   CARD_IMAGE_MIN,
   sizeOf,
   isCardImagePos,
@@ -369,8 +367,8 @@ describe("card image placement helpers", () => {
   });
 
   it("accepts exactly the four placements", () => {
-    for (const pos of ["top", "leading", "trailing", "background"]) expect(isCardImagePos(pos)).toBe(true);
-    for (const bad of [undefined, null, "bottom", "left", 3]) expect(isCardImagePos(bad)).toBe(false);
+    for (const pos of ["top", "bottom", "leading", "trailing", "background"]) expect(isCardImagePos(pos)).toBe(true);
+    for (const bad of [undefined, null, "middle", "left", 3]) expect(isCardImagePos(bad)).toBe(false);
   });
 
   it("keeps sketches saved before placement existed on top", () => {
@@ -435,13 +433,5 @@ describe("card image placement helpers", () => {
     expect(cardScrimOf("#ffffff", "center")).toMatch(/^rgba\(0,0,0,/);
   });
 
-  it("folds the image switch and its placement into one layout choice", () => {
-    expect(cardLayoutOf(makeItem("card"))).toBe("top");
-    expect(cardLayoutOf({ ...makeItem("card"), noImage: true, imagePos: "leading" })).toBe("none");
-    expect(cardLayoutOf({ ...makeItem("card"), imagePos: "background" })).toBe("background");
-    expect(cardLayoutPatch("top")).toEqual({ noImage: undefined, imagePos: undefined });
-    expect(cardLayoutPatch("trailing")).toEqual({ noImage: undefined, imagePos: "trailing" });
-    expect(cardLayoutPatch("none")).toEqual({ noImage: true, imagePos: undefined });
-  });
 });
 

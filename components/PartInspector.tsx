@@ -2,27 +2,19 @@
 
 import { useEffect, useState } from "react";
 import {
-  CARD_IMAGE_MIN,
   CAROUSEL_HEIGHTS,
   CAROUSEL_LAYOUTS,
-  CHOICE_KINDS,
-  CardAlign,
-  ChoiceKind,
   CarouselLayout,
   DATE_LAYOUTS,
   DateLayout,
-  FIELD_KINDS,
-  FieldKind,
   Frame,
   Item,
   KIND_SPEC,
   LOADING_SIZES,
   PHONE_H,
   PHONE_W,
-  PICTURE_KINDS,
   PROGRESS_DEFAULT_VALUE,
   Palette,
-  PictureKind,
   RING_SIZES,
   SLIDER_DEFAULT_VALUE,
   TEXT_SIZES,
@@ -34,35 +26,19 @@ import {
   TimeLayout,
   actionSlotsOf,
   barWidths,
-  cardContentAlignOf,
-  cardDefaultFillOf,
-  cardFillOf,
-  cardImageMaxOf,
-  cardImagePosOf,
-  cardImageSizeOf,
-  cardLayoutOf,
-  cardLayoutPatch,
-  cardTextColorOf,
   cardWidths,
   carouselCardPatch,
   carouselCardsOf,
   carouselCountOf,
   carouselLayoutOf,
-  choiceTypePatch,
   dateLayoutOf,
-  dayOf,
-  fieldTypePatch,
   frameSizeOf,
-  hourOf,
   isChoice,
   isField,
   isPicture,
   isProgress,
   isWideRail,
   maxRingThickness,
-  minuteOf,
-  onToken,
-  pictureTypePatch,
   progressThickness,
   progressTypePatch,
   setIconSlot,
@@ -70,13 +46,13 @@ import {
   timeLayoutOf,
   topBarHeightOf,
 } from "@/lib/tokens";
-import { CardLayoutPicker, Field, ImageRow, NamedSizes, PanelShell, Section, Segmented, Slider, TextTokenChips, Toggle, TokenChips } from "./ui";
+import { Field, ImageRow, NamedSizes, PanelShell, RUN_CELL, Section, Segmented, Slider, Toggle } from "./ui";
+import { CardStage } from "./CardStage";
 import { arcPath, wavePath } from "./Loading";
 import { Icon } from "./M3Node";
 import { AiHooks } from "./Inspector";
-import { AlignBox, CornerRows, EdgeCornerRows, EntryList, IconRow, NoTriggerNote, NoteSection, PartHeader, PartTabs, PlaceFn, StyleRun, Tab, TriggerSection, WidthRows, hasTrigger } from "./PartPanel";
-import { dateHeadline } from "./Pickers";
-import { KIND_TEXT, t, useLang } from "@/lib/i18n";
+import { AlignBox, CornerRows, EdgeCornerRows, EntryList, FillRun, IconRow, IconStrip, ListStyleRun, NoTriggerNote, NoteSection, PartHeader, PartTabs, PlaceFn, StyleRun, Tab, TriggerSection, WidthRows, hasTrigger } from "./PartPanel";
+import { t, useLang } from "@/lib/i18n";
 
 /* One panel for every part that is not a button. It wears the button's chrome -- the title row,
  * the two tabs, the align grid, the spec field -- and fills the design tab with only what the
@@ -254,9 +230,11 @@ function CardStrip({ item, selected, onSelect, p }: { item: Item; selected: numb
 function SlotStrip({ item, selected, onSelect, p }: { item: Item; selected: string; onSelect: (k: string) => void; p: Palette }) {
   const lang = useLang();
   const slots = actionSlotsOf(item);
+  /* a tab's words are too long for a cell: the cell carries its number and the words are the hover text */
+  const numbered = item.kind === "tabs";
   return (
     <Segmented<string>
-      options={slots.map((s) => ({ key: s.key, icon: s.value ?? undefined, label: s.value ? undefined : s.label, title: s.label, dot: !!item.actions?.[s.key] }))}
+      options={slots.map((s, i) => ({ key: s.key, icon: s.value ?? undefined, label: s.value ? undefined : numbered ? `${i + 1}` : s.label, title: s.label, dot: !!item.actions?.[s.key] }))}
       value={selected}
       onChange={onSelect}
       p={p}
@@ -267,70 +245,23 @@ function SlotStrip({ item, selected, onSelect, p }: { item: Item; selected: stri
   );
 }
 
-/** The three selection controls drawn small, as one connected run: the drawing of a switch, a
- *  checkbox and a radio is the whole of what tells them apart. */
-function ChoiceThumb({ kind, on, p }: { kind: ChoiceKind; on: boolean; p: Palette }) {
-  const ink = on ? p.onPrimary : p.onSurfaceVariant;
-  if (kind === "switch")
-    return (
-      <span aria-hidden style={{ width: 30, height: 18, borderRadius: 9, border: `2px solid ${ink}`, boxSizing: "border-box", position: "relative" }}>
-        <span style={{ position: "absolute", right: 2, top: 2, width: 10, height: 10, borderRadius: 5, background: ink }} />
-      </span>
-    );
-  if (kind === "checkbox")
-    return (
-      <span aria-hidden style={{ width: 18, height: 18, borderRadius: 3, background: ink, display: "grid", placeItems: "center", color: on ? p.primary : p.surfaceContainerHigh }}>
-        <Icon name="check" size={14} weight={700} />
-      </span>
-    );
-  return (
-    <span aria-hidden style={{ width: 18, height: 18, borderRadius: 9, border: `2px solid ${ink}`, boxSizing: "border-box", display: "grid", placeItems: "center" }}>
-      <span style={{ width: 8, height: 8, borderRadius: 4, background: ink }} />
-    </span>
-  );
-}
-
-function ChoiceTypePicker({ item, onChange, p }: { item: Item; onChange: Change; p: Palette }) {
+/** A choice's state, as the control itself drawn as an icon beside its words: one tap turns it
+ *  on or off, and the icon is the whole of what changes -- a switch's icon slides across. */
+function ChoiceToggle({ item, onChange, p }: { item: Item; onChange: Change; p: Palette }) {
   const lang = useLang();
+  const on = !!item.checked;
+  const icon = item.kind === "switch" ? (on ? "toggle_on" : "toggle_off") : item.kind === "checkbox" ? (on ? "check_box" : "check_box_outline_blank") : on ? "radio_button_checked" : "radio_button_unchecked";
   return (
-    <Segmented<ChoiceKind>
-      options={CHOICE_KINDS.map((k) => ({ key: k, title: KIND_TEXT[lang][k]?.noun ?? KIND_SPEC[k].label, node: <ChoiceThumb kind={k} on={k === item.kind} p={p} /> }))}
-      value={item.kind as ChoiceKind}
-      onChange={(k) => onChange(choiceTypePatch(item, k))}
-      p={p}
-      height={44}
-      label={t("partType", lang)}
-    />
-  );
-}
-
-/** the three things a box can show: a picture, the camera's view, a map */
-function PictureTypePicker({ item, onChange, p }: { item: Item; onChange: Change; p: Palette }) {
-  const lang = useLang();
-  const icons: Record<PictureKind, string> = { image: "image", camera: "photo_camera", map: "map" };
-  return (
-    <Segmented<PictureKind>
-      options={PICTURE_KINDS.map((k) => ({ key: k, icon: icons[k], title: KIND_TEXT[lang][k]?.noun ?? KIND_SPEC[k].label }))}
-      value={item.kind as PictureKind}
-      onChange={(k) => onChange(pictureTypePatch(item, k))}
-      p={p}
-      label={t("partType", lang)}
-    />
-  );
-}
-
-/** the two fields: one typed into, one that drops a list */
-function FieldTypePicker({ item, onChange, p }: { item: Item; onChange: Change; p: Palette }) {
-  const lang = useLang();
-  const icons: Record<FieldKind, string> = { textField: "text_fields", select: "arrow_drop_down_circle" };
-  return (
-    <Segmented<FieldKind>
-      options={FIELD_KINDS.map((k) => ({ key: k, icon: icons[k], title: KIND_TEXT[lang][k]?.noun ?? KIND_SPEC[k].label }))}
-      value={item.kind as FieldKind}
-      onChange={(k) => onChange(fieldTypePatch(item, k))}
-      p={p}
-      label={t("partType", lang)}
-    />
+    <button
+      onClick={() => onChange({ checked: !on })}
+      title={t("on", lang)}
+      aria-label={t("on", lang)}
+      aria-pressed={on}
+      className="m3-press"
+      style={{ width: 44, height: 44, flex: "0 0 auto", borderRadius: 22, border: "none", background: "transparent", padding: 0, color: on ? p.primary : p.onSurfaceVariant, cursor: "pointer", display: "grid", placeItems: "center" }}
+    >
+      <Icon name={icon} size={item.kind === "switch" ? 30 : 24} fill={on} />
+    </button>
   );
 }
 
@@ -345,6 +276,7 @@ function TextRows({ item, onChange, p, labelKey = "label", supportingKey = "supp
           <div style={{ flex: 1, minWidth: 0 }}>
             <Field value={item.label} onChange={(label) => onChange({ label })} placeholder={t(labelKey, lang)} p={p} />
           </div>
+          {isChoice(item.kind) && <ChoiceToggle item={item} onChange={onChange} p={p} />}
           {bold && (
             <Segmented<"regular" | "bold">
               options={[
@@ -385,13 +317,14 @@ function TextSizeRows({ item, onChange, p }: { item: Item; onChange: Change; p: 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
       <Slider icon="format_size" title={t("fontSize", lang)} value={size} min={spec.size!.min} max={spec.size!.max} step={1} onChange={(v) => onChange({ size: v })} p={p} unit="sp" />
+      {/* the four steps of the type scale, named the way every other size is: the role and the sp are the hover text */}
       <Segmented<string>
-        options={TEXT_SIZES.map((s) => ({ key: s.key, title: t(s.key === "body" ? "typeBody" : s.key === "title" ? "typeTitle" : s.key === "headline" ? "typeHeadline" : "typeDisplay", lang), node: <span style={{ fontSize: Math.min(22, 10 + s.value * 0.25), fontWeight: 600, lineHeight: 1 }}>Aa</span> }))}
+        options={TEXT_SIZES.map((s, i) => ({ key: s.key, label: ["S", "M", "L", "XL"][i], title: `${t(s.key === "body" ? "typeBody" : s.key === "title" ? "typeTitle" : s.key === "headline" ? "typeHeadline" : "typeDisplay", lang)} ${s.value}sp`, style: RUN_CELL }))}
         value={TEXT_SIZES.find((s) => s.value === size)?.key ?? ""}
         onChange={(k) => onChange({ size: TEXT_SIZES.find((s) => s.key === k)!.value })}
         p={p}
-        height={44}
         label={t("fontSize", lang)}
+        tight
       />
     </div>
   );
@@ -484,10 +417,26 @@ export function PartInspector({
   const slots = actionSlotsOf(item);
   const slotKey = slots.some((s) => s.key === slot) ? slot : (slots[0]?.key ?? "");
   const kind = item.kind;
+  /* a list item's trailing end may hold a switch instead of an icon: the picker offers the switch
+   * off and on beside "no icon", and the cell shows whichever the part wears */
+  const trailing = kind === "listItem" && item.switch ? (item.checked ? "toggle_on" : "toggle_off") : (item.icon2 ?? null);
   const iconSlots = [
     { key: "icon", value: item.icon, title: t(spec.hasIcon && (kind === "listItem" || kind === "topAppBar" || kind === "searchBar") ? "leading" : "icon", lang) },
-    ...(kind === "listItem" || kind === "topAppBar" || kind === "searchBar" ? [{ key: "icon2", value: item.icon2 ?? null, title: t("trailing", lang) }] : []),
+    ...(kind === "listItem" || kind === "topAppBar" || kind === "searchBar"
+      ? [{ key: "icon2", value: trailing, title: t("trailing", lang), extras: kind === "listItem" ? [{ icon: "toggle_off", title: t("switchOff", lang) }, { icon: "toggle_on", title: t("switchOn", lang) }] : undefined }]
+      : []),
   ];
+  const pickIcon = (key: string, icon: string | null) => {
+    if (kind === "listItem" && key === "icon2") {
+      if (icon === "toggle_on" || icon === "toggle_off") {
+        onChange({ switch: true, checked: icon === "toggle_on", icon2: undefined });
+        return;
+      }
+      onChange({ ...setIconSlot(item, key, icon), switch: undefined });
+      return;
+    }
+    onChange(setIconSlot(item, key, icon));
+  };
   const widthRows = (auto = false) => (
     <WidthRows value={width} min={spec.size?.min ?? 40} max={spec.size?.max ?? PHONE_W} step={spec.size?.step ?? 4} frameW={frameW} onChange={(size) => onChange({ size })} p={p} auto={auto} />
   );
@@ -505,22 +454,7 @@ export function PartInspector({
 
   const design = (
     <>
-      {/* ---------- the parts that switch kind inside the panel ---------- */}
-      {isChoice(kind) && (
-        <Section id="part-type" icon="toggle_on" title={t("partType", lang)} p={p}>
-          <ChoiceTypePicker item={item} onChange={onChange} p={p} />
-        </Section>
-      )}
-      {isPicture(kind) && (
-        <Section id="part-type" icon="image" title={t("partType", lang)} p={p}>
-          <PictureTypePicker item={item} onChange={onChange} p={p} />
-        </Section>
-      )}
-      {isField(kind) && (
-        <Section id="part-type" icon="text_fields" title={t("partType", lang)} p={p}>
-          <FieldTypePicker item={item} onChange={onChange} p={p} />
-        </Section>
-      )}
+      {/* ---------- the one part that switches shape inside the panel ---------- */}
       {isProgress(kind) && (
         <Section id="part-type" icon="progress_activity" title={t("partType", lang)} p={p}>
           <ProgressTypePicker item={item} onChange={onChange} p={p} />
@@ -532,7 +466,7 @@ export function PartInspector({
         <Section id="part-text" icon="short_text" title={t("text", lang)} p={p}>
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {/* the words stand between the two icons they stand between on the part */}
-            <IconRow slots={iconSlots} onPick={(key, icon) => onChange(setIconSlot(item, key, icon))} p={p}>
+            <IconRow slots={iconSlots} onPick={pickIcon} p={p}>
               <Field value={item.label} onChange={(label) => onChange({ label })} placeholder={t(kind === "searchBar" ? "placeholder" : kind === "topAppBar" ? "title" : "label", lang)} p={p} />
             </IconRow>
             {spec.hasSupporting && <Field value={item.supporting ?? ""} onChange={(supporting) => onChange({ supporting })} placeholder={t("supporting", lang)} p={p} />}
@@ -564,23 +498,9 @@ export function PartInspector({
         </Section>
       )}
       {kind === "card" && (
+        /* the words themselves; where they sit is set on the drawing of the card below */
         <Section id="part-text" icon="short_text" title={t("text", lang)} p={p}>
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            <TextRows item={item} onChange={onChange} p={p} labelKey="title" supportingKey="body" paragraph />
-            {/* where the words sit on the card, and the colour they are written in */}
-            <Segmented<CardAlign>
-              options={[
-                { key: "start", icon: "vertical_align_top", title: t("textTop", lang) },
-                { key: "center", icon: "vertical_align_center", title: t("textMiddle", lang) },
-                { key: "end", icon: "vertical_align_bottom", title: t("textBottom", lang) },
-              ]}
-              value={cardContentAlignOf(item)}
-              onChange={(contentAlign) => onChange({ contentAlign })}
-              p={p}
-              label={t("textPosition", lang)}
-            />
-            <TextTokenChips value={item.textColor} auto={cardTextColorOf(item, p)} onChange={(textColor) => onChange({ textColor })} p={p} />
-          </div>
+          <TextRows item={item} onChange={onChange} p={p} labelKey="title" supportingKey="body" paragraph />
         </Section>
       )}
       {(isChoice(kind) || kind === "text") && (
@@ -590,31 +510,51 @@ export function PartInspector({
       )}
 
       {/* ---------- entries ---------- */}
-      {(kind === "bottomNav" || kind === "navRail" || kind === "toolbar" || kind === "tabs" || kind === "select") && (
+      {(kind === "bottomNav" || kind === "navRail" || kind === "tabs" || kind === "select") && (
         <Section id="part-entries" icon={kind === "select" ? "list" : "view_column"} title={t(kind === "select" ? "options" : "tabs", lang)} p={p}>
-          <EntryList item={item} onChange={onChange} p={p} icons={kind !== "tabs" && kind !== "select"} labels={kind !== "toolbar"} selectable={kind !== "toolbar"} clearable={kind === "select"} />
+          <EntryList item={item} onChange={onChange} p={p} icons={kind !== "tabs" && kind !== "select"} selectable clearable={kind === "select"} />
+        </Section>
+      )}
+      {kind === "toolbar" && (
+        <Section id="part-entries" icon="view_column" title={t("tabs", lang)} p={p}>
+          <IconStrip item={item} onChange={onChange} p={p} />
         </Section>
       )}
 
       {/* ---------- pictures ---------- */}
       {kind === "card" && (
-        <Section id="part-image" icon="image" title={t("image", lang)} p={p}>
+        /* The card drawn small, with its picture and its words where they are on it: the
+           picture is dragged to an edge or into the middle and pulled bigger by its inner edge,
+           the words are dragged up or down. The button at the start puts the picture on or off. */
+        <Section id="part-image" icon="image" title={t("cardLayout", lang)} p={p}>
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            <CardLayoutPicker value={cardLayoutOf(item)} onChange={(layout) => onChange(cardLayoutPatch(layout))} p={p} />
-            {!item.noImage && cardImagePosOf(item) !== "background" && cardImageMaxOf(item) > CARD_IMAGE_MIN && (
-              /* the image area's one free dimension: its height on top, its width at a side; a card too small to leave room hides it */
-              <Slider
-                icon={cardImagePosOf(item) === "top" ? "height" : "width"}
-                title={t(cardImagePosOf(item) === "top" ? "height" : "width", lang)}
-                value={cardImageSizeOf(item)}
-                min={CARD_IMAGE_MIN}
-                max={cardImageMaxOf(item)}
-                step={4}
-                onChange={(imageSize) => onChange({ imageSize })}
-                p={p}
-              />
-            )}
-            {(!item.noImage || item.src) && <ImageRow key={item.id} value={item.src} onChange={(src) => onChange({ src })} p={p} />}
+            <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+              <button
+                type="button"
+                onClick={() => onChange({ noImage: item.noImage ? undefined : true })}
+                title={t(item.noImage ? "image" : "noImageLayout", lang)}
+                aria-label={t("image", lang)}
+                aria-pressed={!item.noImage}
+                className="m3-press"
+                style={{
+                  width: 32,
+                  height: 32,
+                  flex: "0 0 auto",
+                  borderRadius: 16,
+                  border: "none",
+                  padding: 0,
+                  background: item.noImage ? p.surfaceContainerHigh : p.secondaryContainer,
+                  color: item.noImage ? p.onSurfaceVariant : p.onSecondaryContainer,
+                  cursor: "pointer",
+                  display: "grid",
+                  placeItems: "center",
+                }}
+              >
+                <Icon name={item.noImage ? "hide_image" : "image"} size={20} />
+              </button>
+              <CardStage item={item} onChange={onChange} p={p} />
+            </div>
+            {!item.noImage && <ImageRow key={item.id} value={item.src} onChange={(src) => onChange({ src })} p={p} />}
           </div>
         </Section>
       )}
@@ -650,119 +590,60 @@ export function PartInspector({
       )}
 
       {/* ---------- the pickers' own controls ---------- */}
+      {/* a calendar shows today and a clock the time it is, so a picker's one choice is its shape */}
       {kind === "datePicker" && (
-        <>
-          <Section id="part-layout" icon="calendar_month" title={t("layout", lang)} p={p}>
-            <Segmented<DateLayout>
-              options={DATE_LAYOUTS.map((l) => ({ key: l.key, icon: l.icon, title: t(l.text, lang) }))}
-              value={dateLayoutOf(item)}
-              onChange={(layout) => onChange({ layout })}
-              p={p}
-              label={t("layout", lang)}
-            />
-          </Section>
-          {/* the calendar is the only place a day can be circled; typed in, only the text shows */}
-          {dateLayoutOf(item) !== "input" && (
-            <Section id="part-day" icon="event" title={t("selectedDay", lang)} p={p}>
-              <Slider icon="today" title={t("selectedDay", lang)} value={dayOf(item)} min={1} max={31} step={1} onChange={(day) => onChange({ day })} p={p} />
-            </Section>
-          )}
-          {dateLayoutOf(item) !== "docked" && (
-            <Section id="part-text" icon="short_text" title={t("text", lang)} p={p}>
-              <Field value={item.label} onChange={(label) => onChange({ label })} placeholder={dateHeadline(dayOf(item), lang)} p={p} />
-            </Section>
-          )}
-        </>
+        <Section id="part-layout" icon="calendar_month" title={t("layout", lang)} p={p}>
+          <Segmented<DateLayout>
+            options={DATE_LAYOUTS.map((l) => ({ key: l.key, icon: l.icon, title: t(l.text, lang) }))}
+            value={dateLayoutOf(item)}
+            onChange={(layout) => onChange({ layout })}
+            p={p}
+            label={t("layout", lang)}
+          />
+        </Section>
       )}
       {kind === "timePicker" && (
-        <>
-          <Section id="part-layout" icon="schedule" title={t("layout", lang)} p={p}>
-            <Segmented<TimeLayout>
-              options={TIME_LAYOUTS.map((l) => ({ key: l.key, icon: l.icon, title: t(l.text, lang) }))}
-              value={timeLayoutOf(item)}
-              onChange={(layout) => onChange({ layout })}
-              p={p}
-              label={t("layout", lang)}
-            />
-          </Section>
-          <Section id="part-time" icon="schedule" title={t("selectTime", lang)} p={p}>
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              <Slider icon="schedule" title={t("hourLabel", lang)} value={hourOf(item)} min={0} max={23} step={1} onChange={(hour) => onChange({ hour })} p={p} />
-              <Slider icon="timer" title={t("minuteLabel", lang)} value={minuteOf(item)} min={0} max={59} step={1} onChange={(minute) => onChange({ minute })} p={p} />
-            </div>
-          </Section>
-        </>
+        <Section id="part-layout" icon="schedule" title={t("layout", lang)} p={p}>
+          <Segmented<TimeLayout>
+            options={TIME_LAYOUTS.map((l) => ({ key: l.key, icon: l.icon, title: t(l.text, lang) }))}
+            value={timeLayoutOf(item)}
+            onChange={(layout) => onChange({ layout })}
+            p={p}
+            label={t("layout", lang)}
+          />
+        </Section>
       )}
 
       {/* ---------- style and colour ---------- */}
-      {(kind === "card" || isField(kind) || kind === "toolbar") && (
+      {(kind === "card" || isField(kind) || kind === "toolbar" || kind === "searchBar") && (
         <Section id="part-style" icon="palette" title={t("style", lang)} p={p}>
           <StyleRun kind={kind} value={item.variant} onChange={(variant) => onChange({ variant })} p={p} />
         </Section>
       )}
-      {(kind === "card" || kind === "listItem" || kind === "box") && (
-        <Section id="part-fill" icon="format_color_fill" title={t("background", lang)} p={p}>
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            <TokenChips
-              value={kind === "card" ? cardFillOf(item) : (item.fill ?? "surfaceContainerLow")}
-              onChange={(fill) => onChange({ fill })}
-              p={p}
-              none={kind === "card"}
-              noneOn={kind === "card" && !item.fill}
-              onNone={() => onChange({ fill: undefined })}
-              noneColor={kind === "card" ? p[cardDefaultFillOf(item.variant)] : undefined}
-              noneTextColor={kind === "card" ? onToken(cardDefaultFillOf(item.variant), p) : undefined}
-              noneIcon={kind === "card" ? "restart_alt" : undefined}
-              noneLabel={kind === "card" ? t("defaultColor", lang) : undefined}
-            />
-            {kind === "listItem" && item.icon && (
-              /* the disc behind the leading icon, or none: the icon stands bare */
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <span style={{ color: p.onSurfaceVariant, display: "inline-flex" }} title={t("iconBackground", lang)}>
-                  <Icon name="account_circle" size={20} />
-                </span>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <TokenChips
-                    value={item.iconFill && item.iconFill !== "none" ? item.iconFill : "primaryContainer"}
-                    onChange={(iconFill) => onChange({ iconFill })}
-                    p={p}
-                    none
-                    noneOn={item.iconFill === "none"}
-                    onNone={() => onChange({ iconFill: "none" })}
-                  />
-                </div>
-              </div>
-            )}
-          </div>
+      {kind === "listItem" && (
+        /* a list item wears one of a few looks, the way a FAB does: the row's colour and the
+           disc behind its icon are set together, so the icon always reads on the row */
+        <Section id="part-style" icon="palette" title={t("style", lang)} p={p}>
+          <ListStyleRun item={item} onChange={onChange} p={p} />
+        </Section>
+      )}
+      {kind === "box" && (
+        /* a box's style is the theme role it is painted in */
+        <Section id="part-style" icon="palette" title={t("style", lang)} p={p}>
+          <FillRun value={item.fill ?? "surfaceContainerLow"} onChange={(fill) => onChange({ fill })} p={p} />
         </Section>
       )}
 
       {/* ---------- state ---------- */}
-      {isChoice(kind) && (
-        <Section id="part-state" icon="tune" title={t("state", lang)} p={p}>
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            <Toggle on={!!item.checked} onChange={(checked) => onChange({ checked })} p={p} icon="toggle_on" label={t("on", lang)} grow />
-            {kind === "switch" && <Toggle on={!item.noCheck} onChange={(on) => onChange({ noCheck: on ? undefined : true })} p={p} icon="check" label={t("thumbCheck", lang)} grow />}
-          </div>
-        </Section>
-      )}
-      {kind === "listItem" && (
-        <Section id="part-state" icon="tune" title={t("state", lang)} p={p}>
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {/* a switch at the trailing end takes the place of the trailing icon */}
-            <Toggle on={!!item.switch} onChange={(on) => onChange({ switch: on || undefined })} p={p} icon="toggle_on" label={t("listSwitch", lang)} grow />
-            {item.switch && <Toggle on={!!item.checked} onChange={(checked) => onChange({ checked })} p={p} icon="check" label={t("on", lang)} grow />}
-          </div>
-        </Section>
-      )}
-      {kind === "box" && (
-        <Section id="part-state" icon="tune" title={t("state", lang)} p={p}>
-          <Toggle on={!!item.checked} onChange={(checked) => onChange({ checked })} p={p} icon="drag_handle" label={t("handle", lang)} grow />
-        </Section>
-      )}
       {kind === "navRail" && (
         <Section id="part-rail" icon="side_navigation" title={t("railState", lang)} p={p}>
           <RailRows item={item} onChange={onChange} p={p} standalone={railStandalone} />
+        </Section>
+      )}
+      {kind === "box" && (
+        /* a box with a handle along its top is a bottom sheet */
+        <Section id="part-state" icon="tune" title={t("state", lang)} p={p}>
+          <Toggle on={!!item.checked} onChange={(checked) => onChange({ checked })} p={p} icon="drag_handle" label={t("handle", lang)} grow />
         </Section>
       )}
       {kind === "loadingIndicator" && (
@@ -787,10 +668,8 @@ export function PartInspector({
         sizeSection(
           <>
             {widthRows()}
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              <Slider icon="height" title={t("height", lang)} value={topBarHeightOf(item)} min={spec.size2!.min} max={spec.size2!.max} step={4} onChange={(size2) => onChange({ size2 })} p={p} />
-              <NamedSizes steps={TOP_BAR_SIZES.map((b) => ({ key: b.key, value: b.h }))} value={topBarHeightOf(item)} onChange={(size2) => onChange({ size2 })} p={p} label={t("height", lang)} />
-            </div>
+            {/* M3 names the bar's three heights, and those are the only ones it comes in */}
+            <NamedSizes steps={TOP_BAR_SIZES.map((b) => ({ key: b.key, value: b.h }))} value={topBarHeightOf(item)} onChange={(size2) => onChange({ size2 })} p={p} label={t("height", lang)} />
             <EdgeCornerRows item={item} onChange={onChange} p={p} />
           </>,
         )}
@@ -813,20 +692,29 @@ export function PartInspector({
         )}
       {(kind === "searchBar" || kind === "listItem" || isField(kind) || kind === "divider") && sizeSection(widthRows())}
       {kind === "switch" && sizeSection(widthRows(true))}
-      {(kind === "card" || kind === "box") &&
+      {kind === "card" &&
         sizeSection(
           <>
             {widthRows()}
-            {heightRow(kind === "card" ? spec.size2!.presets!.map((v) => ({ key: v === 120 ? "s" : v === 188 ? "m" : "l", value: v })) : [{ key: "half", value: Math.round(frameH / 2) }, { key: "full", value: frameH }])}
+            {heightRow(spec.size2!.presets!.map((v) => ({ key: v === 120 ? "s" : v === 188 ? "m" : "l", value: v })))}
             <CornerRows item={item} onChange={onChange} p={p} />
           </>,
         )}
-      {isPicture(kind) &&
+      {(kind === "box" || isPicture(kind)) &&
         sizeSection(
+          /* a box and a picture are measured down first, then across; a camera and a map keep
+             the corners their kind gives them */
           <>
+            {heightRow(
+              kind === "box"
+                ? [
+                    { key: "half", value: Math.round(frameH / 2) },
+                    { key: "full", value: frameH },
+                  ]
+                : undefined,
+            )}
             {widthRows()}
-            {kind !== "image" && heightRow()}
-            <CornerRows item={item} onChange={onChange} p={p} />
+            {(kind === "box" || kind === "image") && <CornerRows item={item} onChange={onChange} p={p} />}
           </>,
         )}
       {kind === "carousel" &&

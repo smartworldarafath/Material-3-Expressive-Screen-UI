@@ -232,3 +232,18 @@ describe("a split button and its menu", () => {
     expect(next.actions).toEqual({ "tab:1": { to: "f1", transition: "slide" }, "tab:0": { to: "f3", transition: "fade" } });
   });
 });
+
+describe("a stack of list items", () => {
+  const row = (patch: Partial<Item> = {}): Item => ({ ...makeItem("listItem"), ...patch });
+
+  it("hands the joining item the width of the stack that is standing still", () => {
+    expect(matchRunSize(row({ id: "a", size: 240 }), row({ size: 380 })).size).toBe(380);
+    const fits = row({ id: "a", size: 380 });
+    expect(matchRunSize(fits, row({ size: 380 }))).toEqual(fits);
+  });
+
+  it("carries a width across the stack", () => {
+    const run = [row({ id: "a", size: 380 }), row({ id: "b", size: 380 })];
+    expect(runSizePatch(run, "a", { size: 300 }).map((it) => it.size)).toEqual([300, 300]);
+  });
+});

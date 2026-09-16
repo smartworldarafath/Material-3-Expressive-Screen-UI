@@ -34,8 +34,10 @@ import {
   menuUp,
   opensMenu,
   splitOpens,
+  hasPickerFields,
   migrateCarousel,
   migrateFabMenu,
+  migratePicker,
   buttonHeightOf,
   explodeGroup,
   freeRadii,
@@ -243,8 +245,7 @@ const BAR_SIDES = ["left", "right"] as const;
 /** a carousel runs the width of the screen, a rail the height of it: only the other measure is pulled on */
 const TALL = new Set<Kind>(["carousel", "navRail"]);
 const TALL_SIDES = ["top", "bottom"] as const;
-/** a picture is a square: either side pulls its one measure */
-const SQUARE = new Set<Kind>(["image"]);
+/** parts with one measure whichever side is pulled; none today, a picture has two */
 
 /** a screen changing size eases the way a settling part does */
 const SIZE_TRANSITION = `width ${SETTLE_MS}ms cubic-bezier(0.2, 0, 0, 1), height ${SETTLE_MS}ms cubic-bezier(0.2, 0, 0, 1), border-radius ${SETTLE_MS}ms cubic-bezier(0.2, 0, 0, 1)`;
@@ -278,6 +279,8 @@ function migrateGroups(groups: Group[], frames: Frame[]): Group[] {
   let out = kept.map((g) => (g.items.some((it) => it.kind === "fabMenu") ? { ...g, items: g.items.map(migrateFabMenu) } : g));
   /* a carousel used to be one box with one caption and one destination; now every card has its own */
   out = out.map((g) => (g.items.some((it) => it.kind === "carousel" && (it.label || it.action)) ? { ...g, items: g.items.map(migrateCarousel) } : g));
+  /* a picker used to carry a chosen day and time; it shows today and now, so those fields go */
+  out = out.map((g) => (g.items.some(hasPickerFields) ? { ...g, items: g.items.map(migratePicker) } : g));
   /* a carousel is as wide as the screen it stands on, whatever size that screen is */
   out = out.map((g) => {
     if (!g.items.some((it) => it.kind === "carousel")) return g;
@@ -518,7 +521,7 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
   const aiNoteTimer = useRef<number | null>(null);
   const aiAbortRef = useRef<AbortController | null>(null);
 
-  const p = paletteOf(paletteKey, customPalette, theme);
+  const p = useMemo(() => paletteOf(paletteKey, customPalette, theme), [paletteKey, customPalette, theme]);
   /* corner helpers read the shape scale outside React; keep it current before anything renders */
   setGlobalShape(theme.shape);
 
@@ -855,6 +858,8 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
           favorites,
           mode,
           lang,
+          /* the theme's surfaces, so the shell drawn before the editor loads is already this colour */
+          boot: { surface: p.surface, container: p.surfaceContainer, low: p.surfaceContainerLow, high: p.surfaceContainerHigh, primary: p.primary, canvas: frame === "phone" ? p.surfaceContainerLow : "#ffffff" },
         }),
       );
     } catch {}
@@ -864,6 +869,8 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
     rightOpen,
     leftW,
     rightW,
+    p,
+    frame,
     favorites,
     mode,
     lang,
@@ -1390,7 +1397,6 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
     /** the undo step for this drag has been taken: it is taken at the first change */
     taken: boolean;
     /** a square picture: either side pulls its one measure */
-    square: boolean;
   } | null>(null);
   /** What a handle on this side of the part changes, and how far it may be pulled: the measure
    *  it holds, and the bounds that measure has for this kind on this screen. A drag and a key
@@ -1404,14 +1410,12 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
      * their one measure is height */
     const tall = item.kind === "extendedFab" || item.kind === "chip" || item.kind === "splitButton";
     const box = sizeOf(item, widthsRef.current);
-    /* a square picture has one measure, whichever side is pulled */
-    const square = SQUARE.has(item.kind);
-    const startV = (vertical || tall) && !square ? box.h : box.w;
+    const startV = vertical || tall ? box.h : box.w;
     /* any part outside the button family is sized the way its panel sizes it: between the
      * bounds its kind is given, and a part as wide as the screen it sits on at most */
     const gauge = !BUTTON_LIKE.has(item.kind);
     /* across, the part's own measure; down, the second one it may have */
-    const gaugeSpec = vertical && !square ? KIND_SPEC[item.kind].size2 : KIND_SPEC[item.kind].size;
+    const gaugeSpec = vertical ? KIND_SPEC[item.kind].size2 : KIND_SPEC[item.kind].size;
     /* only a button must stay at least as wide as it is tall: it is a circle at its narrowest */
     const grows = item.kind === "button";
     const { w: screenW, h: screenH } = f ? frameSizeOf(f) : { w: PHONE_W, h: PHONE_H };
@@ -1421,7 +1425,6 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
       vertical,
       round,
       tall,
-      square,
       grows,
       startV,
       /* a button is a circle at its narrowest, so its height says how narrow it may be drawn; a
@@ -1440,8 +1443,8 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
   };
   /** the patch a new measure is: the height for a part held top and bottom or as wide as its
    *  label, the width or diameter for the rest; a button set narrower than it is tall grows */
-  const sizePatch = (item: Item, d: { vertical: boolean; tall: boolean; grows: boolean; square: boolean }, v: number): Partial<Item> =>
-    (d.vertical || d.tall) && !d.square ? { size2: v, ...(d.grows && item.size && item.size < v ? { size: v } : {}) } : { size: v };
+  const sizePatch = (item: Item, d: { vertical: boolean; tall: boolean; grows: boolean }, v: number): Partial<Item> =>
+    d.vertical || d.tall ? { size2: v, ...(d.grows && item.size && item.size < v ? { size: v } : {}) } : { size: v };
   /** a handle pulled by the keyboard: one 4dp step out or in, kept the way a panel change is */
   const nudgeSize = (g: Group, item: Item, side: HandleSide, dir: 1 | -1) => {
     const d = sizeDragSpec(item, side, frameOfGroup(g, framesRef.current, widthsRef.current) ?? null);

@@ -330,10 +330,6 @@ function Tappable({
     rowDragEnd.current?.();
   }, []);
 
-  /** A row of cards travels slower than the hand that carries it: its cards are large, and each
-   *  one grows as it goes, so a movement that suits a row of tabs sends cards flying past. */
-  const GAIN = scrollCards ? 0.6 : 1;
-
   /** a mouse or pen drags the row; touch pans it natively, so it is left to the browser */
   const dragRow = (e: React.PointerEvent<HTMLDivElement>) => {
     swallowClick.current = false;
@@ -350,7 +346,7 @@ function Tappable({
     const move = (ev: PointerEvent) => {
       const dx = ev.clientX - x0;
       if (Math.abs(dx) > 4) moved = true;
-      if (moved) el.scrollLeft = left0 - dx * GAIN;
+      if (moved) el.scrollLeft = left0 - dx;
     };
     const end = () => {
       window.removeEventListener("pointermove", move);
@@ -463,11 +459,11 @@ function Tappable({
       const d = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
       const canMove = d < 0 ? el.scrollLeft > 0 : el.scrollLeft < el.scrollWidth - el.clientWidth - 1;
       if (canMove) e.preventDefault();
-      el.scrollLeft += d * GAIN;
+      el.scrollLeft += d;
     };
     el.addEventListener("wheel", onWheel, { passive: false });
     return () => el.removeEventListener("wheel", onWheel);
-  }, [scrollRow, GAIN]);
+  }, [scrollRow]);
 
   const dragValue = (e: React.PointerEvent) => {
     const r = ref.current?.getBoundingClientRect();
@@ -495,6 +491,11 @@ function Tappable({
     const inset = sizeOf(item, {}).h - topBarHeightOf(item);
     if (item.icon) slots.push({ key: "icon", style: { left: 4, top: inset + 8, width: 48, height: 48, borderRadius: 24 } });
     if (item.icon2) slots.push({ key: "icon2", style: { right: 4, top: inset + 8, width: 48, height: 48, borderRadius: 24 } });
+  }
+  if (onSlot && item.kind === "searchBar") {
+    /* the two icons at the ends of the bar, each under a round hit area the bar's height */
+    if (item.icon) slots.push({ key: "icon", style: { left: 4, top: 4, width: 48, height: 48, borderRadius: 24 } });
+    if (item.icon2) slots.push({ key: "icon2", style: { right: 4, top: 4, width: 48, height: 48, borderRadius: 24 } });
   }
   if (onSlot && scrollTabs) {
     /* hit areas sit inside the scrolling layer, one per tab, so they move with the row */

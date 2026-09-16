@@ -95,10 +95,10 @@ describe("card image placement", () => {
 
   /* the phrase the layout section must carry for each placement */
   const PLACEMENT: Record<Lang, Record<string, string>> = {
-    ja: { top: "上部に", leading: "先頭側（全高）に", trailing: "末尾側（全高）に", background: "背景全面に" },
-    en: { top: "on top", leading: "filling the leading side", trailing: "filling the trailing side", background: "as a full-bleed background" },
-    zh: { top: "顶部是", leading: "左侧（全高）是", trailing: "右侧（全高）是", background: "整张卡片的背景是" },
-    ko: { top: "위쪽에", leading: "앞쪽(전체 높이)에", trailing: "뒤쪽(전체 높이)에", background: "배경 전체에" },
+    ja: { top: "上部に", bottom: "下部に", leading: "先頭側（全高）に", trailing: "末尾側（全高）に", background: "背景全面に" },
+    en: { top: "on top", bottom: "along the bottom", leading: "filling the leading side", trailing: "filling the trailing side", background: "as a full-bleed background" },
+    zh: { top: "顶部是", bottom: "底部是", leading: "左侧（全高）是", trailing: "右侧（全高）是", background: "整张卡片的背景是" },
+    ko: { top: "위쪽에", bottom: "아래쪽에", leading: "앞쪽(전체 높이)에", trailing: "뒤쪽(전체 높이)에", background: "배경 전체에" },
   };
   const SIZED: Record<Lang, { top: string; side: string }> = {
     ja: { top: "（高さ 96dp）", side: "（幅 96dp）" },
@@ -137,6 +137,9 @@ describe("card image placement", () => {
     expect(cardLayout(lang, { textColor: "primary" })).toContain(color[lang]);
     expect(cardLayout(lang, { contentAlign: "end" })).toContain(bottom[lang]);
     expect(cardLayout(lang, { imagePos: "background", contentAlign: "end" })).not.toContain(bottom[lang]);
+    const centred: Record<Lang, string> = { ja: "文字は中央揃え", en: "text centred", zh: "文字居中", ko: "텍스트 가운데 정렬" };
+    expect(cardLayout(lang, { textAlign: "start" })).not.toContain(centred[lang]);
+    expect(cardLayout(lang, { textAlign: "center" })).toContain(centred[lang]);
   });
 
   it.each(LANGS)("states a card's corners once they are changed in %s", (lang) => {

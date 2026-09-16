@@ -5,11 +5,15 @@ import { Reorder, useDragControls } from "motion/react";
 import {
   Action,
   BACK_TARGET,
+  COLOR_TOKENS,
+  ColorToken,
   ENTRY_BOUNDS,
   Frame,
   Item,
   KIND_SPEC,
   LINK_TARGET,
+  LIST_STYLES,
+  ListStyle,
   MENU_TARGET,
   NavTab,
   Palette,
@@ -22,18 +26,22 @@ import {
   halfWidth,
   isFab,
   isPhoneFrame,
+  listStyleOf,
+  listStylePatch,
+  onToken,
   removeTabPatch,
   reorderTabsPatch,
   scaleR,
+  sizeOf,
   variantStyle,
 } from "@/lib/tokens";
 import { Lang } from "@/lib/i18n";
-import { Icon } from "./M3Node";
+import { Icon, boxStyle } from "./M3Node";
 import { IconPicker } from "./IconPicker";
-import { CornerIcon, Field, IconBtn, RUN_CELL, Section, Segmented, Select, SelectOption, Slider, Toggle } from "./ui";
+import { CornerIcon, Field, IconBtn, RUN_CELL, Section, Segmented, Select, SelectOption, Slider } from "./ui";
 import { AiHooks, variantsOf } from "./Inspector";
 import { LinkStage, TapStage } from "./TapStage";
-import { KIND_TEXT, t, useLang } from "@/lib/i18n";
+import { COLOR_TOKEN_TEXT, KIND_TEXT, t, useLang } from "@/lib/i18n";
 
 /* The chrome every part's panel wears: the title row with its menu, the two tabs, the grid that
  * lines a part up, the field the model writes into, and the tap action with its stage. A part
@@ -455,6 +463,10 @@ export function NoteSection({ item, ai, onChange, p }: { item: Item; ai: AiHooks
   );
 }
 
+/** the button family wears the button styles; every other part is painted the way the canvas
+ *  paints it, so a cell in the panel is the very colour the part shows */
+const BUTTON_STYLED: Item["kind"][] = ["button", "iconButton", "fab", "extendedFab", "splitButton", "chip"];
+
 /** The styles a part comes in, as one connected run, each cell painted the way that style
  *  looks; the chosen one carries a check mark and nothing else is written on them. */
 export function StyleRun({ kind, value, onChange, p }: { kind: Item["kind"]; value: Variant; onChange: (v: Variant) => void; p: Palette }) {
@@ -463,15 +475,16 @@ export function StyleRun({ kind, value, onChange, p }: { kind: Item["kind"]; val
   return (
     <Segmented<Variant>
       options={variants.map((v) => {
-        const st = variantStyle(v.key, p);
+        const st = BUTTON_STYLED.includes(kind) ? variantStyle(v.key, p) : boxStyle({ ...BLANK, kind, variant: v.key }, p);
         return {
           key: v.key,
           title: v.label,
           node: v.key === value ? <Icon name="check" size={20} /> : <span />,
           style: {
             ...st,
-            /* a text button paints nothing, so its cell gets a faint edge to be found by */
-            border: v.key === "outlined" ? st.border : v.key === "text" ? `1px dashed ${p.outlineVariant}` : "none",
+            /* a text button paints nothing, so its cell gets a faint edge to be found by; a part
+               painted in a surface role close to the panel's own gets one too */
+            border: st.border && st.border !== "none" ? st.border : v.key === "text" ? `1px dashed ${p.outlineVariant}` : BUTTON_STYLED.includes(kind) ? "none" : `1px solid ${p.outlineVariant}`,
             boxShadow: v.key === "elevated" ? "0 1px 3px rgba(0,0,0,0.2)" : "none",
             minWidth: 0,
             padding: "0 4px",
@@ -483,6 +496,65 @@ export function StyleRun({ kind, value, onChange, p }: { kind: Item["kind"]; val
       p={p}
       label={t("style", lang)}
       tight
+    />
+  );
+}
+
+/** the bare item a style cell is painted from: only the kind and the style matter to it */
+const BLANK: Item = { id: "", kind: "box", label: "", icon: null, variant: "filled" };
+
+/** The colours a box can be, as one connected run of the theme's own roles: each cell is
+ *  painted in the role, and the chosen one carries a check mark in the colour that reads on it.
+ *  The run wraps onto a second row, since ten roles are more than one row holds. */
+export function FillRun({ value, onChange, p }: { value: ColorToken; onChange: (fill: ColorToken) => void; p: Palette }) {
+  const lang = useLang();
+  const rows = [COLOR_TOKENS.slice(0, 5), COLOR_TOKENS.slice(5)];
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+      {rows.map((row, r) => (
+        <Segmented<ColorToken>
+          key={r}
+          options={row.map((tk) => ({
+            key: tk.key,
+            title: lang === "en" ? tk.label : COLOR_TOKEN_TEXT[lang][tk.key],
+            node: tk.key === value ? <Icon name="check" size={20} /> : <span />,
+            style: { background: p[tk.key], color: onToken(tk.key, p), border: `1px solid ${p.outlineVariant}`, minWidth: 0, padding: 0 },
+          }))}
+          value={value}
+          onChange={onChange}
+          p={p}
+          label={`${t("style", lang)} ${r + 1}/${rows.length}`}
+          tight
+        />
+      ))}
+    </div>
+  );
+}
+
+/** The looks a list item comes in, as one connected run, the way a FAB's styles are offered:
+ *  each cell is painted in the look's row colour and carries the disc its icon sits on, so the
+ *  two colours a look sets are both in the picture. The one worn carries a check. */
+export function ListStyleRun({ item, onChange, p }: { item: Item; onChange: (patch: Partial<Item>) => void; p: Palette }) {
+  const lang = useLang();
+  const value = listStyleOf(item);
+  return (
+    <Segmented<ListStyle | "">
+      options={LIST_STYLES.map((s) => ({
+        key: s.key,
+        title: t(s.text, lang),
+        node: (
+          <span aria-hidden style={{ width: 26, height: 26, borderRadius: 13, background: p[s.iconFill], color: onToken(s.iconFill, p), display: "grid", placeItems: "center" }}>
+            {s.key === value && <Icon name="check" size={18} />}
+          </span>
+        ),
+        style: { background: p[s.fill], color: onToken(s.fill, p), border: `1px solid ${p.outlineVariant}`, minWidth: 0, padding: 0 },
+      }))}
+      /* colours set before the looks existed match none of them: no cell is checked until one is picked */
+      value={value ?? ""}
+      onChange={(k) => k && onChange(listStylePatch(k))}
+      p={p}
+      height={44}
+      label={t("style", lang)}
     />
   );
 }
@@ -551,7 +623,7 @@ export function IconCell({ icon, faint, open, title, onClick, p }: { icon: strin
 
 /** The icons a part carries at its two ends -- or the one it carries -- each a cell that opens
  *  the picker in place. A part whose words sit between them shows the field there too. */
-export function IconRow({ slots, onPick, children, p }: { slots: { key: string; value: string | null; title: string }[]; onPick: (key: string, icon: string | null) => void; children?: React.ReactNode; p: Palette }) {
+export function IconRow({ slots, onPick, children, p }: { slots: { key: string; value: string | null; title: string; extras?: { icon: string; title: string }[] }[]; onPick: (key: string, icon: string | null) => void; children?: React.ReactNode; p: Palette }) {
   const [open, setOpen] = useState<string | null>(null);
   const picked = slots.find((s) => s.key === open) ?? null;
   return (
@@ -561,7 +633,7 @@ export function IconRow({ slots, onPick, children, p }: { slots: { key: string; 
         {children ? <div style={{ flex: 1, minWidth: 0 }}>{children}</div> : <span style={{ flex: 1 }} />}
         {slots[1] && <IconCell icon={slots[1].value} open={open === slots[1].key} title={slots[1].title} onClick={() => setOpen(open === slots[1].key ? null : slots[1].key)} p={p} />}
       </div>
-      {picked && <IconPicker value={picked.value} onChange={(icon) => onPick(picked.key, icon)} onClose={() => setOpen(null)} palette={p} />}
+      {picked && <IconPicker value={picked.value} onChange={(icon) => onPick(picked.key, icon)} onClose={() => setOpen(null)} palette={p} extras={picked.extras} />}
     </div>
   );
 }
@@ -695,6 +767,118 @@ export function EntryList({
   );
 }
 
+/** the mark of the current entry: a radio glyph that fills when picked, on no plate of its own */
+function EntryRadio({ on, onClick, p }: { on: boolean; onClick: () => void; p: Palette }) {
+  const lang = useLang();
+  return (
+    <button
+      onClick={onClick}
+      title={t("selectedTab", lang)}
+      aria-label={t("selectedTab", lang)}
+      aria-pressed={on}
+      style={{ width: 32, height: 32, border: "none", background: "transparent", padding: 0, color: on ? p.primary : p.onSurfaceVariant, cursor: "pointer", display: "grid", placeItems: "center" }}
+    >
+      <Icon name={on ? "radio_button_checked" : "radio_button_unchecked"} size={20} fill={on} />
+    </button>
+  );
+}
+
+/** The icons a toolbar carries, in the one row they stand in on the part: each a cell that
+ *  opens the picker, dragged sideways into a new order. The cell at the end adds one; while a
+ *  cell is being dragged it turns into the place to drop it to take it out. */
+export function IconStrip({ item, onChange, p }: { item: Item; onChange: (patch: Partial<Item>) => void; p: Palette }) {
+  const lang = useLang();
+  const [pick, setPick] = useState<string | null>(null);
+  const [dragging, setDragging] = useState<number | null>(null);
+  const [overBin, setOverBin] = useState(false);
+  const bin = useRef<HTMLButtonElement | null>(null);
+  const tabs: NavTab[] = item.tabs ?? [];
+  const bounds = ENTRY_BOUNDS[item.kind] ?? { min: 1, max: 12 };
+  const keys = useRef<{ id: string; names: string[] }>({ id: item.id, names: [] });
+  if (keys.current.id !== item.id) keys.current = { id: item.id, names: [] };
+  const named = useRef(0);
+  while (keys.current.names.length < tabs.length) keys.current.names.push(`i${named.current++}`);
+  if (keys.current.names.length > tabs.length) keys.current.names.length = tabs.length;
+  const names = keys.current.names;
+  const picked = pick === null ? -1 : names.indexOf(pick);
+  const onBin = (e: { clientX: number; clientY: number }) => {
+    const r = bin.current?.getBoundingClientRect();
+    return !!r && e.clientX >= r.left - 8 && e.clientX <= r.right + 8 && e.clientY >= r.top - 8 && e.clientY <= r.bottom + 8;
+  };
+  const canAdd = tabs.length < bounds.max;
+  const canRemove = tabs.length > bounds.min;
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+        <Reorder.Group
+          axis="x"
+          values={names}
+          onReorder={(next: string[]) => {
+            const order = next.map((k) => names.indexOf(k));
+            keys.current.names = next;
+            onChange(reorderTabsPatch(item, order));
+          }}
+          style={{ display: "flex", gap: 6, padding: 0, margin: 0 }}
+        >
+          {tabs.map((tab, i) => (
+            <Reorder.Item
+              key={names[i]}
+              value={names[i]}
+              onDragStart={() => setDragging(i)}
+              onDrag={(e) => setOverBin(canRemove && onBin(e as PointerEvent))}
+              onDragEnd={(e) => {
+                const drop = canRemove && onBin(e as PointerEvent);
+                setDragging(null);
+                setOverBin(false);
+                if (drop) {
+                  if (pick === names[i]) setPick(null);
+                  keys.current.names = names.filter((_, j) => j !== i);
+                  onChange(removeTabPatch(item, i));
+                }
+              }}
+              style={{ listStyle: "none", position: "relative", touchAction: "none", cursor: "grab" }}
+            >
+              <IconCell icon={tab.icon || null} open={pick === names[i]} title={t("changeIcon", lang)} onClick={() => setPick(pick === names[i] ? null : names[i])} p={p} />
+            </Reorder.Item>
+          ))}
+        </Reorder.Group>
+        {(canAdd || dragging !== null) && (
+          <button
+            ref={bin}
+            disabled={!canAdd && dragging === null}
+            onClick={() => {
+              if (!canAdd) return;
+              const spare = defaultTabsFor(item.kind);
+              onChange({ tabs: [...tabs, { ...spare[tabs.length % spare.length] }] });
+            }}
+            title={t(dragging !== null ? "dropToRemove" : "addTab", lang)}
+            aria-label={t(dragging !== null ? "dropToRemove" : "addTab", lang)}
+            className="m3-press"
+            style={{
+              width: 44,
+              height: 44,
+              flex: "0 0 auto",
+              borderRadius: 22,
+              border: `1.5px dashed ${overBin ? p.error : dragging !== null ? (canRemove ? p.error : p.outlineVariant) : p.outline}`,
+              background: overBin ? p.errorContainer : "transparent",
+              color: dragging !== null ? (canRemove ? p.error : p.outline) : p.primary,
+              cursor: dragging !== null ? "copy" : "pointer",
+              display: "grid",
+              placeItems: "center",
+              transition: "background 120ms, color 120ms, border-color 120ms",
+            }}
+          >
+            <Icon name={dragging !== null ? "delete" : "add"} size={20} />
+          </button>
+        )}
+      </div>
+      {picked >= 0 && tabs[picked] && (
+        <IconPicker value={tabs[picked].icon || null} onChange={(icon) => onChange({ tabs: tabs.map((t, j) => (j === picked ? { ...t, icon: icon ?? "" } : t)) })} onClose={() => setPick(null)} palette={p} />
+      )}
+    </div>
+  );
+}
+
 /** one entry: the handle at the start of its words, the words, and the icon beside them */
 function EntryRow({
   id,
@@ -747,19 +931,11 @@ function EntryRow({
       onDragEnd={(e) => onDragEnd(e as PointerEvent)}
       style={{ listStyle: "none", display: "flex", gap: 6, alignItems: "center", position: "relative" }}
     >
-      {onSelect && (
-        <IconBtn
-          icon={selected ? "radio_button_checked" : "radio_button_unchecked"}
-          p={p}
-          size={44}
-          on={selected}
-          onClick={onSelect}
-          title={t("selectedTab", lang)}
-        />
-      )}
       {labels ? (
         <div style={{ position: "relative", flex: 1, minWidth: 0 }}>
-          <Field value={tab.label} onChange={onLabel} placeholder={t("label", lang)} p={p} icon="drag_indicator" height={44} />
+          {/* the mark that says which entry is the current one stands inside the field, right
+              after the handle, and only the mark itself changes when it is picked */}
+          <Field value={tab.label} onChange={onLabel} placeholder={t("label", lang)} p={p} icon="drag_indicator" height={44} leading={onSelect && <EntryRadio on={!!selected} onClick={onSelect} p={p} />} />
           {/* the handle sits where the field draws its mark, and is the only thing that drags */}
           {handle}
         </div>
@@ -775,8 +951,192 @@ function EntryRow({
   );
 }
 
-/** The corners of a part: one radius for all four until the author asks for each. The seed
- *  is what the canvas draws for the part today. */
+/** a whole number typed into a small box: it follows the field while the number is in range
+ *  and settles when the field is left, the way the slider's own number does */
+function Num({ value, min, max, title, onChange, p }: { value: number; min: number; max: number; title: string; onChange: (v: number) => void; p: Palette }) {
+  const [text, setText] = useState(String(value));
+  const [editing, setEditing] = useState(false);
+  useEffect(() => {
+    if (!editing) setText(String(value));
+  }, [value, editing]);
+  const commit = () => {
+    const n = Math.round(Number(text));
+    if (Number.isFinite(n) && text.trim() !== "") onChange(Math.max(min, Math.min(max, n)));
+    setEditing(false);
+    setText(String(value));
+  };
+  return (
+    <input
+      type="number"
+      inputMode="numeric"
+      aria-label={title}
+      title={title}
+      min={min}
+      max={max}
+      value={editing ? text : String(value)}
+      onFocus={(e) => {
+        setEditing(true);
+        setText(String(value));
+        e.currentTarget.select();
+      }}
+      onChange={(e) => {
+        setText(e.target.value);
+        const n = Math.round(Number(e.target.value));
+        if (e.target.value.trim() !== "" && Number.isFinite(n) && n >= min && n <= max) onChange(n);
+      }}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") e.currentTarget.blur();
+        if (e.key === "Escape") {
+          setText(String(value));
+          e.currentTarget.blur();
+        }
+      }}
+      className="m3-number"
+      style={{
+        width: 48,
+        height: 28,
+        padding: "0 6px",
+        borderRadius: 8,
+        border: "none",
+        background: p.surfaceContainerHigh,
+        color: p.onSurface,
+        fontSize: 12,
+        fontWeight: 600,
+        textAlign: "center",
+        fontVariantNumeric: "tabular-nums",
+        fontFamily: "inherit",
+        outline: editing ? `2px solid ${p.primary}` : "none",
+        outlineOffset: -1,
+        boxSizing: "border-box",
+      }}
+    />
+  );
+}
+
+const CORNER_KEYS = ["tl", "tr", "bl", "br"] as const;
+type CornerKey = (typeof CORNER_KEYS)[number];
+const CORNER_TEXT: Record<CornerKey, "cornerTl" | "cornerTr" | "cornerBl" | "cornerBr"> = { tl: "cornerTl", tr: "cornerTr", bl: "cornerBl", br: "cornerBr" };
+/** the tallest the drawing of the part is; the widest is the stage it stands on */
+const SHAPE_MAX_H = 104;
+const SHAPE_MIN = 56;
+const HANDLE = 14;
+
+/** The part drawn small on a stage of its own, the way the trigger tab draws a screen, with each
+ *  corner's number beside it and a handle on the corner itself. A handle sits where the corner's
+ *  arc is centred, so pulling it in along the diagonal rounds the corner under the finger. */
+function CornerStage({ item, corners, max, onChange, p }: { item: Item; corners: Radii; max: number; onChange: (c: Radii) => void; p: Palette }) {
+  const lang = useLang();
+  const stage = useRef<HTMLDivElement | null>(null);
+  const shape = useRef<HTMLDivElement | null>(null);
+  const [avail, setAvail] = useState(0);
+  useEffect(() => {
+    const el = stage.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => setAvail(el.clientWidth));
+    ro.observe(el);
+    setAvail(el.clientWidth);
+    return () => ro.disconnect();
+  }, []);
+  /* the drawing keeps the part's own proportions, so a wide box reads as a wide box */
+  const { w: dpW, h: dpH } = sizeOf(item, {});
+  const maxW = Math.max(SHAPE_MIN, (avail || 220) - 24);
+  const k = Math.min(maxW / Math.max(1, dpW), SHAPE_MAX_H / Math.max(1, dpH));
+  const w = Math.max(SHAPE_MIN, Math.round(dpW * k));
+  const h = Math.max(SHAPE_MIN, Math.round(dpH * k));
+  /* radii are scaled with the drawing, so the picture is the part, not a diagram of it */
+  const scale = w / Math.max(1, dpW);
+  const px = (r: number) => Math.round(r * scale);
+  const set = (key: CornerKey, r: number) => onChange({ ...corners, [key]: Math.max(0, Math.min(max, Math.round(r))) });
+
+  const drag = (key: CornerKey) => (e: React.PointerEvent<HTMLSpanElement>) => {
+    const box = shape.current?.getBoundingClientRect();
+    if (!box) return;
+    e.preventDefault();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    /* the corner the handle belongs to, and which way "in" is from it */
+    const cx = key === "tl" || key === "bl" ? box.left : box.right;
+    const cy = key === "tl" || key === "tr" ? box.top : box.bottom;
+    const sx = key === "tl" || key === "bl" ? 1 : -1;
+    const sy = key === "tl" || key === "tr" ? 1 : -1;
+    const move = (ev: PointerEvent) => {
+      const inset = Math.min((ev.clientX - cx) * sx, (ev.clientY - cy) * sy);
+      set(key, inset / scale);
+    };
+    const up = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointercancel", up);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+    window.addEventListener("pointercancel", up);
+  };
+
+  const num = (key: CornerKey) => <Num value={corners[key]} min={0} max={max} title={t(CORNER_TEXT[key], lang)} onChange={(v) => set(key, v)} p={p} />;
+  const handle = (key: CornerKey) => {
+    const r = px(corners[key]);
+    const at: React.CSSProperties = {
+      left: key === "tl" || key === "bl" ? r - HANDLE / 2 : undefined,
+      right: key === "tr" || key === "br" ? r - HANDLE / 2 : undefined,
+      top: key === "tl" || key === "tr" ? r - HANDLE / 2 : undefined,
+      bottom: key === "bl" || key === "br" ? r - HANDLE / 2 : undefined,
+    };
+    return (
+      <span
+        key={key}
+        aria-hidden
+        onPointerDown={drag(key)}
+        style={{
+          position: "absolute",
+          ...at,
+          width: HANDLE,
+          height: HANDLE,
+          borderRadius: HANDLE / 2,
+          background: p.primary,
+          border: `2px solid ${p.surface}`,
+          boxSizing: "border-box",
+          boxShadow: "0 1px 2px rgba(0,0,0,0.3)",
+          cursor: key === "tl" || key === "br" ? "nwse-resize" : "nesw-resize",
+          touchAction: "none",
+        }}
+      />
+    );
+  };
+
+  return (
+    <div ref={stage} style={{ flex: 1, minWidth: 0, background: p.surfaceContainerLow, borderRadius: 12, padding: "8px 8px", display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", width: "100%" }}>
+        {num("tl")}
+        {num("tr")}
+      </div>
+      <div
+        ref={shape}
+        style={{
+          position: "relative",
+          width: w,
+          height: h,
+          /* the part's own colour, drawn without the picture that may be on it */
+          background: p.surfaceContainerHighest,
+          border: `1.5px solid ${p.outline}`,
+          boxSizing: "border-box",
+          borderRadius: `${px(corners.tl)}px ${px(corners.tr)}px ${px(corners.br)}px ${px(corners.bl)}px`,
+        }}
+      >
+        {CORNER_KEYS.map(handle)}
+      </div>
+      <div style={{ display: "flex", justifyContent: "space-between", width: "100%" }}>
+        {num("bl")}
+        {num("br")}
+      </div>
+    </div>
+  );
+}
+
+/** The corners of a part: one radius for all four, on a slider, until the button at its start
+ *  is tapped. Then each corner is its own and is set on a drawing of the part -- typed at the
+ *  corner or pulled in by it. The button wears the icon of the mode it would switch to, so it
+ *  reads as what a tap does, and the seed is what the canvas draws for the part today. */
 export function CornerRows({ item, onChange, p, max = 48 }: { item: Item; onChange: (patch: Partial<Item>) => void; p: Palette; max?: number }) {
   const lang = useLang();
   const spec = KIND_SPEC[item.kind];
@@ -784,50 +1144,53 @@ export function CornerRows({ item, onChange, p, max = 48 }: { item: Item; onChan
   const top = item.radiusTop ?? (isBox ? 0 : scaleR(spec.radius));
   const bottom = isBox ? (item.radiusBottom ?? 0) : top;
   const corners: Radii | undefined = item.corners ?? (isBox && top !== bottom ? { tl: top, tr: top, bl: bottom, br: bottom } : undefined);
+  const each = !!corners;
+  const toggle = () =>
+    onChange(each ? { corners: undefined, radiusTop: corners!.tl, radiusBottom: isBox ? corners!.tl : undefined } : { corners: { tl: top, tr: top, bl: bottom, br: bottom } });
+  const modeButton = (
+    <button
+      type="button"
+      onClick={toggle}
+      title={t("cornersEach", lang)}
+      aria-label={t("cornersEach", lang)}
+      aria-pressed={each}
+      className="m3-press"
+      style={{
+        width: 32,
+        height: 32,
+        flex: "0 0 auto",
+        borderRadius: 16,
+        border: "none",
+        padding: 0,
+        /* painted like the number box beside the slider, so it reads as a thing to tap and not a label */
+        background: each ? p.secondaryContainer : p.surfaceContainerHigh,
+        color: each ? p.onSecondaryContainer : p.onSurfaceVariant,
+        cursor: "pointer",
+        display: "grid",
+        placeItems: "center",
+      }}
+    >
+      <Icon name={each ? "crop_free" : "rounded_corner"} size={20} />
+    </button>
+  );
+  if (!corners) {
+    return (
+      <Slider
+        iconNode={modeButton}
+        title={t("cornerRadius", lang)}
+        value={top}
+        min={0}
+        max={max}
+        step={1}
+        onChange={(r) => onChange(isBox ? { radiusTop: r, radiusBottom: r } : { radiusTop: r })}
+        p={p}
+      />
+    );
+  }
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-      {!corners && (
-        <Slider
-          icon="rounded_corner"
-          title={t("cornerRadius", lang)}
-          value={top}
-          min={0}
-          max={max}
-          step={1}
-          onChange={(r) => onChange(isBox ? { radiusTop: r, radiusBottom: r } : { radiusTop: r })}
-          p={p}
-        />
-      )}
-      {(item.kind === "card" || isBox) && (
-        <Toggle
-          on={!!corners}
-          onChange={(each) =>
-            onChange(
-              each
-                ? { corners: { tl: top, tr: top, bl: bottom, br: bottom } }
-                : { corners: undefined, radiusTop: corners?.tl ?? top, radiusBottom: isBox ? (corners?.tl ?? top) : undefined },
-            )
-          }
-          p={p}
-          icon="crop_free"
-          label={t("cornersEach", lang)}
-          grow
-        />
-      )}
-      {corners &&
-        (["tl", "tr", "bl", "br"] as const).map((k) => (
-          <Slider
-            key={k}
-            iconNode={<CornerIcon side={k} />}
-            title={t(k === "tl" ? "cornerTl" : k === "tr" ? "cornerTr" : k === "bl" ? "cornerBl" : "cornerBr", lang)}
-            value={corners[k]}
-            min={0}
-            max={max}
-            step={1}
-            onChange={(v) => onChange({ corners: { ...corners, [k]: v } })}
-            p={p}
-          />
-        ))}
+    <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+      {modeButton}
+      <CornerStage item={item} corners={corners} max={max} onChange={(c) => onChange({ corners: c })} p={p} />
     </div>
   );
 }

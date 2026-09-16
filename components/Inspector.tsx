@@ -49,6 +49,11 @@ export function variantsOf(kind: Kind): { key: Variant; label: string }[] {
         { key: "outlined", label: t("outlined") },
         { key: "filled", label: t("filled") },
       ];
+    case "searchBar":
+      return [
+        { key: "filled", label: t("filled") },
+        { key: "outlined", label: t("outlined") },
+      ];
     case "chip":
       return [
         { key: "outlined", label: t("outlined") },

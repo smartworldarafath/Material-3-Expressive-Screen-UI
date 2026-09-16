@@ -26,6 +26,7 @@ const validItem = (item: unknown) =>
   (item.imagePos === undefined || isCardImagePos(item.imagePos)) &&
   (item.imageSize === undefined || (Number.isFinite(item.imageSize) && (item.imageSize as number) > 0)) &&
   (item.contentAlign === undefined || isCardAlign(item.contentAlign)) &&
+  (item.textAlign === undefined || isCardAlign(item.textAlign)) &&
   (item.textColor === undefined || isTextToken(item.textColor)) &&
   typeof item.id === "string" &&
   typeof item.kind === "string" &&
@@ -38,9 +39,6 @@ const validItem = (item: unknown) =>
   (item.note === undefined || typeof item.note === "string") &&
   (item.layout === undefined || (typeof item.layout === "string" && LAYOUTS.has(item.layout))) &&
   optionalNumber(item.count) &&
-  optionalNumber(item.day) &&
-  optionalNumber(item.hour) &&
-  optionalNumber(item.minute) &&
   validTabs(item.tabs);
 
 const validGroup = (group: unknown) =>

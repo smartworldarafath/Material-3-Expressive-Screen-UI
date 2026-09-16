@@ -646,10 +646,6 @@ export const timeLayoutOf = (it: Item): TimeLayout => (it.layout === "input" ? "
  *  slider's handle first sits */
 export const PROGRESS_DEFAULT_VALUE = 60;
 export const SLIDER_DEFAULT_VALUE = 40;
-/** the day a date picker has circled, and the time a clock's hands are set to */
-export const dayOf = (it: Item) => clamp(Math.round(it.day ?? 17), 1, 31);
-export const hourOf = (it: Item) => clamp(Math.round(it.hour ?? 10), 0, 23);
-export const minuteOf = (it: Item) => clamp(Math.round(it.minute ?? 30), 0, 59);
 /** how many cards a carousel holds */
 export const carouselCountOf = (it: Item) => clamp(Math.round(it.count ?? 4), 2, 8);
 /** The cards themselves: one per card, carrying the picture and the words put on it. They are
@@ -672,6 +668,22 @@ export function migrateCarousel(it: Item): Item {
     next.action = undefined;
   }
   return next;
+}
+
+/** A sketch saved when a picker carried a chosen day and time: the fields are gone, since a
+ *  picker shows today and now, and they are dropped rather than written back out forever. */
+type PickerFields = { day?: unknown; hour?: unknown; minute?: unknown };
+export const hasPickerFields = (it: Item) => {
+  const old = it as Item & PickerFields;
+  return old.day !== undefined || old.hour !== undefined || old.minute !== undefined;
+};
+export function migratePicker(it: Item): Item {
+  if (!hasPickerFields(it)) return it;
+  const rest = { ...it } as Item & PickerFields;
+  delete rest.day;
+  delete rest.hour;
+  delete rest.minute;
+  return rest;
 }
 
 /** the gap between a carousel's cards */
@@ -730,12 +742,18 @@ export const isScrollableCarousel = (it: Item, width: number) => carouselScrollM
 
 /** Where the row rests: one stop per card, each the scroll at which that card stands at the head
  *  of the arrangement. A scroll let go between two is pulled to the nearer one, so the card on the
- *  left is always a whole card at its own size rather than something caught mid-growth. */
+ *  left is always a whole card at its own size rather than something caught mid-growth.
+ *
+ *  Every stop is the same distance from the last. A card leaves the row from the large keyline
+ *  whichever card it is, so every card costs the same scroll to pass, and the row travels with
+ *  the hand that carries it rather than crawling through the wide cards and bolting through the
+ *  narrow ones. (The first stop also takes back the margin the row starts with.) */
 export function carouselStops(it: Item, width: number): number[] {
   const inset = carouselInset(width);
   const ws = cardWidths(carouselLayoutOf(it), width - inset, carouselCountOf(it));
+  const stride = ws[0] + CARD_GAP;
   const stops = [0];
-  for (let i = 0; i < carouselScrollMax(it, width); i++) stops.push(stops[i] + ws[i] + CARD_GAP);
+  for (let i = 0; i < carouselScrollMax(it, width); i++) stops.push(stops[i] + stride + (i ? 0 : inset));
   return stops;
 }
 
@@ -788,17 +806,29 @@ export function carouselShapes(it: Item, width: number, scroll = 0): { x: number
     }
   }
   if (!(scroll > 0)) passed = 0;
-  /* the last cards keep the row full between them: from there on the arrangement turns around */
+  /* The last cards keep the row full between them: from there on the arrangement turns around.
+   * The sizes are read into their new ones on a curve that sets off and settles, so the row is
+   * not seen starting or stopping on the turn. */
   const fill = carouselFill(ws, width - inset);
-  const turn = clamp(passed - (count - fill), 0, 1);
+  const turning = clamp(passed - (count - fill), 0, 1);
+  const turn = turning * turning * (3 - 2 * turning);
+  /* The row also gives way to the last card as it comes to rest against the far edge. Where that
+   * is a pull against the travel it is taken early, while the row is still moving fast enough to
+   * swallow it, and is all but over by the time the travel dies away: spread evenly it outlives
+   * the travel and the row is seen backing up at the very end. A pull that goes with the travel
+   * has nothing to fight, and is spread evenly so the row does not bolt on it. */
+  const settle = 1 - (1 - turning) * (1 - turning) * (1 - turning);
   const out: { x: number; w: number; lead: number }[] = [];
   /* The margin is the list's, not the edge's: the first card stands off the near edge, and past
    * it the row simply runs to the edge and is cut there, so nothing is held in a margin on its
    * way out. The card leaving carries the row's start with it as it goes. */
   const leaving = passed - Math.floor(passed);
-  const going = slotWidth(ws, -leaving);
   const start = inset * clamp(1 - passed, 0, 1);
-  let x = start - leaving * (going + CARD_GAP);
+  /* The card at the head goes out at a steady rate: it travels the width it is left with when it
+   * finally goes, and draws the rest of the way in instead of moving. Travelling its own width
+   * while that width is shrinking would carry it past where it ends up and bring it back, which
+   * the whole row would be seen doing. */
+  let x = start - leaving * (ws[ws.length - 1] + CARD_GAP);
   for (let i = 0; i < count; i++) {
     const running = slotWidth(ws, i - passed);
     /* turned around, a card takes its size from the end of the row rather than the head of it */
@@ -816,7 +846,8 @@ export function carouselShapes(it: Item, width: number, scroll = 0): { x: number
    * at the head, where the cards are leaving anyway. */
   if (turn > 0) {
     const right = x - CARD_GAP * Math.min(1, out[count - 1].w / 8);
-    const want = lerp(0, width - inset - right, turn);
+    const span = width - inset - right;
+    const want = lerp(0, span, span > 0 ? settle : turn);
     for (const c of out) c.x += want;
   }
   return out;
@@ -1057,7 +1088,7 @@ export const KIND_SPEC: Record<Kind, KindSpec> = {
     w: CONTENT_W,
     h: 56,
     radius: 28,
-    hasVariant: false,
+    hasVariant: true,
     hasLabel: true,
     hasSupporting: false,
     hasIcon: true,
@@ -1066,6 +1097,7 @@ export const KIND_SPEC: Record<Kind, KindSpec> = {
     defIcon: "search",
     defIcon2: "mic",
     defSize: CONTENT_W,
+    defVariant: "filled",
   },
   card: {
     label: "Card",
@@ -1260,7 +1292,8 @@ export const KIND_SPEC: Record<Kind, KindSpec> = {
     hasLabel: false,
     hasSupporting: false,
     hasIcon: true,
-    size: { min: 48, max: PHONE_W, step: 4, icon: "open_in_full", presets: [96, HALF_W, CONTENT_W, PHONE_W] },
+    size: { min: 48, max: PHONE_W, step: 4, icon: "width", presets: [96, HALF_W, CONTENT_W, PHONE_W] },
+    size2: { min: 48, max: PHONE_H, step: 4, icon: "height", presets: [96, 200, 280] },
     defLabel: "",
     defIcon: "image",
     defSize: 200,
@@ -1585,12 +1618,13 @@ export type Item = {
   imageSize?: number;
   /** cards: where the text block sits vertically; unset means the top, or the bottom over a background image */
   contentAlign?: CardAlign;
+  /** cards: where the words sit across the card; the start when unset */
+  textAlign?: CardAlign;
   /** cards: a color role for the headline and body instead of the automatic one */
   textColor?: TextToken;
   /** on/off state for switches, checkboxes and chips */
   checked?: boolean;
   /** a switch whose handle stays plain when on, without the check icon */
-  noCheck?: boolean;
   /** 0..100 for sliders and determinate progress; undefined = indeterminate */
   value?: number;
   wavy?: boolean;
@@ -1625,11 +1659,6 @@ export type Item = {
   layout?: PartLayout;
   /** how many cards a carousel holds */
   count?: number;
-  /** the day a date picker has circled */
-  day?: number;
-  /** the time a clock is set to */
-  hour?: number;
-  minute?: number;
   /** runtime-only: the editor is showing this FAB's menu open. Never written to JSON. */
   [fabOpen]?: boolean;
   /** runtime-only: the menu rises out of the part's top rather than dropping below it. */
@@ -1743,33 +1772,20 @@ export function progressTypePatch(it: Item, to: ProgressKind): Partial<Item> {
 }
 
 /** The three selection controls, one panel: a switch, a checkbox and a radio button say the same
- *  thing in three shapes, so a part changes between them keeping its words and its state. A
- *  switch is the only one given a width; the other two are as wide as their label. */
+ *  thing in three shapes. A switch is the only one given a width; the other two are as wide as
+ *  their label. */
 export const CHOICE_KINDS = ["switch", "checkbox", "radio"] as const;
 export type ChoiceKind = (typeof CHOICE_KINDS)[number];
 export const isChoice = (k: Kind): k is ChoiceKind => (CHOICE_KINDS as readonly string[]).includes(k);
-export function choiceTypePatch(it: Item, to: ChoiceKind): Partial<Item> {
-  if (it.kind === to) return {};
-  return { kind: to, size: undefined, noCheck: undefined };
-}
-/** The three pictures a screen shows, one panel: a picture, the camera's viewfinder and a map
- *  are one box with something different in it. A change keeps the box's width and corners; the
- *  picture put on an image goes with it, since a camera and a map draw their own. */
+/** the three pictures a screen shows: a picture, the camera's viewfinder and a map, each a box
+ *  with something different in it and the same panel around it */
 export const PICTURE_KINDS = ["image", "camera", "map"] as const;
 export type PictureKind = (typeof PICTURE_KINDS)[number];
 export const isPicture = (k: Kind): k is PictureKind => (PICTURE_KINDS as readonly string[]).includes(k);
-export function pictureTypePatch(it: Item, to: PictureKind): Partial<Item> {
-  if (it.kind === to) return {};
-  return { kind: to, size2: undefined, src: to === "image" ? it.src : undefined };
-}
 /** the two fields that hold a value: a text field, and the dropdown that picks one from a list */
 export const FIELD_KINDS = ["textField", "select"] as const;
 export type FieldKind = (typeof FIELD_KINDS)[number];
 export const isField = (k: Kind): k is FieldKind => (FIELD_KINDS as readonly string[]).includes(k);
-export function fieldTypePatch(it: Item, to: FieldKind): Partial<Item> {
-  if (it.kind === to) return {};
-  return { kind: to, tabs: to === "select" ? (it.tabs?.length ? it.tabs : defaultTabsFor("select")) : it.tabs, selected: to === "select" ? it.selected : undefined };
-}
 
 /** M3's type scale, as the sizes a line of text on the canvas is offered at. The letter names
  *  the role -- body, title, headline, display -- and the number is the sp it comes to. */
@@ -1847,6 +1863,11 @@ export function matchRunSize(item: Item, host: Item): Item {
     const h = chipHeightOf(host);
     return chipHeightOf(item) === h ? item : { ...item, size2: h };
   }
+  /* list items stack, so the measure they share is their width */
+  if (family === "list") {
+    const w = host.size ?? KIND_SPEC[host.kind].defSize ?? KIND_SPEC[host.kind].w;
+    return (item.size ?? KIND_SPEC[item.kind].defSize ?? KIND_SPEC[item.kind].w) === w ? item : { ...item, size: w };
+  }
   if (family !== "button") return item;
   const h = buttonHeightOf(host);
   if (buttonHeightOf(item) === h) return item;
@@ -1855,12 +1876,13 @@ export function matchRunSize(item: Item, host: Item): Item {
 }
 
 /** the patch that sets a part's measure, carried across a run it belongs to: the parts of one
- *  run share a height, and each keeps its own width. */
+ *  run share a height, and each keeps its own width -- or, in a stack of list items, a width. */
 export function runSizePatch(items: Item[], id: string, patch: Partial<Item>): Item[] {
   const at = items.findIndex((it) => it.id === id);
   if (at < 0) return items;
   const next = { ...items[at], ...patch };
-  const carries = items.length > 1 && ("size2" in patch || (items[at].kind === "iconButton" && "size" in patch));
+  const stacked = KIND_SPEC[items[at].kind].connect?.family === "list";
+  const carries = items.length > 1 && ("size2" in patch || ((items[at].kind === "iconButton" || stacked) && "size" in patch));
   if (!carries) return items.map((it, i) => (i === at ? next : it));
   return items.map((it, i) => (i === at ? next : matchRunSize(it, next)));
 }
@@ -1877,7 +1899,7 @@ export const TRANSITIONS: { key: Transition; label: string; icon: string }[] = [
 
 /** slots on a bar that can each carry their own tap action */
 export function actionSlotsOf(it: Item): IconSlot[] {
-  if (it.kind === "topAppBar" || it.kind === "bottomNav" || it.kind === "navRail" || it.kind === "toolbar") return iconSlotsOf(it).filter((s) => !!s.value);
+  if (it.kind === "topAppBar" || it.kind === "searchBar" || it.kind === "bottomNav" || it.kind === "navRail" || it.kind === "toolbar") return iconSlotsOf(it).filter((s) => !!s.value);
   /* the entries of a menu, whichever FAB opens it */
   if (it.kind === "fabMenu" || opensMenu(it)) return (it.tabs ?? []).map((t, i) => ({ key: `tab:${i}`, label: t.label || `${i + 1}`, value: t.icon || null }));
   if (it.kind === "tabs") return (it.tabs ?? []).map((t, i) => ({ key: `tab:${i}`, label: t.label || `${i + 1}`, value: null }));
@@ -1943,21 +1965,19 @@ export const cardDefaultFillOf = (variant: Variant): ColorToken =>
   variant === "outlined" ? "surface" : variant === "elevated" ? "surfaceContainerLow" : "surfaceContainerHighest";
 export const cardFillOf = (it: Item): ColorToken => it.fill ?? cardDefaultFillOf(it.variant);
 
-/** where a card's image area sits; sketches saved before placement existed stay on top */
-export type CardImagePos = "top" | "leading" | "trailing" | "background";
-export const isCardImagePos = (v: unknown): v is CardImagePos => v === "top" || v === "leading" || v === "trailing" || v === "background";
+/** where a card's image area sits: a band along the top or the bottom, a column down a side, or
+ *  the whole background; sketches saved before placement existed stay on top */
+export type CardImagePos = "top" | "bottom" | "leading" | "trailing" | "background";
+export const isCardImagePos = (v: unknown): v is CardImagePos => v === "top" || v === "bottom" || v === "leading" || v === "trailing" || v === "background";
+/** a band runs across the card and is measured down; a column runs down it and is measured across */
+export const isCardImageBand = (pos: CardImagePos) => pos === "top" || pos === "bottom";
 export const cardImagePosOf = (it: Item): CardImagePos => it.imagePos ?? "top";
 
-/** the five card layouts the editor offers: the placements plus "no image", as one choice */
-export type CardLayout = CardImagePos | "none";
-export const cardLayoutOf = (it: Item): CardLayout => (it.noImage ? "none" : cardImagePosOf(it));
-/** the fields a layout choice sets; the top layout is the unset default so old sketches stay untouched */
-export const cardLayoutPatch = (layout: CardLayout): Pick<Item, "noImage" | "imagePos"> =>
-  layout === "none" ? { noImage: true, imagePos: undefined } : { noImage: undefined, imagePos: layout === "top" ? undefined : layout };
 
 export type CardAlign = "start" | "center" | "end";
 export const isCardAlign = (v: unknown): v is CardAlign => v === "start" || v === "center" || v === "end";
 /** the text block's vertical position: the top, or the bottom when it lies over a background image */
+export const cardTextAlignOf = (it: Item): CardAlign => it.textAlign ?? "start";
 export const cardContentAlignOf = (it: Item): CardAlign => it.contentAlign ?? (!it.noImage && cardImagePosOf(it) === "background" ? "end" : "start");
 
 /** the color roles a card's text may be set to; "on" roles pair with the containers offered as backgrounds */
@@ -2013,13 +2033,13 @@ export const CARD_IMAGE_MIN = 40;
  *  a top band is bounded by the drawn height, a side column by the drawn width */
 export function cardImageMaxOf(it: Item): number {
   const { w, h } = sizeOf(it, {});
-  const room = cardImagePosOf(it) === "top" ? h - CARD_MIN_TEXT_H : w - CARD_MIN_TEXT_W;
+  const room = isCardImageBand(cardImagePosOf(it)) ? h - CARD_MIN_TEXT_H : w - CARD_MIN_TEXT_W;
   return Math.max(CARD_IMAGE_MIN, room - CARD_PADDING * 2 - CARD_MEDIA_GAP);
 }
 /** the image area's extent in dp: the author's value, else 28% of the card's width
  *  on top or the standard column on a side, never beyond cardImageMaxOf */
 export function cardImageSizeOf(it: Item): number {
-  const top = cardImagePosOf(it) === "top";
+  const top = isCardImageBand(cardImagePosOf(it));
   const size = it.imageSize ?? (top ? Math.round((it.size ?? KIND_SPEC.card.defSize ?? KIND_SPEC.card.w) * 0.28) : CARD_SIDE_IMAGE_W);
   return Math.min(size, cardImageMaxOf(it));
 }
@@ -2040,6 +2060,28 @@ export function onToken(t: ColorToken, p: Palette): string {
       return p.onSurface;
   }
 }
+
+/** The looks a list item comes in, named the way a FAB's are: each is a row colour and the
+ *  colour of the disc behind its leading icon, set together so the icon always reads on the row.
+ *  The surface look is what a list item wears when nothing was chosen. */
+export type ListStyle = "surface" | "primary" | "secondary";
+export const LIST_STYLES: { key: ListStyle; fill: ColorToken; iconFill: ColorToken; text: "styleSurface" | "stylePrimary" | "styleSecondary" }[] = [
+  { key: "surface", fill: "surfaceContainerLow", iconFill: "primaryContainer", text: "styleSurface" },
+  { key: "primary", fill: "primaryContainer", iconFill: "primary", text: "stylePrimary" },
+  { key: "secondary", fill: "secondaryContainer", iconFill: "surface", text: "styleSecondary" },
+];
+/** the look a list item wears, or null when its colours were set some other way: a sketch
+ *  from before the looks existed keeps its colours until a look is picked on purpose */
+export const listStyleOf = (it: Item): ListStyle | null => {
+  const fill = it.fill ?? "surfaceContainerLow";
+  const icon = it.iconFill ?? "primaryContainer";
+  return LIST_STYLES.find((s) => s.fill === fill && s.iconFill === icon)?.key ?? null;
+};
+/** the fields a look sets; the surface look is the unset default so old sketches stay untouched */
+export const listStylePatch = (style: ListStyle): Pick<Item, "fill" | "iconFill"> => {
+  const s = LIST_STYLES.find((l) => l.key === style) ?? LIST_STYLES[0];
+  return style === "surface" ? { fill: undefined, iconFill: undefined } : { fill: s.fill, iconFill: s.iconFill };
+};
 
 export type Frame = {
   id: string;
@@ -2334,15 +2376,8 @@ export function makeItem(kind: Kind): Item {
     it.count = 4;
     it.size2 = 180;
   }
-  if (kind === "datePicker") {
-    it.layout = "modal";
-    it.day = 17;
-  }
-  if (kind === "timePicker") {
-    it.layout = "dial";
-    it.hour = 10;
-    it.minute = 30;
-  }
+  if (kind === "datePicker") it.layout = "modal";
+  if (kind === "timePicker") it.layout = "dial";
   if (kind === "bottomNav") {
     it.tabs = defaultTabs();
     it.radiusTop = 0;
@@ -2408,8 +2443,10 @@ export function sizeOf(it: Item, widths: Record<string, number>) {
     case "iconButton":
     case "circularProgress":
     case "loadingIndicator":
-    case "image":
       return { w: n, h: n };
+    /* a picture is as tall as it was made; square until it is given a height of its own */
+    case "image":
+      return { w: n, h: it.size2 ?? n };
     case "camera":
       return { w: n, h: it.size2 ?? Math.round((n * 4) / 3) };
     case "map":
@@ -2434,7 +2471,7 @@ export function sizeOf(it: Item, widths: Record<string, number>) {
       /* the calendar's rows follow its width, so a wider dialog is a taller one */
       const cell = Math.round((n - 24 * 2) / 7);
       /* the headline, the month row, seven rows of days and the two text buttons */
-      return { w: n, h: l === "input" ? 96 : l === "docked" ? 112 + cell * 7 : 164 + cell * 7 };
+      return { w: n, h: l === "input" ? 96 : l === "docked" ? 120 + cell * 7 : 164 + cell * 7 };
     }
     case "timePicker": {
       const dial = Math.min(256, n - 48);
@@ -2489,9 +2526,9 @@ export function baseRadii(it: Item): Radii {
     case "loadingIndicator":
       return uniformRadii((it.size ?? 48) / 2);
     case "card":
+    case "image":
       if (it.corners) return { ...it.corners };
     // falls through
-    case "image":
     case "camera":
     case "map":
       return uniformRadii(it.radiusTop ?? scaleR(s.radius));

@@ -60,12 +60,6 @@ export function translateDefaultFrameName(name: string, lang: Lang): string {
   return name;
 }
 
-export const TEXT_TOKEN_TEXT = {
-  ja: { onSurface: "標準（オンサーフェス）", onSurfaceVariant: "控えめ（オンサーフェスバリアント）", primary: "プライマリ", secondary: "セカンダリ", onPrimaryContainer: "オンプライマリコンテナ", onSecondaryContainer: "オンセカンダリコンテナ", onTertiaryContainer: "オンターシャリコンテナ", inverseOnSurface: "反転オンサーフェス" },
-  zh: { onSurface: "表面文字", onSurfaceVariant: "表面次要文字", primary: "主色", secondary: "次色", onPrimaryContainer: "主色容器文字", onSecondaryContainer: "次色容器文字", onTertiaryContainer: "第三色容器文字", inverseOnSurface: "反色表面文字" },
-  ko: { onSurface: "표면 텍스트", onSurfaceVariant: "표면 보조 텍스트", primary: "주 색상", secondary: "보조 색상", onPrimaryContainer: "주 색상 컨테이너 텍스트", onSecondaryContainer: "보조 색상 컨테이너 텍스트", onTertiaryContainer: "세 번째 색상 컨테이너 텍스트", inverseOnSurface: "반전 표면 텍스트" },
-};
-
 export const COLOR_TOKEN_TEXT = {
   ja: { surface: "サーフェス", surfaceContainerLow: "コンテナ（低）", surfaceContainer: "コンテナ", surfaceContainerHigh: "コンテナ（高）", surfaceContainerHighest: "コンテナ（最高）", primaryContainer: "プライマリコンテナ", secondaryContainer: "セカンダリコンテナ", tertiaryContainer: "ターシャリコンテナ", primary: "プライマリ", inverseSurface: "反転サーフェス" },
   zh: { surface: "表面", surfaceContainerLow: "低层容器", surfaceContainer: "容器", surfaceContainerHigh: "高层容器", surfaceContainerHighest: "最高层容器", primaryContainer: "主色容器", secondaryContainer: "次色容器", tertiaryContainer: "第三色容器", primary: "主色", inverseSurface: "反色表面" },
@@ -110,7 +104,6 @@ export const UI = {
   screenName: { ja: "画面の名前", en: "Screen name", zh: "屏幕名称" },
   name: { ja: "名前", en: "Name", zh: "名称" },
   background: { ja: "背景", en: "Background", zh: "背景" },
-  defaultColor: { ja: "既定の色", en: "Default color", zh: "默认颜色" },
   export: { ja: "書き出し", en: "Export", zh: "导出" },
   project: { ja: "プロジェクト", en: "Project", zh: "项目" },
   saveProject: { ja: "プロジェクトを保存", en: "Save project", zh: "保存项目" },
@@ -187,16 +180,21 @@ export const UI = {
   imageUrl: { ja: "画像の URL", en: "Image URL", zh: "图片网址" },
   imageFailed: { ja: "この画像は読み込めませんでした", en: "This image could not be read", zh: "无法读取这张图片" },
   imageTop: { ja: "上部", en: "Top", zh: "顶部" },
+  imageBottom: { ja: "下部", en: "Bottom", zh: "底部" },
   imageLeading: { ja: "先頭", en: "Leading", zh: "左侧" },
   imageTrailing: { ja: "末尾", en: "Trailing", zh: "右侧" },
+  imageBehind: { ja: "背景", en: "Behind the text", zh: "背景" },
   cardLayout: { ja: "レイアウト", en: "Layout", zh: "布局" },
   noImageLayout: { ja: "画像なし", en: "No image", zh: "无图片" },
   textPosition: { ja: "文字の位置", en: "Text position", zh: "文字位置" },
   textTop: { ja: "上", en: "Top", zh: "顶部" },
   textMiddle: { ja: "中央", en: "Middle", zh: "居中" },
   textBottom: { ja: "下", en: "Bottom", zh: "底部" },
+  textStart: { ja: "左", en: "Start", zh: "左" },
+  textCenter: { ja: "中央", en: "Center", zh: "居中" },
+  textEnd: { ja: "右", en: "End", zh: "右" },
+  imageSize: { ja: "画像の大きさ", en: "Image size", zh: "图片大小" },
   textColor: { ja: "文字の色", en: "Text color", zh: "文字颜色" },
-  autoColor: { ja: "自動", en: "Auto", zh: "自动" },
   autoWidth: { ja: "自動", en: "Auto", zh: "自动" },
   icon: { ja: "アイコン", en: "Icon", zh: "图标" },
   noIcon: { ja: "アイコンなし", en: "No icon", zh: "无图标" },
@@ -208,6 +206,9 @@ export const UI = {
   outlined: { ja: "枠線", en: "Outlined", zh: "描边" },
   standard: { ja: "標準", en: "Standard", zh: "标准" },
   vibrant: { ja: "鮮やか", en: "Vibrant", zh: "鲜艳" },
+  styleSurface: { ja: "標準", en: "Surface", zh: "标准" },
+  stylePrimary: { ja: "プライマリ", en: "Primary", zh: "主色" },
+  styleSecondary: { ja: "セカンダリ", en: "Secondary", zh: "次色" },
   state: { ja: "状態", en: "State", zh: "状态" },
   railState: { ja: "レールの表示", en: "Rail state", zh: "导航栏形态" },
   railCollapsed: { ja: "折りたたみ", en: "Collapsed", zh: "折叠" },
@@ -218,7 +219,8 @@ export const UI = {
   collapseNavigation: { ja: "ナビゲーションを折りたたむ", en: "Collapse navigation", zh: "收起导航" },
   selected: { ja: "選択", en: "Selected", zh: "已选中" },
   handle: { ja: "ハンドル", en: "Handle", zh: "拖动条" },
-  listSwitch: { ja: "末尾にスイッチ", en: "Trailing switch", zh: "列表项开关" },
+  switchOff: { ja: "スイッチ（オフ）", en: "Switch, off", zh: "开关（关）" },
+  switchOn: { ja: "スイッチ（オン）", en: "Switch, on", zh: "开关（开）" },
   on: { ja: "オン", en: "On", zh: "开" },
   container: { ja: "コンテナ", en: "Container", zh: "容器" },
   wavy: { ja: "波形", en: "Wavy", zh: "波浪形" },
@@ -262,7 +264,6 @@ export const UI = {
   swipeTo: { ja: "スワイプで移動", en: "Swipe to open", zh: "滑动跳转" },
   toggle: { ja: "切り替えボタン", en: "Toggle button", zh: "切换按钮" },
   toggleHint: { ja: "タップでオン／オフ", en: "Tap toggles on / off", zh: "点击切换开/关" },
-  thumbCheck: { ja: "オンのときチェックアイコン", en: "Check icon when on", zh: "开启时显示勾选图标" },
   behavior: { ja: "振る舞い", en: "Behavior", zh: "行为" },
   whenPressed: { ja: "押したとき…", en: "When pressed…", zh: "按下时…" },
   whatItDoes: { ja: "この部品の動き…", en: "What this part does…", zh: "这个组件的作用…" },
@@ -276,7 +277,6 @@ export const UI = {
     en: "Keeps the overlap and moves as one layer",
     zh: "保持叠放关系，作为一个图层一起移动",
   },
-  iconBackground: { ja: "アイコンの背景", en: "Icon background", zh: "图标背景" },
   noBackground: { ja: "背景なし", en: "No background", zh: "无背景" },
   normalState: { ja: "通常", en: "Normal", zh: "常态" },
   onState: { ja: "オン", en: "On", zh: "开启" },
@@ -402,7 +402,6 @@ export const UI = {
   dateInput: { ja: "入力欄", en: "Input", zh: "输入框" },
   timeDial: { ja: "時計盤", en: "Dial", zh: "表盘" },
   cards: { ja: "カード", en: "Cards", zh: "卡片" },
-  selectedDay: { ja: "選択中の日", en: "Selected day", zh: "选中的日期" },
   linkUrl: { ja: "リンク先の URL", en: "Link URL", zh: "链接地址" },
   linkInvalid: { ja: "有効な Web アドレスを入力してください", en: "Enter a valid web address", zh: "请输入有效的网址" },
   linkBrowser: { ja: "ブラウザ", en: "Browser", zh: "浏览器" },
@@ -488,12 +487,13 @@ export type UIKey = keyof typeof UI;
 export const KO: Record<UIKey, string> = {
   frameSize: "화면 크기", phoneFrame: "휴대전화", desktopFrame: "데스크톱", columnWidth: "휴대전화 한 화면 너비", cornerLeft: "왼쪽 모서리", cornerRight: "오른쪽 모서리", cornersEach: "모서리별로 지정", cornerTl: "왼쪽 위", cornerTr: "오른쪽 위", cornerBl: "왼쪽 아래", cornerBr: "오른쪽 아래",
   filled: "채움", tonal: "색조", elevated: "그림자", outlined: "윤곽선", standard: "표준", vibrant: "선명함",
+  styleSurface: "표준", stylePrimary: "기본색", styleSecondary: "보조색",
   parts: "부품", layers: "레이어", edit: "편집", prompt: "프롬프트", closePanel: "패널 닫기",
   search: "검색", favorites: "즐겨찾기", addFavorite: "즐겨찾기에 추가", removeFavorite: "즐겨찾기에서 제거", clear: "지우기", language: "언어",
   select: "선택", hand: "손 도구", blank: "빈 캔버스", phone: "휴대전화 화면", addFrame: "화면 추가", preview: "미리보기",
   zoomIn: "확대", zoomOut: "축소", fit: "전체 맞춤", undo: "실행 취소", redo: "다시 실행",
   clearAll: "모두 지우기", clearAllTitle: "캔버스를 비울까요?", clearAllBody: "모든 화면과 부품을 삭제합니다. 실행 취소(Ctrl+Z)로 복원할 수 있습니다.",
-  screen: "화면", screenName: "화면 이름", name: "이름", background: "배경", defaultColor: "기본 색상", export: "내보내기", project: "프로젝트",
+  screen: "화면", screenName: "화면 이름", name: "이름", background: "배경", export: "내보내기", project: "프로젝트",
   saveProject: "프로젝트 저장", openProject: "프로젝트 열기", replaceProjectTitle: "이 프로젝트를 열까요?",
   replaceProject: "현재 캔버스가 교체됩니다. 실행 취소(Ctrl+Z)로 되돌릴 수 있습니다.",
   askAi: "AI에게 맡기기",
@@ -512,8 +512,8 @@ export const KO: Record<UIKey, string> = {
   copied: "복사됨", saveImage: "이미지로 저장", saving: "저장 중…", previewFrom: "이 화면부터 미리보기",
   duplicate: "복제", more: "더보기", delete: "삭제", deleteSelection: "선택 항목 삭제",
   text: "텍스트", label: "레이블", bold: "굵게", action: "동작", supporting: "보조 텍스트", tabs: "항목", changeIcon: "아이콘 변경",
-  options: "옵션", addOption: "옵션 추가", removeOption: "이 옵션 삭제", addTab: "탭 추가", selectedOption: "초깃값", image: "이미지", pickImage: "이미지 선택", removeImage: "이미지 제거", imageUrl: "이미지 URL", imageFailed: "이 이미지를 읽을 수 없습니다", imageTop: "위쪽", imageLeading: "앞쪽", imageTrailing: "뒤쪽", cardLayout: "레이아웃", noImageLayout: "이미지 없음", textPosition: "텍스트 위치", textTop: "위", textMiddle: "가운데", textBottom: "아래", textColor: "텍스트 색상", autoColor: "자동", autoWidth: "자동", icon: "아이콘", noIcon: "아이콘 없음", searchIcons: "아이콘 검색",
-  style: "스타일", state: "상태", selected: "선택됨", handle: "핸들", listSwitch: "끝에 스위치", on: "켜짐", container: "컨테이너", wavy: "물결 모양", determinate: "확정형",
+  options: "옵션", addOption: "옵션 추가", removeOption: "이 옵션 삭제", addTab: "탭 추가", selectedOption: "초깃값", image: "이미지", pickImage: "이미지 선택", removeImage: "이미지 제거", imageUrl: "이미지 URL", imageFailed: "이 이미지를 읽을 수 없습니다", imageTop: "위쪽", imageBottom: "아래쪽", imageLeading: "앞쪽", imageTrailing: "뒤쪽", imageBehind: "배경", cardLayout: "레이아웃", noImageLayout: "이미지 없음", textPosition: "텍스트 위치", textTop: "위", textMiddle: "가운데", textBottom: "아래", textStart: "왼쪽", textCenter: "가운데", textEnd: "오른쪽", imageSize: "이미지 크기", textColor: "텍스트 색상", autoWidth: "자동", icon: "아이콘", noIcon: "아이콘 없음", searchIcons: "아이콘 검색",
+  style: "스타일", state: "상태", selected: "선택됨", handle: "핸들", switchOff: "스위치(꺼짐)", switchOn: "스위치(켜짐)", on: "켜짐", container: "컨테이너", wavy: "물결 모양", determinate: "확정형",
   railState: "레일 표시", railCollapsed: "접힘", railExpanded: "펼침",
  
  
@@ -526,9 +526,9 @@ export const KO: Record<UIKey, string> = {
   screenWidth: "전체 너비", contentWidth: "표준", halfWidth: "절반",
   screenHeight: "화면 높이", halfHeight: "화면의 절반",
   tapTo: "탭 동작", none: "없음", goBack: "뒤로", swipeTo: "스와이프하여 이동", toggle: "토글 버튼", toggleHint: "탭할 때 켜짐/꺼짐 전환",
-  thumbCheck: "켜졌을 때 체크 아이콘 표시", behavior: "동작", whenPressed: "눌렀을 때…", whatItDoes: "이 부품의 동작…", removeLink: "링크 제거",
+  behavior: "동작", whenPressed: "눌렀을 때…", whatItDoes: "이 부품의 동작…", removeLink: "링크 제거",
   group: "그룹", makeGroup: "그룹화", ungroup: "그룹 해제", selectedParts: "개 선택됨", groupHint: "겹침을 유지한 채 하나의 레이어처럼 함께 이동합니다",
-  iconBackground: "아이콘 배경", noBackground: "배경 없음", normalState: "기본", onState: "켜짐",
+  noBackground: "배경 없음", normalState: "기본", onState: "켜짐",
   groupEditNote: "안쪽 부품을 편집하려면 그룹을 해제하세요", openPanel: "패널 열기", colors: "색상", templates: "팔레트", customColor: "사용자 지정",
   seedColor: "기준 색상", seedHint: "색상 하나로 전체 Material 3 색상 구성을 만듭니다. 세부 조정에서 개별 색상도 바꿀 수 있습니다.",
   useThis: "이 색상 사용", fineTune: "세부 조정", dynamicColor: "동적 색상",
@@ -546,7 +546,7 @@ export const KO: Record<UIKey, string> = {
   reorder: "순서 변경", splitMain: "주 동작", splitMenu: "화살표", selectDate: "날짜 선택",
   selectTime: "시간 선택", dateLabel: "날짜", hourLabel: "시", minuteLabel: "분", layout: "표시", carouselMultiBrowse: "멀티 브라우즈",
   carouselUncontained: "균등", carouselHero: "히어로", carouselFullScreen: "전체 화면", dateModal: "대화상자", dateDocked: "도킹",
-  dateInput: "입력란", timeDial: "시계판", cards: "카드", selectedDay: "선택한 날", linkUrl: "링크 URL", linkInvalid: "유효한 웹 주소를 입력하세요",
+  dateInput: "입력란", timeDial: "시계판", cards: "카드", linkUrl: "링크 URL", linkInvalid: "유효한 웹 주소를 입력하세요",
   linkBrowser: "브라우저", shapeScale: "모서리 둥글기", shapeSquare: "사각형", shapeRounded: "둥근형", shapeFull: "완전 둥근형",
   shapeHint: "모든 부품의 기본 모서리를 한 번에 바꿉니다. 부품에 직접 입력한 반경은 유지됩니다.", fontFamily: "글꼴", emphasized: "강조 스타일",
   emphasizedHint: "제목과 레이블에 더 굵은 M3 Expressive 스타일을 사용합니다.", motionScheme: "모션 방식", motionStandard: "표준", motionExpressive: "익스프레시브",
@@ -559,6 +559,13 @@ export const KO: Record<UIKey, string> = {
   aiErrorRefusal: "모델이 답변을 거부했습니다", aiErrorJson: "모델의 응답을 읽을 수 없습니다", aiErrorLong: "답변이 너무 길어 중간에 잘렸습니다. 화면 수를 줄여 다시 시도하세요", aiErrorModel: "모델 ID를 입력하세요",
   aiErrorInsecure: "기본 URL은 https를 사용하거나 localhost를 가리켜야 합니다", aiErrorNetwork: "연결할 수 없습니다. URL, 네트워크 및 서버의 CORS 설정을 확인하세요",
 };
+
+/** the locale each language writes its dates in */
+const LOCALE: Record<Lang, string> = { ja: "ja-JP", en: "en-US", zh: "zh-CN", ko: "ko-KR" };
+/** a day, written the way the language writes a date: what a date picker's headline says */
+export const dateHeadline = (lang: Lang, at: Date = new Date()) => new Intl.DateTimeFormat(LOCALE[lang], { weekday: "short", month: "short", day: "numeric" }).format(at);
+/** a month over its calendar grid */
+export const monthHeadline = (lang: Lang, at: Date = new Date()) => new Intl.DateTimeFormat(LOCALE[lang], { year: "numeric", month: "long" }).format(at);
 
 export const t = (key: UIKey, lang: Lang = current): string => (lang === "ko" ? KO[key] : UI[key][lang]);
 

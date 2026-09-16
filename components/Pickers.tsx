@@ -4,37 +4,28 @@ import {
   CARD_PADDING,
   Item,
   Palette,
+  cardWidths,
   carouselCardsOf,
+  carouselCountOf,
+  carouselInset,
+  carouselLayoutOf,
   carouselShapes,
   cardScrimOf,
   dateLayoutOf,
-  dayOf,
-  hourOf,
-  minuteOf,
   scaleR,
   sizeOf,
   timeLayoutOf,
 } from "@/lib/tokens";
-import { Lang, t, useLang } from "@/lib/i18n";
+import { dateHeadline, monthHeadline, t, useLang } from "@/lib/i18n";
 import { Icon } from "./M3Node";
 
 /* The three parts drawn here are wide surfaces rather than controls: a carousel's row of
- * cards, a calendar, a clock. They take their whole box and read their numbers off the item,
- * so a sketch shows a date and a time an author chose rather than today's. */
+ * cards, a calendar, a clock. They take their whole box. A calendar shows today and a clock the
+ * time it is now, the way the real pickers open, so the sketch never has a date to be set and
+ * the prompt never names one. */
 
-/** The month every calendar in a sketch shows: one fixed month, so a saved sketch reads the same
- *  on any day it is opened. The day circled on it is the author's; the weekday and the headline
- *  are read off the real calendar for that month. */
-const PICKER_YEAR = 2026;
-const PICKER_MONTH = 2;
-const DAYS_IN_MONTH = new Date(PICKER_YEAR, PICKER_MONTH + 1, 0).getDate();
-const FIRST_WEEKDAY = new Date(PICKER_YEAR, PICKER_MONTH, 1).getDay();
-const LOCALE: Record<Lang, string> = { ja: "ja-JP", en: "en-US", zh: "zh-CN", ko: "ko-KR" };
-/** the day a picker has circled, written the way the sketch's language writes a date */
-export const dateHeadline = (day: number, lang: Lang) =>
-  new Intl.DateTimeFormat(LOCALE[lang], { weekday: "short", month: "short", day: "numeric" }).format(new Date(PICKER_YEAR, PICKER_MONTH, Math.min(day, DAYS_IN_MONTH)));
-/** the month the calendar shows, over its grid */
-export const monthHeadline = (lang: Lang) => new Intl.DateTimeFormat(LOCALE[lang], { year: "numeric", month: "long" }).format(new Date(PICKER_YEAR, PICKER_MONTH, 1));
+/** the moment a picker is drawn at: read once per render, so every piece of one picker agrees */
+const now = () => new Date();
 
 export function CarouselBody({ item, p, scroll = 0 }: { item: Item; p: Palette; scroll?: number }) {
   const { w, h } = sizeOf(item, {});
@@ -43,6 +34,11 @@ export function CarouselBody({ item, p, scroll = 0 }: { item: Item; p: Palette; 
   /* where each card stands at this scroll: at rest it is the arrangement the layout names, and
    * part-way through a scroll each card is between two of its sizes */
   const shapes = carouselShapes(item, w, scroll);
+  /* Every picture is drawn at the widest a card ever is and cropped by the card it is on, so it
+   * holds still while the card grows and shrinks. Sized to the card instead, a picture would be
+   * zoomed and unzoomed the whole way through a scroll, which is the card's own movement fighting
+   * what is on it. */
+  const picture = cardWidths(carouselLayoutOf(item), w - carouselInset(w), carouselCountOf(item))[0];
   return (
     <div style={{ position: "relative", height: "100%", overflow: "hidden" }}>
       {shapes.map(({ x, w: cw, lead }, i) => {
@@ -71,7 +67,13 @@ export function CarouselBody({ item, p, scroll = 0 }: { item: Item; p: Palette; 
             {src ? (
               /* the picture fills its card, however the card is shaped */
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={src} alt="" draggable={false} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
+              <img
+                src={src}
+                alt=""
+                draggable={false}
+                /* the card keeps the middle of it: what a narrow card loses, it loses off both sides */
+                style={{ position: "absolute", top: 0, left: "50%", transform: "translateX(-50%)", width: picture, maxWidth: "none", height: "100%", objectFit: "cover" }}
+              />
             ) : (
               cw > 56 && !words && <Icon name="image" size={Math.min(32, Math.round(Math.min(cw, h) * 0.28))} />
             )}
@@ -130,13 +132,13 @@ const WEEKDAYS: Record<string, string[]> = {
   ko: ["일", "월", "화", "수", "목", "금", "토"],
 };
 
-/** a month as a grid: its days from the weekday the month starts on, with the chosen one on a
- *  filled circle */
-function Month({ item, p, cell }: { item: Item; p: Palette; cell: number }) {
+/** this month as a grid: its days from the weekday it starts on, with today on a filled circle */
+function Month({ at, p, cell }: { at: Date; p: Palette; cell: number }) {
   const lang = useLang();
-  const day = dayOf(item);
-  const offset = FIRST_WEEKDAY;
-  const cells = Array.from({ length: 42 }, (_, i) => (i < offset || i - offset >= DAYS_IN_MONTH ? null : i - offset + 1));
+  const day = at.getDate();
+  const days = new Date(at.getFullYear(), at.getMonth() + 1, 0).getDate();
+  const offset = new Date(at.getFullYear(), at.getMonth(), 1).getDay();
+  const cells = Array.from({ length: 42 }, (_, i) => (i < offset || i - offset >= days ? null : i - offset + 1));
   return (
     <div style={{ padding: "0 24px" }}>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)" }}>
@@ -172,7 +174,7 @@ function Month({ item, p, cell }: { item: Item; p: Palette; cell: number }) {
 }
 
 /** the field a date is typed into, with the calendar button at its end */
-function DateField({ item, p }: { item: Item; p: Palette }) {
+function DateField({ at, p }: { at: Date; p: Palette }) {
   const lang = useLang();
   return (
     <div style={{ padding: 16 }}>
@@ -191,7 +193,7 @@ function DateField({ item, p }: { item: Item; p: Palette }) {
         }}
       >
         <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-          {item.label.trim() || dateHeadline(dayOf(item), lang)}
+          {dateHeadline(lang, at)}
         </span>
         <Icon name="calendar_month" size={22} />
       </div>
@@ -202,7 +204,8 @@ function DateField({ item, p }: { item: Item; p: Palette }) {
 export function DatePickerBody({ item, p }: { item: Item; p: Palette }) {
   const lang = useLang();
   const layout = dateLayoutOf(item);
-  if (layout === "input") return <DateField item={item} p={p} />;
+  const at = now();
+  if (layout === "input") return <DateField at={at} p={p} />;
   const { w } = sizeOf(item, {});
   const cell = Math.round((w - 48) / 7);
   return (
@@ -211,13 +214,14 @@ export function DatePickerBody({ item, p }: { item: Item; p: Palette }) {
         <div style={{ padding: "16px 24px 0" }}>
           <div style={{ fontSize: 12, color: p.onSurfaceVariant }}>{t("selectDate", lang)}</div>
           <div style={{ fontSize: 28, fontWeight: 500, color: p.onSurface, marginTop: 8, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-            {item.label.trim() || dateHeadline(dayOf(item), lang)}
+            {dateHeadline(lang, at)}
           </div>
         </div>
       )}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 16px 0 24px", color: p.onSurfaceVariant }}>
+      {/* under a headline the month row sits close; docked, it is the first thing on the surface and takes the surface's own margin */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: `${layout === "docked" ? 16 : 8}px 16px 0 24px`, color: p.onSurfaceVariant }}>
         <span style={{ fontSize: 14, fontWeight: 600, color: p.onSurface, display: "inline-flex", alignItems: "center", gap: 4 }}>
-          {monthHeadline(lang)}
+          {monthHeadline(lang, at)}
           <Icon name="arrow_drop_down" size={20} />
         </span>
         <span style={{ display: "inline-flex", gap: 12 }}>
@@ -226,7 +230,7 @@ export function DatePickerBody({ item, p }: { item: Item; p: Palette }) {
         </span>
       </div>
       <div style={{ flex: 1, minHeight: 0, paddingTop: 4 }}>
-        <Month item={item} p={p} cell={cell} />
+        <Month at={at} p={p} cell={cell} />
       </div>
       <PickerActions p={p} />
     </div>
@@ -256,10 +260,10 @@ function TimeBox({ text, on, p, wide }: { text: string; on: boolean; p: Palette;
   );
 }
 
-/** the clock face: the hours around it and a hand reaching the chosen one */
-function Dial({ item, p, size }: { item: Item; p: Palette; size: number }) {
+/** the clock face: the hours around it and a hand reaching the one it is now */
+function Dial({ hour24, p, size }: { hour24: number; p: Palette; size: number }) {
   /* the hour on a twelve-hour face: twelve stands at the top, where a zero would */
-  const hour = hourOf(item) % 12 || 12;
+  const hour = hour24 % 12 || 12;
   const R = size / 2;
   const ring = R - 20;
   const angle = ((hour % 12) / 12) * Math.PI * 2 - Math.PI / 2;
@@ -304,9 +308,10 @@ export function TimePickerBody({ item, p }: { item: Item; p: Palette }) {
   const lang = useLang();
   const layout = timeLayoutOf(item);
   const { w } = sizeOf(item, {});
-  const hour24 = hourOf(item);
+  const at = now();
+  const hour24 = at.getHours();
   const hh = String(hour24 % 12 || 12).padStart(2, "0");
-  const mm = String(minuteOf(item)).padStart(2, "0");
+  const mm = String(at.getMinutes()).padStart(2, "0");
   const pm = hour24 >= 12;
   const plate = Math.max(0, Math.min(96, Math.round((w - CARD_PADDING * 2 - 60) / 2)));
   const dial = Math.min(256, w - 48);
@@ -341,7 +346,7 @@ export function TimePickerBody({ item, p }: { item: Item; p: Palette }) {
       </div>
       {layout === "dial" ? (
         <div style={{ flex: 1, minHeight: 0, display: "grid", placeItems: "center", padding: "12px 0" }}>
-          <Dial item={item} p={p} size={dial} />
+          <Dial hour24={hour24} p={p} size={dial} />
         </div>
       ) : (
         <div style={{ flex: 1, minHeight: 0, display: "flex", alignItems: "flex-start", padding: "10px 24px", gap: 8, color: p.onSurfaceVariant, fontSize: 12 }}>

@@ -3,16 +3,18 @@
  * two families that switch shape in their own panel, a FAB and a progress indicator.
  *
  * Locks in:
- *  - each one falls back to the layout it was built with, and reads a value the author set
+ *  - each one falls back to the layout it was built with
  *  - the box follows the layout: a calendar is as tall as its rows, a typed date is a field
- *  - the prompt names the layout, the cards, the day and the clock
+ *  - the prompt names the layout and the cards; a picker shows today and now, never a set value
  */
 import { describe, expect, it } from "vitest";
 import { buildPrompt } from "./prompt";
+import { dateHeadline, monthHeadline } from "./i18n";
 import {
   DEFAULT_THEME,
   KIND_ORDER,
   PALETTE_HIDDEN,
+  PHONE_MARGIN,
   PROGRESS_KINDS,
   extendedFabHeight,
   extendedFabMetrics,
@@ -28,11 +30,9 @@ import {
   Item,
   CARD_GAP,
   TOP_BAR_SIZES,
-  choiceTypePatch,
-  fieldTypePatch,
-  pictureTypePatch,
   topBarHeightOf,
   KIND_SPEC,
+  CAROUSEL_LAYOUTS,
   carouselCountOf,
   carouselLayoutOf,
   carouselScrollMax,
@@ -42,10 +42,7 @@ import {
   cardWidths,
   migrateCarousel,
   dateLayoutOf,
-  dayOf,
-  hourOf,
   makeItem,
-  minuteOf,
   progressTypePatch,
   sizeOf,
   timeLayoutOf,
@@ -82,46 +79,43 @@ describe("carousel", () => {
 });
 
 describe("date picker", () => {
-  it("is a dialog with a day circled until it is told otherwise", () => {
+  it("is a dialog until it is told otherwise", () => {
     const it = makeItem("datePicker");
     expect(dateLayoutOf(it)).toBe("modal");
-    expect(dayOf(it)).toBe(17);
     /* the calendar's rows follow its width, and a typed date is only a field */
     expect(sizeOf(it, {}).h).toBeGreaterThan(400);
     expect(sizeOf({ ...it, layout: "input" }, {}).h).toBe(96);
     expect(sizeOf({ ...it, layout: "docked" }, {}).h).toBeLessThan(sizeOf(it, {}).h);
   });
 
-  it("holds the day inside a month", () => {
-    expect(dayOf({ ...makeItem("datePicker"), day: 0 })).toBe(1);
-    expect(dayOf({ ...makeItem("datePicker"), day: 44 })).toBe(31);
+  it("writes the date it is given in the sketch's language", () => {
+    const at = new Date(2026, 0, 2);
+    expect(dateHeadline("en", at)).toBe("Fri, Jan 2");
+    expect(dateHeadline("ja", at)).toContain("1月2日");
+    expect(monthHeadline("en", at)).toBe("January 2026");
+    expect(monthHeadline("ja", at)).toBe("2026年1月");
   });
 
-  it("says which day is selected in the prompt", () => {
-    const out = buildPrompt(docWith({ ...makeItem("datePicker"), day: 9 }), {}, undefined, "en");
-    expect(out).toContain("day 9 selected");
+  it("tells the prompt today is selected, without naming the day", () => {
+    const out = buildPrompt(docWith(makeItem("datePicker")), {}, undefined, "en");
+    expect(out).toContain("today's date selected");
     expect(out).toContain("modal dialog");
+    expect(out).not.toMatch(/day \d+ selected/);
   });
 });
 
 describe("time picker", () => {
-  it("starts on the dial at half past ten", () => {
+  it("starts on the dial", () => {
     const it = makeItem("timePicker");
     expect(timeLayoutOf(it)).toBe("dial");
-    expect(hourOf(it)).toBe(10);
-    expect(minuteOf(it)).toBe(30);
     expect(sizeOf({ ...it, layout: "input" }, {}).h).toBeLessThan(sizeOf(it, {}).h);
   });
 
-  it("keeps the clock on a real time", () => {
-    expect(hourOf({ ...makeItem("timePicker"), hour: 30 })).toBe(23);
-    expect(minuteOf({ ...makeItem("timePicker"), minute: -5 })).toBe(0);
-  });
-
-  it("reads the clock out in the prompt, in halves of the day", () => {
-    const out = buildPrompt(docWith({ ...makeItem("timePicker"), hour: 15, minute: 5 }), {}, undefined, "en");
-    expect(out).toContain("03:05 PM");
+  it("tells the prompt the clock shows the current time, without a reading", () => {
+    const out = buildPrompt(docWith(makeItem("timePicker")), {}, undefined, "en");
+    expect(out).toContain("set to the current time");
     expect(out).toContain("dial");
+    expect(out).not.toMatch(/\d\d:\d\d [AP]M/);
   });
 });
 
@@ -225,15 +219,39 @@ describe("a carousel's row of cards", () => {
   const row = (patch: Partial<Item> = {}): Item => ({ ...makeItem("carousel"), id: "c", ...patch });
   const W = 412;
 
-  it("stops once per card that can pass out at the head, and rests one card further each time", () => {
+  it("stops once per card that can pass out at the head, every stop the same distance on", () => {
     const it = row();
     const ws = cardWidths("multiBrowse", W - 16, carouselCountOf(it));
     const stops = carouselStops(it, W);
     expect(stops[0]).toBe(0);
     expect(stops.length).toBe(carouselScrollMax(it, W) + 1);
-    /* each stop is the last one plus the card that has just left, and the gap after it */
-    for (let i = 1; i < stops.length; i++) expect(stops[i]).toBe(stops[i - 1] + ws[i - 1] + CARD_GAP);
+    /* a card leaves the row from the large keyline whichever card it is, so every card costs the
+       same scroll to pass; the first stop also takes back the margin the row starts with */
+    const stride = ws[0] + CARD_GAP;
+    for (let i = 1; i < stops.length; i++) expect(stops[i]).toBe(stops[i - 1] + stride + (i === 1 ? PHONE_MARGIN : 0));
     expect(carouselTrack(it, W)).toBe(W + stops[stops.length - 1]);
+  });
+
+  it("goes with the hand that carries it: the cards travel forward, and none of them bolts", () => {
+    for (const l of CAROUSEL_LAYOUTS) {
+      const it = row({ layout: l.key, count: 8 });
+      const end = carouselStops(it, W).at(-1)!;
+      let prev = carouselShapes(it, W, 0);
+      for (let s = 1; s <= end; s++) {
+        const cur = carouselShapes(it, W, s);
+        cur.forEach((c, i) => {
+          /* a card that is not on the screen is not travelling on it */
+          if (c.w < 2) return;
+          const step = c.x - prev[i].x;
+          /* nothing drifts back while the row is scrolled forward, not even where the last card
+             is settling against the far edge and the row is giving way to it */
+          expect(step).toBeLessThan(0.05);
+          /* and nothing runs away from the scroll that is carrying it */
+          expect(step).toBeGreaterThan(-2);
+        });
+        prev = cur;
+      }
+    }
   });
 
   it("turns the arrangement around at the end: the last card finishes at the large keyline", () => {
@@ -264,42 +282,6 @@ describe("a carousel's row of cards", () => {
     expect(next.actions?.["tab:0"]).toEqual({ to: "f2", transition: "slide" });
     /* a row already made of cards is left exactly as it is */
     expect(migrateCarousel(next)).toBe(next);
-  });
-});
-
-describe("the parts that switch kind inside one panel", () => {
-  it("turns a switch into a checkbox and back, keeping its words and its state", () => {
-    const sw: Item = { ...makeItem("switch"), id: "s", label: "Wi-Fi", checked: true, size: 240, noCheck: true };
-    const cb = { ...sw, ...choiceTypePatch(sw, "checkbox") };
-    expect(cb.kind).toBe("checkbox");
-    expect(cb.label).toBe("Wi-Fi");
-    expect(cb.checked).toBe(true);
-    /* the width and the handle's check belong to a switch alone */
-    expect(cb.size).toBeUndefined();
-    expect(cb.noCheck).toBeUndefined();
-    expect(choiceTypePatch(cb, "checkbox")).toEqual({});
-  });
-
-  it("turns a picture into a map and keeps its box, but not the picture", () => {
-    const img: Item = { ...makeItem("image"), id: "i", size: 240, src: "data:x", radiusTop: 12 };
-    const map = { ...img, ...pictureTypePatch(img, "map") };
-    expect(map.kind).toBe("map");
-    expect(map.size).toBe(240);
-    expect(map.radiusTop).toBe(12);
-    expect(map.src).toBeUndefined();
-    /* back to a picture, the box keeps its width and gets a picture again if one is put on it */
-    expect({ ...map, ...pictureTypePatch(map, "image") }.size).toBe(240);
-  });
-
-  it("turns a text field into a dropdown with options to pick from, and back without them", () => {
-    const tf: Item = { ...makeItem("textField"), id: "t", label: "Country" };
-    const sel = { ...tf, ...fieldTypePatch(tf, "select") };
-    expect(sel.kind).toBe("select");
-    expect(sel.tabs?.length).toBeGreaterThan(0);
-    expect(sel.label).toBe("Country");
-    const back = { ...sel, selected: 1, ...fieldTypePatch(sel, "textField") };
-    expect(back.kind).toBe("textField");
-    expect(back.selected).toBeUndefined();
   });
 });
 
