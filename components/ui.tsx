@@ -69,7 +69,8 @@ export function PanelShell({
         <div
           className="no-scrollbar"
           inert={locked || undefined}
-          style={{ padding: `${tabs ? PANEL_TABS_H + PANEL_TABS_GAP : 0}px 12px 20px`, overflowY: "auto", height: "100%" }}
+          /* under a row of tabs the content starts below them; with none, it starts under the fade's thick part */
+          style={{ padding: `${tabs ? PANEL_TABS_H + PANEL_TABS_GAP : PANEL_FADE_H / 2}px 12px 20px`, overflowY: "auto", height: "100%" }}
         >
           {children}
         </div>

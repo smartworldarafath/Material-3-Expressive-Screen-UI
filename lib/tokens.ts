@@ -2324,6 +2324,8 @@ export type Doc = {
   brief: string;
   /** the prompt as the author rewrote it by hand; undefined means the generated one */
   promptEdit?: string;
+  /** the guidance lines the author switched on; undefined means the default set */
+  promptOptions?: string[];
   /** shape, type, motion and the light / dark and contrast switches */
   theme?: Theme;
 };

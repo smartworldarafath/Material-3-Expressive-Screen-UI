@@ -4,6 +4,7 @@ import { ReactNode, useMemo, useState } from "react";
 import { Reorder, useDragControls } from "motion/react";
 import { Frame, Group, Item, KIND_SPEC, Palette, explodeGroup, isPhoneFrame } from "@/lib/tokens";
 import { Icon } from "./M3Node";
+import { Select } from "./ui";
 import { Lang, KIND_TEXT, t, useLang } from "@/lib/i18n";
 
 /* Rows never animate their size: opening a row only adds rows under it, so
@@ -293,36 +294,15 @@ export function LayersPanel({
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       {frames.length > 1 && (
-        <div className="no-scrollbar" style={{ display: "flex", gap: 6, padding: "12px 12px 4px", overflowX: "auto", flex: "0 0 auto" }}>
-          {frames.map((f) => {
-            const on = f.id === frameId;
-            return (
-              <button
-                key={f.id}
-                onClick={() => onFrame(f.id)}
-                className="m3-press"
-                style={{
-                  height: 32,
-                  padding: "0 12px 0 8px",
-                  borderRadius: 16,
-                  border: "none",
-                  background: on ? p.primary : p.surfaceContainerHigh,
-                  color: on ? p.onPrimary : p.onSurfaceVariant,
-                  fontSize: 12,
-                  fontWeight: 600,
-                  cursor: "pointer",
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 6,
-                  whiteSpace: "nowrap",
-                  flex: "0 0 auto",
-                }}
-              >
-                <Icon name={isPhoneFrame(f) ? "smartphone" : "desktop_windows"} size={16} />
-                {f.name || t("screen", lang)}
-              </button>
-            );
-          })}
+        /* the screen whose layers are listed, picked from a dropdown the way a tap's target is */
+        <div style={{ padding: "12px 12px 4px", flex: "0 0 auto" }}>
+          <Select
+            options={frames.map((f) => ({ key: f.id, label: f.name || t("screen", lang), icon: isPhoneFrame(f) ? "smartphone" : "desktop_windows" }))}
+            value={frameId ?? frames[0].id}
+            onChange={onFrame}
+            p={p}
+            label={t("screens", lang)}
+          />
         </div>
       )}
       <div className="no-scrollbar" style={{ flex: 1, overflowY: "auto", padding: "8px 10px 12px" }}>

@@ -1366,7 +1366,6 @@ const GENERAL: Record<Lang, (string | ((pl: Platform) => string))[]> = {
     "「〜の中に重ねて配置」と書いた部品は、その容器（ボックスやカード）を背景にした Box の上に重ねて描く。重なりは意図したものなので、レイアウトの都合で分離したり順序を変えたりしない。前後関係は記述の順（後に書いたものが前面）に従う。",
     "タップできる部品にはリップルと軽い縮小のフィードバックを付ける。「戻る」は入ったときの遷移を逆再生し、システムの戻る操作（戻るジェスチャー・戻るボタン）でも同じ動きにする。",
     "アイコンは Material Symbols Rounded を使う。",
-    (pl: Platform) => `${pl === "web" ? "ブラウザでの" : "エミュレータや実機での"}動作検証は不要。実装が終わったら${pl === "web" ? "production build を実行し、その出力" : "署名済みの release APK "}を成果物として提供する。`,
   ],
   en: [
     "Work out what kind of app this is from the purpose of the screens, and implement the features such an app is normally expected to have (create, list, detail, edit, delete, search, settings, whichever apply) even where the sketch does not show them.",
@@ -1380,7 +1379,6 @@ const GENERAL: Record<Lang, (string | ((pl: Platform) => string))[]> = {
     "Parts described as \"layered inside\" a container are drawn on top of that container (a Box with the container as its background). The overlap is intentional: do not separate or reorder them for layout reasons. Later items in the description are drawn in front of earlier ones.",
     "Give every tappable part ripple plus a slight press-scale. \"Back\" plays the entry transition in reverse, and the system back gesture / button must do the same.",
     "Use Material Symbols Rounded for icons.",
-    (pl: Platform) => `Do not verify ${pl === "web" ? "in a browser" : "on an emulator or a device"}. When the implementation is done, ${pl === "web" ? "run the production build and provide its output" : "produce a signed release APK"} as the deliverable.`,
   ],
   zh: [
     "先根据屏幕目的判断这是什么类型的应用，并实现该类应用通常应有的功能（新建、列表、详情、编辑、删除、搜索、设置等，视情况而定），即使草图中没有画出。",
@@ -1394,7 +1392,6 @@ const GENERAL: Record<Lang, (string | ((pl: Platform) => string))[]> = {
     "写明“内部叠放”的组件要绘制在该容器（容器框或卡片）之上（以容器为背景的 Box）。这种叠放是有意为之，不要因布局原因拆开或调整顺序。前后关系按描述顺序，后写的在前面。",
     "可点击的组件加涟漪和轻微缩放反馈。“返回”反向播放进入时的过渡动画，系统返回手势／返回键也要做同样的效果。",
     "图标使用 Material Symbols Rounded。",
-    (pl: Platform) => `不需要在${pl === "web" ? "浏览器" : "模拟器或真机"}上验证。实现完成后${pl === "web" ? "运行 production build 并提供其输出" : "生成已签名的 release APK "}作为交付物。`,
   ],
   ko: [
     "화면의 목적에서 앱의 종류를 판단하고, 스케치에 없더라도 그 종류의 앱에 일반적으로 필요한 기능(만들기, 목록, 상세, 편집, 삭제, 검색, 설정 등)을 구현한다.",
@@ -1408,7 +1405,6 @@ const GENERAL: Record<Lang, (string | ((pl: Platform) => string))[]> = {
     "'내부에 겹쳐 배치'한 부품은 해당 컨테이너(상자 또는 카드)를 배경으로 하는 Box 위에 그린다. 이 겹침은 의도된 것이므로 분리하거나 순서를 바꾸지 않으며 나중에 설명된 항목을 앞에 그린다.",
     "탭 가능한 부품에는 리플과 약한 축소 피드백을 준다. '뒤로'는 진입 전환을 반대로 재생하고 시스템 뒤로 제스처나 버튼도 같은 동작을 수행한다.",
     "아이콘은 Material Symbols Rounded를 사용한다.",
-    (pl: Platform) => `${pl === "web" ? "브라우저" : "에뮬레이터나 실제 기기"} 동작 검증은 필요 없다. 구현 후 ${pl === "web" ? "production build를 실행하고 그 출력" : "서명된 release APK"}을 결과물로 제공한다.`,
   ],
 };
 
@@ -1609,6 +1605,70 @@ const PH = {
   },
 };
 
+/** The lines an author may add to the general guidance with one tap: each is a short choice in
+ *  the panel and one sentence in the prompt. The deliverable is on unless it is turned off, so
+ *  a sketch saved before the choices existed reads the same. */
+export type PromptOption = "deliverable" | "tests" | "darkMode" | "languages" | "offline";
+export const PROMPT_OPTIONS: PromptOption[] = ["deliverable", "tests", "darkMode", "languages", "offline"];
+export const DEFAULT_PROMPT_OPTIONS: PromptOption[] = ["deliverable"];
+export const isPromptOption = (v: unknown): v is PromptOption => PROMPT_OPTIONS.includes(v as PromptOption);
+export const promptOptionsOf = (doc: Pick<Doc, "promptOptions">): PromptOption[] => (doc.promptOptions ? doc.promptOptions.filter(isPromptOption) : DEFAULT_PROMPT_OPTIONS);
+export const PROMPT_OPTION_TEXT: Record<Lang, Record<PromptOption, { label: string; icon: string; line: string | ((pl: Platform) => string) }>> = {
+  ja: {
+    deliverable: { label: "検証不要・成果物のみ", icon: "package_2", line: (pl) => `${pl === "web" ? "ブラウザでの" : "エミュレータや実機での"}動作検証は不要。実装が終わったら${pl === "web" ? "production build を実行し、その出力" : "署名済みの release APK "}を成果物として提供する。` },
+    tests: { label: "テストを書く", icon: "science", line: "主要なロジックにユニットテストを書き、すべて通る状態で提出する。" },
+    darkMode: { label: "ダークモード対応", icon: "dark_mode", line: "ライトとダークの両方のカラースキームに対応し、システム設定に追従する。" },
+    languages: { label: "日本語と英語", icon: "translate", line: "UI の文言は日本語と英語の両方を用意し、端末の言語設定に追従する。" },
+    offline: { label: "オフライン対応", icon: "cloud_off", line: "ネットワークがなくても主要な機能が使えるようにし、必要なら再接続時に同期する。" },
+  },
+  en: {
+    deliverable: { label: "No verification, deliverable only", icon: "package_2", line: (pl) => `Do not verify ${pl === "web" ? "in a browser" : "on an emulator or a device"}. When the implementation is done, ${pl === "web" ? "run the production build and provide its output" : "produce a signed release APK"} as the deliverable.` },
+    tests: { label: "Write tests", icon: "science", line: "Write unit tests for the main logic and hand it over with all of them passing." },
+    darkMode: { label: "Dark mode", icon: "dark_mode", line: "Support both the light and the dark color scheme, following the system setting." },
+    languages: { label: "Japanese and English", icon: "translate", line: "Provide the UI text in both Japanese and English, following the device language." },
+    offline: { label: "Works offline", icon: "cloud_off", line: "Keep the main features usable without a network, syncing when it returns if needed." },
+  },
+  zh: {
+    deliverable: { label: "无需验证，仅交付成果", icon: "package_2", line: (pl) => `不需要在${pl === "web" ? "浏览器" : "模拟器或真机"}上验证。实现完成后${pl === "web" ? "运行 production build 并提供其输出" : "生成已签名的 release APK "}作为交付物。` },
+    tests: { label: "编写测试", icon: "science", line: "为主要逻辑编写单元测试，并在全部通过的状态下交付。" },
+    darkMode: { label: "支持深色模式", icon: "dark_mode", line: "同时支持浅色与深色配色方案，并跟随系统设置。" },
+    languages: { label: "日语和英语", icon: "translate", line: "UI 文案同时提供日语和英语，并跟随设备语言设置。" },
+    offline: { label: "支持离线", icon: "cloud_off", line: "在没有网络时也能使用主要功能，必要时在重新连接后同步。" },
+  },
+  ko: {
+    deliverable: { label: "검증 없이 결과물만", icon: "package_2", line: (pl) => `${pl === "web" ? "브라우저" : "에뮬레이터나 실제 기기"} 동작 검증은 필요 없다. 구현 후 ${pl === "web" ? "production build를 실행하고 그 출력" : "서명된 release APK"}을 결과물로 제공한다.` },
+    tests: { label: "테스트 작성", icon: "science", line: "주요 로직에 단위 테스트를 작성하고 모두 통과하는 상태로 제출한다." },
+    darkMode: { label: "다크 모드 지원", icon: "dark_mode", line: "라이트와 다크 색상 스킴을 모두 지원하고 시스템 설정을 따른다." },
+    languages: { label: "일본어와 영어", icon: "translate", line: "UI 문구를 일본어와 영어로 모두 준비하고 기기 언어 설정을 따른다." },
+    offline: { label: "오프라인 지원", icon: "cloud_off", line: "네트워크가 없어도 주요 기능을 쓸 수 있게 하고, 필요하면 재연결 시 동기화한다." },
+  },
+};
+
+/** A place in the prompt the outline can point at: a section heading, or the line a screen
+ *  begins on. Read off the text itself, so an edited prompt keeps its marks while its headings
+ *  and screen names still stand. */
+export type PromptMark = { kind: "section" | "screen"; label: string; line: number; frameId?: string };
+export function promptMarks(text: string, frames: Frame[], lang: Lang = getLang()): PromptMark[] {
+  const ph = PH[lang];
+  const q = quote(lang);
+  const out: PromptMark[] = [];
+  text.split("\n").forEach((l, i) => {
+    if (l.startsWith("## ")) {
+      out.push({ kind: "section", label: l.slice(3).trim(), line: i });
+      return;
+    }
+    for (const f of frames) {
+      const name = q(f.name || ph.screen);
+      /* the screen's line opens with its quoted name and the word for a screen right after */
+      if ((l.startsWith(name) && /^(画面|屏幕| 화면)/.test(l.slice(name.length))) || l.startsWith(`The ${name} screen`)) {
+        out.push({ kind: "screen", label: f.name || ph.screen, line: i, frameId: f.id });
+        break;
+      }
+    }
+  });
+  return out;
+}
+
 export function buildPrompt(doc: Doc, widths: Record<string, number>, onlyFrameId?: string, lang: Lang = getLang()): string {
   doc = { ...doc, groups: constrainModalRails(doc.groups) };
   const th = normalizeTheme(doc.theme);
@@ -1719,6 +1779,13 @@ export function buildPrompt(doc: Doc, widths: Record<string, number>, onlyFrameI
   lines.push("");
   lines.push(ph.hGeneral);
   for (const s of GENERAL[lang]) lines.push(`- ${typeof s === "function" ? s(platform) : s}`);
+  /* the author's own choices come last, in the order they are offered */
+  const chosen = promptOptionsOf(doc);
+  for (const key of PROMPT_OPTIONS) {
+    if (!chosen.includes(key)) continue;
+    const line = PROMPT_OPTION_TEXT[lang][key].line;
+    lines.push(`- ${typeof line === "function" ? line(platform) : line}`);
+  }
   return lines.join("\n");
 }
 

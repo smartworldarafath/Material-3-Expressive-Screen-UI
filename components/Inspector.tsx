@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   Action,
   BACK_TARGET,
@@ -11,8 +11,6 @@ import {
   PHONE_W,
   Kind,
   Palette,
-  SWIPE_DIRS,
-  SwipeDir,
   TRANSITIONS,
   Transition,
   VARIANTS,
@@ -23,16 +21,14 @@ import {
   halfWidth,
   isPhoneFrame,
   variantStyle,
-  Place,
   AlignKind,
 } from "@/lib/tokens";
 import { ButtonInspector } from "./ButtonInspector";
 import { PartInspector } from "./PartInspector";
 import { Icon } from "./M3Node";
-import { ButtonRun, Field, IconBtn, Section, Segmented, TidyButton, TidyState, TokenChips } from "./ui";
+import { ButtonRun, Field, IconBtn, Section, Segmented } from "./ui";
 import { AiWriteBtn } from "./AiPanel";
-import { popHistory } from "@/lib/ai";
-import { SWIPE_TEXT, TRANSITION_TEXT, UIKey, t, useLang } from "@/lib/i18n";
+import { TRANSITION_TEXT, UIKey, t, useLang } from "@/lib/i18n";
 
 export function variantsOf(kind: Kind): { key: Variant; label: string }[] {
   const variants = VARIANTS.map((v) => ({ ...v, label: t(v.key) }));
@@ -277,183 +273,6 @@ export function AiField({ ai, history, onRestore, p, value, onChange, placeholde
           {!!history?.length && <IconBtn icon="undo" p={p} size={40} on onClick={onRestore} title={t("aiRestore", lang)} />}
         </ButtonRun>
       </div>
-    </div>
-  );
-}
-
-export function FrameInspector({
-  frame,
-  palette: p,
-  onChange,
-  onDelete,
-  onDuplicate,
-  onPreview,
-  prompt,
-  onSaveImage,
-  frames,
-  tidy,
-  onTidy,
-  onPlace,
-  ai,
-  onSize,
-}: {
-  frame: Frame;
-  palette: Palette;
-  onChange: (patch: Partial<Frame>) => void;
-  onDelete: () => void;
-  onDuplicate: () => void;
-  onPreview: () => void;
-  prompt: string;
-  onSaveImage: () => Promise<void>;
-  frames: Frame[];
-  /** what the tidy button offers: tidy the screen, undo the last tidy, or nothing (already tidy) */
-  tidy: TidyState;
-  onTidy: () => void;
-  /** sets where Tidy puts the body of this screen, and tidies */
-  onPlace: (place: Place) => void;
-  ai: AiHooks;
-  onSize: (preset: FramePreset) => void;
-}) {
-  const lang = useLang();
-  const [copied, setCopied] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [swipeDir, setSwipeDir] = useState<SwipeDir>("left");
-  useEffect(() => {
-    if (!copied) return;
-    const t = setTimeout(() => setCopied(false), 1400);
-    return () => clearTimeout(t);
-  }, [copied]);
-  const actionBtn = (icon: string, label: string, onClick: () => void, busy?: boolean) => (
-    <button
-      onClick={onClick}
-      disabled={busy}
-      className="m3-press"
-      style={{
-        flex: 1,
-        height: 44,
-        borderRadius: 22,
-        border: "none",
-        background: p.secondaryContainer,
-        color: p.onSecondaryContainer,
-        fontSize: 13,
-        fontWeight: 600,
-        cursor: busy ? "default" : "pointer",
-        display: "inline-flex",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: 8,
-        opacity: busy ? 0.6 : 1,
-      }}
-    >
-      <Icon name={icon} size={20} />
-      {label}
-    </button>
-  );
-  return (
-    <div className="no-scrollbar" style={{ padding: "12px 12px 20px", overflowY: "auto", height: "100%" }}>
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 8,
-          marginBottom: 10,
-          padding: "6px 6px 6px 14px",
-          borderRadius: 20,
-          background: p.secondaryContainer,
-          color: p.onSecondaryContainer,
-        }}
-      >
-        <Icon name={isPhoneFrame(frame) ? "smartphone" : "desktop_windows"} size={20} />
-        <span style={{ fontSize: 14, fontWeight: 600, flex: 1, minWidth: 0 }}>{t("screen", lang)}</span>
-        <IconBtn icon="play_arrow" p={p} onClick={onPreview} title={t("previewFrom", lang)} size={32} fill />
-        <IconBtn icon="content_copy" p={p} onClick={onDuplicate} title={t("duplicate", lang)} size={32} />
-        <IconBtn icon="delete" p={p} danger onClick={onDelete} title={t("delete", lang)} size={32} />
-      </div>
-      <Section id="frame-size" icon="aspect_ratio" title={t("frameSize", lang)} p={p}>
-        <FrameSizePicker frame={frame} palette={p} onChange={onSize} />
-      </Section>
-      <Section id="frame-name" icon="label" title={t("name", lang)} p={p}>
-        <Field value={frame.name} onChange={(name) => onChange({ name })} placeholder={t("screenName", lang)} p={p} icon={isPhoneFrame(frame) ? "smartphone" : "desktop_windows"} />
-      </Section>
-      <Section id="frame-note" icon="notes" title={t("description", lang)} p={p}>
-        <AiField ai={ai} history={frame.noteHistory} onRestore={() => onChange(popHistory(frame.note, frame.noteHistory, "note", "noteHistory"))} p={p} value={frame.note ?? ""} onChange={(note) => onChange({ note: note || undefined })} placeholder={t("screenDescription", lang)} />
-      </Section>
-      <Section id="frame-bg" icon="format_color_fill" title={t("background", lang)} p={p}>
-        <TokenChips value={frame.bg ?? "surface"} onChange={(bg) => onChange({ bg })} p={p} />
-      </Section>
-      <Section id="frame-tidy" icon="align_space_even" title={t("tidy", lang)} p={p}>
-        <TidyButton state={tidy} onClick={onTidy} p={p} place={frame.place} onPlace={onPlace} />
-      </Section>
-      {frames.length > 1 && (
-        <Section id="frame-swipe" icon="swipe" title={t("swipeTo", lang)} p={p}>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            <Segmented<SwipeDir>
-              options={SWIPE_DIRS.map((d) => ({ key: d.key, icon: d.icon, title: SWIPE_TEXT[lang][d.key], dot: !!frame.swipe?.[d.key] }))}
-              value={swipeDir}
-              onChange={setSwipeDir}
-              p={p}
-              height={36}
-            />
-            <FrameChips
-              frames={frames.filter((f) => f.id !== frame.id)}
-              value={frame.swipe?.[swipeDir] ?? null}
-              onChange={(to) => {
-                const swipe = { ...(frame.swipe ?? {}) };
-                if (to) swipe[swipeDir] = to;
-                else delete swipe[swipeDir];
-                onChange({ swipe: Object.keys(swipe).length ? swipe : undefined });
-              }}
-              p={p}
-              small
-            />
-          </div>
-        </Section>
-      )}
-      <Section id="frame-export" icon="ios_share" title={t("export", lang)} p={p}>
-        <ButtonRun>
-          {actionBtn(
-            copied ? "check" : "content_copy",
-            copied ? t("copied", lang) : t("prompt", lang),
-            async () => {
-              try {
-                await navigator.clipboard.writeText(prompt);
-                setCopied(true);
-              } catch {}
-            },
-          )}
-          {actionBtn(
-            "image",
-            saving ? t("saving", lang) : t("saveImage", lang),
-            async () => {
-              setSaving(true);
-              try {
-                await onSaveImage();
-              } finally {
-                setSaving(false);
-              }
-            },
-            saving,
-          )}
-        </ButtonRun>
-        <div
-          className="no-scrollbar"
-          style={{
-            marginTop: 10,
-            maxHeight: 260,
-            overflowY: "auto",
-            borderRadius: 16,
-            background: p.surfaceContainerLow,
-            padding: 12,
-            fontSize: 12,
-            lineHeight: 1.7,
-            color: p.onSurfaceVariant,
-            whiteSpace: "pre-wrap",
-            wordBreak: "break-word",
-          }}
-        >
-          {prompt}
-        </div>
-      </Section>
     </div>
   );
 }

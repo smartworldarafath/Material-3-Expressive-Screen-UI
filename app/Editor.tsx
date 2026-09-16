@@ -110,7 +110,8 @@ import {
 import { Icon, M3Node, M3Static, MeasuredContent } from "@/components/M3Node";
 import { CORNER_GAIN, CORNERS, HandleSide, SizeHandles } from "@/components/SizeHandles";
 import { LayersPanel } from "@/components/Layers";
-import { FrameInspector, FrameSizePicker, Inspector } from "@/components/Inspector";
+import { FrameSizePicker, Inspector } from "@/components/Inspector";
+import { FrameInspector } from "@/components/FramePanel";
 import { Preview } from "@/components/Preview";
 import { Logo } from "@/components/Logo";
 import { PartsPalette } from "@/components/PartsPalette";
@@ -456,6 +457,9 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
   const [title, setTitle] = useState("");
   const [brief, setBrief] = useState("");
   const [promptEdit, setPromptEdit] = useState<string | undefined>(undefined);
+  const [promptOptions, setPromptOptions] = useState<string[] | undefined>(undefined);
+  /** the prompt's full-screen cover is up: the panel's own band steps aside while it is */
+  const [promptCoverUp, setPromptCoverUp] = useState(false);
   /** the author's explicit target; null follows the screens (web once a desktop screen exists) */
   const [platform, setPlatform] = useState<Platform | null>(null);
   /** a project file waiting for the author to confirm replacing the canvas */
@@ -707,6 +711,8 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
     else if (reset) setBrief("");
     if (typeof doc.promptEdit === "string") setPromptEdit(doc.promptEdit);
     else if (reset) setPromptEdit(undefined);
+    if (Array.isArray(doc.promptOptions)) setPromptOptions(doc.promptOptions);
+    else if (reset) setPromptOptions(undefined);
     if (isPlatform(doc.platform)) setPlatform(doc.platform);
     else if (reset) setPlatform(null);
   };
@@ -839,10 +845,10 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
     try {
       localStorage.setItem(
         DOC_KEY,
-        JSON.stringify({ groups, frames, paletteKey, frame, title, brief, promptEdit, platform: platform ?? undefined, customPalette: customPalette ?? undefined, dynamicColor, theme }),
+        JSON.stringify({ groups, frames, paletteKey, frame, title, brief, promptEdit, promptOptions, platform: platform ?? undefined, customPalette: customPalette ?? undefined, dynamicColor, theme }),
       );
     } catch {}
-  }, [editAccess, groups, frames, paletteKey, frame, title, brief, promptEdit, platform, customPalette, dynamicColor, theme]);
+  }, [editAccess, groups, frames, paletteKey, frame, title, brief, promptEdit, promptOptions, platform, customPalette, dynamicColor, theme]);
 
   useEffect(() => {
     if (!loadedRef.current) return;
@@ -3150,6 +3156,18 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
     setView(v);
     window.setTimeout(() => setCameraEasing(false), SETTLE_MS + 40);
   };
+  /** brings one screen to the middle of the canvas at the zoom it fits in, gliding there */
+  const glideToFrame = (f: Frame) => {
+    const r = canvasRect();
+    if (!r) return;
+    const { w, h } = frameSizeOf(f);
+    const pad = 40;
+    const top = 84;
+    const boxW = w + BEZEL * 2;
+    const boxH = h + BEZEL * 2 + FRAME_LABEL_H;
+    const z = clamp(Math.min((r.width - pad * 2) / boxW, (r.height - top - pad) / boxH, viewRef.current.z), MIN_Z, MAX_Z);
+    glide({ x: (r.width - boxW * z) / 2 - (f.x - BEZEL) * z, y: top + (r.height - top - pad - boxH * z) / 2 - (f.y - BEZEL - FRAME_LABEL_H) * z, z });
+  };
   const openPreview = (startId?: string | null) => {
     if (frame !== "phone") {
       changeFrame("phone");
@@ -3366,8 +3384,8 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
   }, [setGap]);
   const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
   const doc: Doc = useMemo(
-    () => ({ groups, frames, paletteKey, frame, title, brief, promptEdit, platform: platform ?? undefined, customPalette: customPalette ?? undefined, dynamicColor, theme }),
-    [groups, frames, paletteKey, frame, title, brief, promptEdit, platform, customPalette, dynamicColor, theme],
+    () => ({ groups, frames, paletteKey, frame, title, brief, promptEdit, promptOptions, platform: platform ?? undefined, customPalette: customPalette ?? undefined, dynamicColor, theme }),
+    [groups, frames, paletteKey, frame, title, brief, promptEdit, promptOptions, platform, customPalette, dynamicColor, theme],
   );
   /** the same document, for callbacks that were created on an earlier render */
   const docRef = useRef(doc);
@@ -4038,6 +4056,8 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
                       setLayersFrameId(id);
                       setSelectedIds([]);
                       setSelectedFrameId(id);
+                      const f = framesRef.current.find((x) => x.id === id);
+                      if (f) glideToFrame(f);
                     }}
                     groups={layerGroups}
                     widths={widths}
@@ -4142,6 +4162,7 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
                           fontSize: 20,
                           fontWeight: 600,
                           color: on ? p.primary : p.onSurfaceVariant,
+                          transition: "color 160ms",
                           cursor: handMode ? "grab" : "move",
                           userSelect: "none",
                           whiteSpace: "nowrap",
@@ -4163,15 +4184,14 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
                           width: w + BEZEL * 2,
                           height: h + BEZEL * 2,
                           borderRadius: radius + BEZEL,
-                          backgroundColor: p.inverseSurface,
+                          /* the chosen screen's bezel is painted in the theme's primary; the others stay dark */
+                          backgroundColor: on ? p.primary : p.inverseSurface,
                           backgroundImage: draftBusy ? draftGradient(p) : undefined,
                           backgroundSize: draftBusy ? "300% 300%" : undefined,
                           animation: draftBusy ? "m3e-drift 3s ease-in-out infinite" : undefined,
-                          boxShadow: on
-                            ? `0 0 0 3px ${p.primary}, 0 18px 50px rgba(0,0,0,0.16)`
-                            : "0 18px 50px rgba(0,0,0,0.14)",
+                          boxShadow: on ? "0 18px 50px rgba(0,0,0,0.16)" : "0 18px 50px rgba(0,0,0,0.14)",
                           cursor: handMode ? "grab" : "move",
-                          transition: `box-shadow 120ms, ${SIZE_TRANSITION}`,
+                          transition: `background-color 160ms, box-shadow 120ms, ${SIZE_TRANSITION}`,
                         }}
                       >
                         <AnimatePresence>{aiFrameId === f.id && <ThinkingRing key="ring" p={p} frame={f} />}</AnimatePresence>
@@ -4603,6 +4623,10 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
                 padding: "20px 20px 8px 16px",
                 /* the band is the panel's own colour; the strip below it carries the fade */
                 background: p.surface,
+                /* while the prompt stands full screen the band has nothing to do: it fades out as the cover opens and back in as it closes */
+                opacity: promptCoverUp ? 0 : 1,
+                pointerEvents: promptCoverUp ? "none" : undefined,
+                transition: "opacity 220ms ease",
               }}
             >
               <div style={{ flex: 1, minWidth: 0 }}>
@@ -4654,6 +4678,8 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
                   prompt={buildPrompt(doc, widths, selectedFrame.id, lang)}
                   onSaveImage={() => saveFrameImage(selectedFrame)}
                   frames={frames}
+                  groups={groups}
+                  widths={widths}
                   tidy={tidyState ?? "done"}
                   onTidy={() => tidy(selectedFrame)}
                   onPlace={(pl) => setPlace(selectedFrame, pl)}
@@ -4697,10 +4723,12 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
                   doc={doc}
                   widths={widths}
                   palette={p}
+                  onCover={setPromptCoverUp}
                   onDoc={(patch) => {
                     if (patch.title !== undefined) setTitle(patch.title);
                     if (patch.brief !== undefined) setBrief(patch.brief);
                     if ("promptEdit" in patch) setPromptEdit(patch.promptEdit);
+                    if ("promptOptions" in patch) setPromptOptions(patch.promptOptions);
                     if ("platform" in patch) setPlatform(isPlatform(patch.platform) ? patch.platform : null);
                   }}
                 />
