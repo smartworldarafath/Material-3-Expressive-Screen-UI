@@ -1652,19 +1652,22 @@ export function promptMarks(text: string, frames: Frame[], lang: Lang = getLang(
   const ph = PH[lang];
   const q = quote(lang);
   const out: PromptMark[] = [];
+  /* the screens are written in document order, so the next screen line is the next unmatched
+   * frame: two screens with one name, or two unnamed ones, each get their own mark */
+  const left = [...frames];
+  const word = lang === "ja" ? "画面" : lang === "zh" ? "屏幕" : lang === "ko" ? " 화면" : null;
   text.split("\n").forEach((l, i) => {
     if (l.startsWith("## ")) {
       out.push({ kind: "section", label: l.slice(3).trim(), line: i });
       return;
     }
-    for (const f of frames) {
+    const at = left.findIndex((f) => {
       const name = q(f.name || ph.screen);
-      /* the screen's line opens with its quoted name and the word for a screen right after */
-      if ((l.startsWith(name) && /^(画面|屏幕| 화면)/.test(l.slice(name.length))) || l.startsWith(`The ${name} screen`)) {
-        out.push({ kind: "screen", label: f.name || ph.screen, line: i, frameId: f.id });
-        break;
-      }
-    }
+      return word ? l.startsWith(name + word) : l.startsWith(`The ${name} screen`);
+    });
+    if (at < 0) return;
+    const f = left.splice(at, 1)[0];
+    out.push({ kind: "screen", label: f.name || ph.screen, line: i, frameId: f.id });
   });
   return out;
 }

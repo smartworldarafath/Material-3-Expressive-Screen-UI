@@ -71,7 +71,7 @@ export const TABS_H = 48;
 
 /** Two M3 primary tabs with the underline indicator. The panel under them is one of two, named
  *  by the tab that opens it, and the arrow keys move between the two. */
-export function PartTabs({ value, onChange, p }: { value: Tab; onChange: (t: Tab) => void; p: Palette }) {
+export function PartTabs({ value, onChange, p, idPrefix = "part" }: { value: Tab; onChange: (t: Tab) => void; p: Palette; /** the ids the tabs and their panels are known by, so two tabbed panels never share one */ idPrefix?: string }) {
   const lang = useLang();
   const tabs: { key: Tab; icon: string; label: string }[] = [
     { key: "design", icon: "palette", label: t("design", lang) },
@@ -82,7 +82,7 @@ export function PartTabs({ value, onChange, p }: { value: Tab; onChange: (t: Tab
     const at = tabs.findIndex((tab) => tab.key === value);
     const next = tabs[(at + d + tabs.length) % tabs.length].key;
     onChange(next);
-    (e.currentTarget as HTMLElement).parentElement?.querySelector<HTMLElement>(`#part-tab-${next}`)?.focus();
+    (e.currentTarget as HTMLElement).parentElement?.querySelector<HTMLElement>(`#${idPrefix}-tab-${next}`)?.focus();
   };
   return (
     /* no rule under the row: the panel's own fade is what the two are told apart by, and the
@@ -93,10 +93,10 @@ export function PartTabs({ value, onChange, p }: { value: Tab; onChange: (t: Tab
         return (
           <button
             key={tab.key}
-            id={`part-tab-${tab.key}`}
+            id={`${idPrefix}-tab-${tab.key}`}
             role="tab"
             aria-selected={on}
-            aria-controls={`part-panel-${tab.key}`}
+            aria-controls={`${idPrefix}-panel-${tab.key}`}
             tabIndex={on ? 0 : -1}
             onKeyDown={(e) => {
               if (e.key === "ArrowRight" || e.key === "ArrowDown") walk(e, 1);

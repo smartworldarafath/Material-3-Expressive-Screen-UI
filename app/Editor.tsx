@@ -160,6 +160,10 @@ const GAP_TWEEN = { duration: SETTLE_MS / 1000, ease: [0.2, 0, 0, 1] as const };
 const RAIL_W = 52;
 const MIN_Z = 0.25;
 const MAX_Z = 3;
+/** the room a screen keeps from the canvas edges when the camera glides to it: the floating
+ *  toolbar's row at the top, a margin elsewhere */
+const GLIDE_TOP = 84;
+const GLIDE_PAD = 40;
 const HISTORY_MAX = 100;
 const DOC_KEY = "m3e:doc";
 /** the design a draft or a link replaced, until the author keeps or undoes it */
@@ -3156,17 +3160,20 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
     setView(v);
     window.setTimeout(() => setCameraEasing(false), SETTLE_MS + 40);
   };
-  /** brings one screen to the middle of the canvas at the zoom it fits in, gliding there */
+  /** Brings one screen to the middle of the canvas at the zoom it fits in, gliding there. A
+   *  screen already wholly in view is left where it is, so picking it does not move the camera. */
   const glideToFrame = (f: Frame) => {
     const r = canvasRect();
     if (!r) return;
     const { w, h } = frameSizeOf(f);
-    const pad = 40;
-    const top = 84;
     const boxW = w + BEZEL * 2;
     const boxH = h + BEZEL * 2 + FRAME_LABEL_H;
-    const z = clamp(Math.min((r.width - pad * 2) / boxW, (r.height - top - pad) / boxH, viewRef.current.z), MIN_Z, MAX_Z);
-    glide({ x: (r.width - boxW * z) / 2 - (f.x - BEZEL) * z, y: top + (r.height - top - pad - boxH * z) / 2 - (f.y - BEZEL - FRAME_LABEL_H) * z, z });
+    const v = viewRef.current;
+    const left = (f.x - BEZEL) * v.z + v.x;
+    const top = (f.y - BEZEL - FRAME_LABEL_H) * v.z + v.y;
+    if (left >= GLIDE_PAD && top >= GLIDE_TOP && left + boxW * v.z <= r.width - GLIDE_PAD && top + boxH * v.z <= r.height - GLIDE_PAD) return;
+    const z = clamp(Math.min((r.width - GLIDE_PAD * 2) / boxW, (r.height - GLIDE_TOP - GLIDE_PAD) / boxH, v.z), MIN_Z, MAX_Z);
+    glide({ x: (r.width - boxW * z) / 2 - (f.x - BEZEL) * z, y: GLIDE_TOP + (r.height - GLIDE_TOP - GLIDE_PAD - boxH * z) / 2 - (f.y - BEZEL - FRAME_LABEL_H) * z, z });
   };
   const openPreview = (startId?: string | null) => {
     if (frame !== "phone") {
@@ -3235,8 +3242,8 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
           t.tagName === "TEXTAREA" ||
           t.isContentEditable);
       if (typing) return;
-      // dialogs and the preview own the keyboard while they are up
-      if (confirmClear || pendingImport !== null || shareOpen || previewId !== null) return;
+      // dialogs, the preview and the prompt's full-screen cover own the keyboard while they are up
+      if (confirmClear || pendingImport !== null || shareOpen || previewId !== null || promptCoverUp) return;
       const mod = e.ctrlKey || e.metaKey;
       if (mod && e.key.toLowerCase() === "z") {
         e.preventDefault();
@@ -3340,6 +3347,7 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
     pendingImport,
     shareOpen,
     previewId,
+    promptCoverUp,
     editAccess,
   ]);
   const openPreviewRef = useRef(openPreview);
@@ -4628,6 +4636,7 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
                 pointerEvents: promptCoverUp ? "none" : undefined,
                 transition: "opacity 220ms ease",
               }}
+              inert={promptCoverUp || undefined}
             >
               <div style={{ flex: 1, minWidth: 0 }}>
                 <Segmented<"edit" | "prompt">
@@ -4677,9 +4686,6 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
                   onPreview={() => openPreview(selectedFrame.id)}
                   prompt={buildPrompt(doc, widths, selectedFrame.id, lang)}
                   onSaveImage={() => saveFrameImage(selectedFrame)}
-                  frames={frames}
-                  groups={groups}
-                  widths={widths}
                   tidy={tidyState ?? "done"}
                   onTidy={() => tidy(selectedFrame)}
                   onPlace={(pl) => setPlace(selectedFrame, pl)}

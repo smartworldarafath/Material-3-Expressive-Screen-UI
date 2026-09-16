@@ -298,7 +298,7 @@ export function LayersPanel({
         <div style={{ padding: "12px 12px 4px", flex: "0 0 auto" }}>
           <Select
             options={frames.map((f) => ({ key: f.id, label: f.name || t("screen", lang), icon: isPhoneFrame(f) ? "smartphone" : "desktop_windows" }))}
-            value={frameId ?? frames[0].id}
+            value={frameId && frames.some((f) => f.id === frameId) ? frameId : frames[0].id}
             onChange={onFrame}
             p={p}
             label={t("screens", lang)}

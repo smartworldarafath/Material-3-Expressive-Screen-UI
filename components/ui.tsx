@@ -771,7 +771,11 @@ export function Field({
     const from = ease ? el.offsetHeight : 0;
     el.style.transition = "none";
     el.style.height = "auto";
-    const full = el.scrollHeight;
+    /* a growing field is never shorter than the lines it was asked for, so an empty one still
+       offers the room its words will take */
+    const line = parseFloat(getComputedStyle(el).lineHeight) || 21;
+    const least = Math.round(rows * line + 24);
+    const full = Math.max(el.scrollHeight, least);
     const capped = maxHeight ? Math.min(full, maxHeight) : full;
     if (ease) {
       el.style.height = `${from}px`;
@@ -781,7 +785,7 @@ export function Field({
     el.style.height = `${capped}px`;
     el.style.overflowY = full > capped ? "auto" : "hidden";
     if (!ease) el.style.transition = "";
-  }, [value, grow, maxHeight, reduced]);
+  }, [value, grow, maxHeight, rows, reduced]);
   /* with a pinned run the text keeps the full width and passes under it; otherwise the clear
    * button takes a column of its own at the trailing edge */
   const pinned = !!(multiline && action);

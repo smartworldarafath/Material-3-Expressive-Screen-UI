@@ -27,7 +27,6 @@ import { ButtonInspector } from "./ButtonInspector";
 import { PartInspector } from "./PartInspector";
 import { Icon } from "./M3Node";
 import { ButtonRun, Field, IconBtn, Section, Segmented } from "./ui";
-import { AiWriteBtn } from "./AiPanel";
 import { TRANSITION_TEXT, UIKey, t, useLang } from "@/lib/i18n";
 
 export function variantsOf(kind: Kind): { key: Variant; label: string }[] {
@@ -260,22 +259,6 @@ export function ActionEditor({
 
 /** what a field's AI button needs from the page; `reason` explains a disabled button */
 export type AiHooks = { ready: boolean; reason?: string; busy: boolean; onRun: () => void; onCancel: () => void };
-
-/** a multiline field with the AI button under it, fused with a button that swaps the AI text and the original once the AI has written it */
-export function AiField({ ai, history, onRestore, p, value, onChange, placeholder }: { ai: AiHooks; history?: string[]; onRestore: () => void; p: Palette; value: string; onChange: (v: string) => void; placeholder: string }) {
-  const lang = useLang();
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-      <Field value={value} onChange={onChange} placeholder={placeholder} p={p} multiline rows={3} aiBusy={ai.busy} />
-      <div style={{ display: "flex", justifyContent: "flex-end" }}>
-        <ButtonRun>
-          <AiWriteBtn p={p} busy={ai.busy} disabled={!ai.ready} onClick={ai.onRun} onCancel={ai.onCancel} label={t("aiWriteShort", lang)} title={ai.ready ? t("aiWrite", lang) : (ai.reason ?? t("aiNoKey", lang))} />
-          {!!history?.length && <IconBtn icon="undo" p={p} size={40} on onClick={onRestore} title={t("aiRestore", lang)} />}
-        </ButtonRun>
-      </div>
-    </div>
-  );
-}
 
 /** A small picture of what an alignment does: a dashed box for the reference (the screen's
  *  body for one part, the selection for several) and two bars placed the way the parts will be;

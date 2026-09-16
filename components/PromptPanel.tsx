@@ -29,28 +29,48 @@ const PANEL_PAD_TOP = 28;
 /** how long the reset button takes to fade before the box narrows on the way out */
 const RESET_FADE_MS = 120;
 
+/** where each line of the text begins, as offsets into it, with the text's end as the last */
+function lineStartsOf(text: string): number[] {
+  const starts = [0];
+  for (let i = 0; i < text.length; i++) if (text[i] === "\n") starts.push(i + 1);
+  starts.push(text.length + 1);
+  return starts;
+}
+
 /** which stretch of the text a mark owns: from its line to the line before the next mark */
-function rangeOf(text: string, marks: PromptMark[], i: number): [number, number] {
-  const lines = text.split("\n");
-  const from = marks[i].line;
-  const next = marks[i + 1]?.line ?? lines.length;
-  const start = lines.slice(0, from).reduce((n, l) => n + l.length + 1, 0);
-  const end = lines.slice(0, next).reduce((n, l) => n + l.length + 1, 0) - 1;
+function rangeOf(starts: number[], marks: PromptMark[], i: number): [number, number] {
+  const start = starts[Math.min(marks[i].line, starts.length - 1)];
+  const next = marks[i + 1]?.line ?? starts.length - 1;
+  const end = starts[Math.min(next, starts.length - 1)] - 1;
   return [start, Math.max(start, end)];
+}
+
+/** the mark whose stretch holds a place in the text, or -1 before the first */
+function markAt(starts: number[], marks: PromptMark[], at: number): number {
+  let lo = 0;
+  let hi = marks.length - 1;
+  let hit = -1;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    if (rangeOf(starts, marks, mid)[0] <= at) {
+      hit = mid;
+      lo = mid + 1;
+    } else hi = mid - 1;
+  }
+  return hit;
 }
 
 /** the outline: the sections as rows, the screens indented under the layout section */
 function Outline({ marks, current, onPick, p }: { marks: PromptMark[]; current: number; onPick: (i: number) => void; p: Palette }) {
   const lang = useLang();
   return (
-    <div role="list" aria-label={t("outline", lang)} className="no-scrollbar" style={{ display: "flex", flexDirection: "column", gap: 2, overflowY: "auto", minHeight: 0 }}>
+    <ul aria-label={t("outline", lang)} className="no-scrollbar" style={{ display: "flex", flexDirection: "column", gap: 2, overflowY: "auto", minHeight: 0, margin: 0, padding: 0, listStyle: "none" }}>
       {marks.map((m, i) => {
         const on = i === current;
         const screen = m.kind === "screen";
         return (
+          <li key={i} style={{ display: "flex" }}>
           <button
-            key={i}
-            role="listitem"
             onClick={() => onPick(i)}
             title={m.label}
             className="m3-press"
@@ -77,9 +97,10 @@ function Outline({ marks, current, onPick, p }: { marks: PromptMark[]; current: 
             <Icon name={screen ? "smartphone" : "tag"} size={18} />
             <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.label}</span>
           </button>
+          </li>
         );
       })}
-    </div>
+    </ul>
   );
 }
 
@@ -160,6 +181,7 @@ function FadeArea({ value, onChange, placeholder, p, rows = 5 }: { value: string
  *  painted: the text itself stays free to edit. Read-only, it is the same box with no caret. */
 function PromptBox({
   text,
+  starts,
   marks,
   lit,
   jump,
@@ -171,6 +193,8 @@ function PromptBox({
   readOnly,
 }: {
   text: string;
+  /** where the text's lines begin, computed once per text */
+  starts: number[];
   marks: PromptMark[];
   lit: number;
   /** counts up each time the outline asks the text to scroll to the lit stretch */
@@ -205,15 +229,17 @@ function PromptBox({
     const bottom = Math.max(...rects.map((r) => r.bottom)) - base;
     setBox({ top: top - 4, height: bottom - top + 8 });
   };
+  /* the observer outlives every render, so it reads the measure of the render it fires in */
+  const measureRef = useRef(measure);
+  measureRef.current = measure;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(measure, [lit, text, marks]);
   useEffect(() => {
     const host = under.current;
     if (!host) return;
-    const ro = new ResizeObserver(() => measure());
+    const ro = new ResizeObserver(() => measureRef.current());
     ro.observe(host);
     return () => ro.disconnect();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const sync = () => {
     if (under.current && areaRef.current) under.current.scrollTop = areaRef.current.scrollTop;
@@ -221,11 +247,16 @@ function PromptBox({
   /* the lit stretch is scrolled to where it stands in the copy under the text, which knows how
    * the lines wrap; a little room is left above it so its heading is not under the fade */
   useEffect(() => {
-    if (!jump || !mark.current || !areaRef.current) return;
-    areaRef.current.scrollTo({ top: Math.max(0, mark.current.offsetTop - PAD - 4), behavior: "smooth" });
+    const el = mark.current;
+    const host = under.current;
+    if (!jump || !el || !host || !areaRef.current) return;
+    const rect = el.getClientRects()[0];
+    if (!rect) return;
+    const top = rect.top - host.getBoundingClientRect().top + host.scrollTop;
+    areaRef.current.scrollTo({ top: Math.max(0, top - FADE - 4), behavior: "smooth" });
   }, [jump, areaRef]);
   const caret = () => areaRef.current && onCaret(areaRef.current.selectionStart);
-  const [a, b] = lit >= 0 && lit < marks.length ? rangeOf(text, marks, lit) : [0, 0];
+  const [a, b] = lit >= 0 && lit < marks.length ? rangeOf(starts, marks, lit) : [0, 0];
   const type: React.CSSProperties = { fontSize: FONT, lineHeight: LINE, fontFamily: "inherit", whiteSpace: "pre-wrap", wordBreak: "break-word", padding: `${PAD}px ${PAD}px ${FOOT}px`, boxSizing: "border-box" };
   const fade = (top: boolean): React.CSSProperties => ({
     position: "absolute",
@@ -288,6 +319,7 @@ export function PromptPanel({
   const edited = doc.promptEdit !== undefined;
   const text = edited ? doc.promptEdit! : generated;
   const marks = useMemo(() => promptMarks(text, doc.frame === "phone" ? doc.frames : [], lang), [text, doc.frames, doc.frame, lang]);
+  const starts = useMemo(() => lineStartsOf(text), [text]);
   const [copied, setCopied] = useState(false);
   /** the full-screen cover: gone, or up -- and whether it has grown to the whole window yet */
   const [cover, setCover] = useState<"off" | "on" | "closing">("off");
@@ -297,7 +329,11 @@ export function PromptPanel({
   /** where the panel's box stands: the cover grows out of it and shrinks back into it */
   const panel = useRef<HTMLDivElement | null>(null);
   const coverEl = useRef<HTMLDivElement | null>(null);
-  const [from, setFrom] = useState({ left: 0, top: 0, width: 0, height: 0 });
+  const [from, setFrom] = useState({ left: 0, top: 0, width: 0 });
+  /** what had the focus before the cover took it, to be given it back */
+  const focusBefore = useRef<HTMLElement | null>(null);
+  /** the close's own timer and frame, cleared if the panel goes before they fire */
+  const closeTimer = useRef<{ id: number; raf: number } | null>(null);
   /** the mark whose stretch is lit: the one tapped, or the one the caret is in */
   const [lit, setLit] = useState(-1);
   const [jump, setJump] = useState(0);
@@ -311,7 +347,8 @@ export function PromptPanel({
   }, [copied]);
   const open = () => {
     const r = panel.current?.getBoundingClientRect();
-    if (r) setFrom({ left: r.left, top: r.top, width: r.width, height: r.height });
+    if (r) setFrom({ left: r.left, top: r.top, width: r.width });
+    focusBefore.current = document.activeElement as HTMLElement | null;
     setGrown(false);
     setNarrow(false);
     setCover("on");
@@ -324,26 +361,48 @@ export function PromptPanel({
       void coverEl.current?.offsetWidth;
       setGrown(true);
       onCover?.(true);
+      /* the text keeps the place the panel was reading, and takes the keyboard */
+      if (wideArea.current) {
+        wideArea.current.scrollTop = area.current?.scrollTop ?? 0;
+        wideArea.current.focus({ preventScroll: true });
+      }
     });
     return () => cancelAnimationFrame(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cover, grown]);
+  /* the panel may go while the cover is up: the band it hid is let go, and nothing fires late */
+  useEffect(
+    () => () => {
+      onCover?.(false);
+      if (closeTimer.current) {
+        window.clearTimeout(closeTimer.current.id);
+        cancelAnimationFrame(closeTimer.current.raf);
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
   /* Closing: the panel's place is read again, in case it moved, and the text box inside the
    * cover is first set to the panel's own width, so that when the surface has shrunk back the
    * words under it are already wrapped the way the panel wraps them. The panel's text is then
    * scrolled to where the cover's is, so nothing jumps at the hand-over. */
   const close = () => {
     const r = panel.current?.getBoundingClientRect();
-    if (r) setFrom({ left: r.left, top: r.top, width: r.width, height: r.height });
+    if (r) setFrom({ left: r.left, top: r.top, width: r.width });
     setGrown(false);
     setCover((c) => (c === "on" ? "closing" : c));
     onCover?.(false);
-    window.setTimeout(() => {
+    focusBefore.current?.focus({ preventScroll: true });
+    focusBefore.current = null;
+    const id = window.setTimeout(() => {
       setNarrow(true);
-      requestAnimationFrame(() => {
+      const raf = requestAnimationFrame(() => {
+        closeTimer.current = null;
         if (area.current && wideArea.current) area.current.scrollTop = wideArea.current.scrollTop;
       });
+      closeTimer.current = { id, raf };
     }, RESET_FADE_MS);
+    closeTimer.current = { id, raf: 0 };
   };
   useEffect(() => {
     if (cover !== "closing") return;
@@ -354,7 +413,10 @@ export function PromptPanel({
   useEffect(() => {
     if (cover !== "on") return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") close();
+      if (e.key !== "Escape") return;
+      e.preventDefault();
+      e.stopPropagation();
+      close();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -366,13 +428,7 @@ export function PromptPanel({
       setCopied(true);
     } catch {}
   };
-  const caret = (at: number) => {
-    let hit = -1;
-    marks.forEach((m, i) => {
-      if (at >= rangeOf(text, marks, i)[0]) hit = i;
-    });
-    setLit(hit);
-  };
+  const caret = (at: number) => setLit(markAt(starts, marks, at));
   const pick = (i: number) => {
     setLit(i);
     setJump((n) => n + 1);
@@ -397,6 +453,7 @@ export function PromptPanel({
         {platform}
         <PromptBox
           text={text}
+          starts={starts}
           marks={marks}
           lit={-1}
           jump={0}
@@ -429,7 +486,7 @@ export function PromptPanel({
             left: grown ? 0 : from.left,
             /* it starts just under the panel's band, so the band can fade rather than be covered, and rises over it as it opens */
             top: grown ? 0 : from.top,
-            width: grown ? "100vw" : from.width,
+            width: grown ? "100%" : from.width,
             bottom: 0,
             borderRadius: grown ? 0 : "18px 0 0 18px",
             background: p.surface,
@@ -497,7 +554,8 @@ export function PromptPanel({
               position: "absolute",
               right: 12,
               /* on the way out the box takes the panel's width at once, so its words wrap as the panel's do */
-              width: narrow ? from.width - 24 : "calc(100vw - 592px)",
+              /* the box takes what the two columns leave, and keeps a readable width on a narrow window */
+              width: narrow ? from.width - 24 : "max(280px, calc(100% - 592px))",
               top: grown ? 40 : PANEL_PAD_TOP + 40 + 10,
               bottom: 12,
               display: "flex",
@@ -507,6 +565,7 @@ export function PromptPanel({
           >
             <PromptBox
               text={text}
+              starts={starts}
               marks={marks}
               lit={lit}
               jump={jump}
@@ -528,7 +587,7 @@ export function PromptPanel({
                       the way out the button already wears the panel's icon, so the hand-over is seamless. */}
                   <div className="m3-run" style={{ display: "flex", gap: 3 }}>
                     <CopyButton copied={copied} onClick={copy} p={p} />
-                    <IconBtn icon={cover === "closing" ? "open_in_full" : "close_fullscreen"} p={p} size={44} on onClick={close} title={t("exitFullscreen", lang)} />
+                    <IconBtn icon={cover === "closing" ? "open_in_full" : "close_fullscreen"} p={p} size={44} on onClick={close} title={t(cover === "closing" ? "fullscreen" : "exitFullscreen", lang)} />
                   </div>
                 </div>
               }
