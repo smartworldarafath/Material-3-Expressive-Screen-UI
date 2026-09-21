@@ -582,6 +582,7 @@ export const KIND_TEXT: Record<
 > = {
   ja: {
     box: { noun: "ボックス" },
+    bottomSheet: { noun: "ボトムシート" },
     button: { noun: "ボタン", label: "ボタン" },
     iconButton: { noun: "アイコンボタン" },
     fab: { noun: "FAB" },
@@ -619,6 +620,7 @@ export const KIND_TEXT: Record<
   },
   en: {
     box: { noun: "box" },
+    bottomSheet: { noun: "bottom sheet" },
     button: { noun: "button", label: "Button" },
     iconButton: { noun: "icon button" },
     fab: { noun: "FAB" },
@@ -656,6 +658,7 @@ export const KIND_TEXT: Record<
   },
   zh: {
     box: { noun: "容器框" },
+    bottomSheet: { noun: "底部面板" },
     button: { noun: "按钮", label: "按钮" },
     iconButton: { noun: "图标按钮" },
     fab: { noun: "FAB" },
@@ -693,6 +696,7 @@ export const KIND_TEXT: Record<
   },
   ko: {
     box: { noun: "상자" },
+    bottomSheet: { noun: "하단 시트" },
     button: { noun: "버튼", label: "버튼" },
     iconButton: { noun: "아이콘 버튼" },
     fab: { noun: "FAB" },

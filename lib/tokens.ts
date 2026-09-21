@@ -580,6 +580,7 @@ export function variantShadow(v: Variant): string {
 /* ---------- component kinds ---------- */
 export type Kind =
   | "box"
+  | "bottomSheet"
   | "button"
   | "iconButton"
   | "fab"
@@ -677,6 +678,15 @@ export const hasPickerFields = (it: Item) => {
   const old = it as Item & PickerFields;
   return old.day !== undefined || old.hour !== undefined || old.minute !== undefined;
 };
+/** A box used to become a bottom sheet when its handle was switched on; the sheet is a part of
+ *  its own now, so such a box is read back as one. */
+export const isSheetBox = (it: Item) => it.kind === "box" && !!it.checked;
+export function migrateSheetBox(it: Item): Item {
+  if (!isSheetBox(it)) return it;
+  const { checked: _checked, radiusBottom: _bottom, corners: _corners, ...rest } = it;
+  return { ...rest, kind: "bottomSheet", radiusTop: it.corners?.tl ?? it.radiusTop ?? 28 };
+}
+
 export function migratePicker(it: Item): Item {
   if (!hasPickerFields(it)) return it;
   const rest = { ...it } as Item & PickerFields;
@@ -924,7 +934,27 @@ export const KIND_SPEC: Record<Kind, KindSpec> = {
     hasLabel: false,
     hasSupporting: false,
     hasIcon: false,
-    hasChecked: true,
+    hasFill: true,
+    size: { min: 40, max: PHONE_W, step: 4, icon: "width", presets: WIDTH_PRESETS },
+    size2: { min: 24, max: PHONE_H, step: 4, icon: "height", presets: HEIGHT_PRESETS },
+    defLabel: "",
+    defIcon: null,
+    defSize: PHONE_W,
+  },
+  /* a modal sheet that slides up from the bottom edge: a drag handle at its top, its top corners
+   * rounded and its bottom ones flush with the screen */
+  bottomSheet: {
+    label: "Bottom sheet",
+    noun: "ボトムシート",
+    category: "containment",
+    paletteIcon: "bottom_sheets",
+    w: PHONE_W,
+    h: 320,
+    radius: 28,
+    hasVariant: false,
+    hasLabel: false,
+    hasSupporting: false,
+    hasIcon: false,
     hasFill: true,
     size: { min: 40, max: PHONE_W, step: 4, icon: "width", presets: WIDTH_PRESETS },
     size2: { min: 24, max: PHONE_H, step: 4, icon: "height", presets: HEIGHT_PRESETS },
@@ -1566,6 +1596,7 @@ export const KIND_ORDER: Kind[] = [
   "card",
   "listItem",
   "box",
+  "bottomSheet",
   "dialog",
   "snackbar",
   "textField",
@@ -2164,9 +2195,9 @@ export function carryItemSize(it: Item, from: { w: number; h: number }, to: { w:
     else if (cur === contentWidth(from.w)) patch.size = contentWidth(to.w);
     else if (cur === halfWidth(from.w)) patch.size = halfWidth(to.w);
     else if (cur > to.w) patch.size = to.w;
-    else if (cur > contentWidth(to.w) && it.kind !== "box") patch.size = contentWidth(to.w);
+    else if (cur > contentWidth(to.w) && it.kind !== "box" && it.kind !== "bottomSheet") patch.size = contentWidth(to.w);
   }
-  if ((it.kind === "box" || it.kind === "navRail") && (it.size2 ?? spec.h) === from.h) patch.size2 = to.h;
+  if ((it.kind === "box" || it.kind === "bottomSheet" || it.kind === "navRail") && (it.size2 ?? spec.h) === from.h) patch.size2 = to.h;
   /* a camera or map the author gave a height keeps its aspect ratio when its width changes */
   if ((it.kind === "camera" || it.kind === "map") && it.size2 !== undefined && patch.size !== undefined) {
     const cur = it.size ?? spec.defSize ?? spec.w;
@@ -2365,12 +2396,17 @@ export function makeItem(kind: Kind): Item {
   if (s.defSupporting !== undefined) it.supporting = text?.supporting ?? s.defSupporting;
   if (s.defIcon2 !== undefined) it.icon2 = s.defIcon2;
   if (s.defSize !== undefined) it.size = s.defSize;
-  if (s.hasChecked) it.checked = kind !== "chip" && kind !== "box";
+  if (s.hasChecked) it.checked = kind !== "chip";
   if (kind === "box") {
     it.size2 = 220;
     it.radiusTop = 28;
     it.radiusBottom = 28;
     it.fill = "surfaceContainerHigh";
+  }
+  if (kind === "bottomSheet") {
+    it.size2 = 320;
+    it.radiusTop = 28;
+    it.fill = "surfaceContainerLow";
   }
   if (kind === "slider") it.value = 40;
   if (kind === "carousel") {
@@ -2483,6 +2519,7 @@ export function sizeOf(it: Item, widths: Record<string, number>) {
     case "card":
       return { w: n, h: it.size2 ?? Math.round(n * 0.5875) };
     case "box":
+    case "bottomSheet":
       return { w: n, h: it.size2 ?? s.h };
     case "navRail":
       return { w: railWidth(it), h: it.size2 ?? s.h };
@@ -2499,6 +2536,11 @@ export function baseRadii(it: Item): Radii {
     /* a button stays fully round whatever height it is given */
     case "button":
       return uniformRadii(scaleR(buttonHeightOf(it) / 2));
+    /* a sheet rounds only the edge it rises with; its bottom stays flush with the screen */
+    case "bottomSheet": {
+      const t = it.radiusTop ?? s.radius;
+      return { tl: t, tr: t, bl: 0, br: 0 };
+    }
     case "box":
       if (it.corners) return { ...it.corners };
     // falls through

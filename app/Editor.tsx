@@ -38,6 +38,8 @@ import {
   migrateCarousel,
   migrateFabMenu,
   migratePicker,
+  isSheetBox,
+  migrateSheetBox,
   buttonHeightOf,
   explodeGroup,
   freeRadii,
@@ -237,7 +239,7 @@ type Snapshot = { groups: Group[]; frames: Frame[]; meta?: DocMeta };
 const HANDLED = new Set<Kind>([
   "button", "iconButton", "chip", "splitButton", "fab", "extendedFab",
   "linearProgress", "circularProgress", "loadingIndicator", "slider", "carousel",
-  "card", "box", "image", "camera", "map", "listItem", "searchBar", "textField", "select", "switch", "divider",
+  "card", "box", "bottomSheet", "image", "camera", "map", "listItem", "searchBar", "textField", "select", "switch", "divider",
   "topAppBar", "bottomNav", "tabs", "navRail",
 ]);
 /** parts held by the four points around them: a circle's diameter, a label's height */
@@ -286,6 +288,8 @@ function migrateGroups(groups: Group[], frames: Frame[]): Group[] {
   out = out.map((g) => (g.items.some((it) => it.kind === "carousel" && (it.label || it.action)) ? { ...g, items: g.items.map(migrateCarousel) } : g));
   /* a picker used to carry a chosen day and time; it shows today and now, so those fields go */
   out = out.map((g) => (g.items.some(hasPickerFields) ? { ...g, items: g.items.map(migratePicker) } : g));
+  /* a box with its handle on used to stand in for a bottom sheet; the sheet is its own part now */
+  out = out.map((g) => (g.items.some(isSheetBox) ? { ...g, items: g.items.map(migrateSheetBox) } : g));
   /* a carousel is as wide as the screen it stands on, whatever size that screen is */
   out = out.map((g) => {
     if (!g.items.some((it) => it.kind === "carousel")) return g;

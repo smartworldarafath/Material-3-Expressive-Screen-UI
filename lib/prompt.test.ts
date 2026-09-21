@@ -360,3 +360,28 @@ describe("scrollable tab rows in the prompt", () => {
     expect(buildPrompt(doc(5), {}, undefined, lang)).not.toContain(marker[lang]);
   });
 });
+
+describe("bottom sheet", () => {
+  afterEach(() => setGlobalLang("ja"));
+
+  it.each(LANGS)("describes a sheet with its handle, background and top corners in %s", (lang) => {
+    const doc = fixture();
+    doc.groups = [{ id: "sheet", x: 0, y: 500, axis: "x", items: [{ ...makeItem("bottomSheet"), radiusTop: 16 }] }];
+    const prompt = buildPrompt(doc, {}, undefined, lang);
+    const words = {
+      ja: ["ボトムシート（上部にドラッグハンドル", "上の角丸 16dp", "ModalBottomSheet"],
+      en: ["bottom sheet with a drag handle at the top", "16dp top corners", "modal bottom sheets"],
+      zh: ["底部面板（顶部带拖动条", "上方圆角 16dp", "ModalBottomSheet"],
+      ko: ["하단 시트(위쪽 드래그 핸들 포함", "위 모서리 16dp", "ModalBottomSheet"],
+    }[lang];
+    for (const w of words) expect(prompt).toContain(w);
+  });
+
+  it.each(LANGS)("keeps a box a plain container in %s", (lang) => {
+    const doc = fixture();
+    doc.groups = [{ id: "box", x: 0, y: 500, axis: "x", items: [makeItem("box")] }];
+    const prompt = buildPrompt(doc, {}, undefined, lang);
+    expect(prompt).not.toContain("ModalBottomSheet");
+    expect(prompt).not.toContain("modal bottom sheets");
+  });
+});

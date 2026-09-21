@@ -42,6 +42,8 @@ import {
   frameRect,
   frameRadius,
   carryItemSize,
+  baseRadii,
+  migrateSheetBox,
   connectSpecOf,
   canJoin,
   iconSlotsOf,
@@ -354,6 +356,32 @@ describe("makeItem", () => {
     expect(box.size2).toBe(220);
     expect(box.radiusTop).toBe(28);
     expect(box.radiusBottom).toBe(28);
+  });
+
+  it("a box is no longer made with a handle state", () => {
+    expect(makeItem("box").checked).toBeUndefined();
+  });
+
+  it("a bottom sheet starts 320dp tall on surfaceContainerLow, rounded only at the top", () => {
+    const sheet = makeItem("bottomSheet");
+    expect(sheet.size2).toBe(320);
+    expect(sheet.fill).toBe("surfaceContainerLow");
+    expect(sheet.radiusTop).toBe(28);
+    expect(sheet.radiusBottom).toBeUndefined();
+    expect(baseRadii({ ...sheet, radiusTop: 12 })).toEqual({ tl: 12, tr: 12, bl: 0, br: 0 });
+  });
+
+  it("a box saved with its handle on is read back as a bottom sheet", () => {
+    const old: Item = { id: "1", kind: "box", label: "", icon: null, variant: "filled", checked: true, size2: 300, radiusTop: 20, radiusBottom: 20, fill: "surfaceContainerHigh" };
+    const out = migrateSheetBox(old);
+    expect(out.kind).toBe("bottomSheet");
+    expect(out.checked).toBeUndefined();
+    expect(out.radiusBottom).toBeUndefined();
+    expect(out.radiusTop).toBe(20);
+    expect(out.size2).toBe(300);
+    expect(out.fill).toBe("surfaceContainerHigh");
+    const plain = { ...old, checked: false };
+    expect(migrateSheetBox(plain)).toBe(plain);
   });
 });
 

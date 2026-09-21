@@ -627,7 +627,7 @@ export function PartInspector({
           <ListStyleRun item={item} onChange={onChange} p={p} />
         </Section>
       )}
-      {kind === "box" && (
+      {(kind === "box" || kind === "bottomSheet") && (
         /* a box's style is the theme role it is painted in */
         <Section id="part-style" icon="palette" title={t("style", lang)} p={p}>
           <FillRun value={item.fill ?? "surfaceContainerLow"} onChange={(fill) => onChange({ fill })} p={p} />
@@ -638,12 +638,6 @@ export function PartInspector({
       {kind === "navRail" && (
         <Section id="part-rail" icon="side_navigation" title={t("railState", lang)} p={p}>
           <RailRows item={item} onChange={onChange} p={p} standalone={railStandalone} />
-        </Section>
-      )}
-      {kind === "box" && (
-        /* a box with a handle along its top is a bottom sheet */
-        <Section id="part-state" icon="tune" title={t("state", lang)} p={p}>
-          <Toggle on={!!item.checked} onChange={(checked) => onChange({ checked })} p={p} icon="drag_handle" label={t("handle", lang)} grow />
         </Section>
       )}
       {kind === "loadingIndicator" && (
@@ -700,13 +694,13 @@ export function PartInspector({
             <CornerRows item={item} onChange={onChange} p={p} />
           </>,
         )}
-      {(kind === "box" || isPicture(kind)) &&
+      {(kind === "box" || kind === "bottomSheet" || isPicture(kind)) &&
         sizeSection(
-          /* a box and a picture are measured down first, then across; a camera and a map keep
-             the corners their kind gives them */
+          /* a box, a sheet and a picture are measured down first, then across; a camera and a map
+             keep the corners their kind gives them, and a sheet rounds only its top */
           <>
             {heightRow(
-              kind === "box"
+              kind === "box" || kind === "bottomSheet"
                 ? [
                     { key: "half", value: Math.round(frameH / 2) },
                     { key: "full", value: frameH },
@@ -715,6 +709,9 @@ export function PartInspector({
             )}
             {widthRows()}
             {(kind === "box" || kind === "image") && <CornerRows item={item} onChange={onChange} p={p} />}
+            {kind === "bottomSheet" && (
+              <Slider icon="rounded_corner" title={t("cornerTop", lang)} value={item.radiusTop ?? 28} min={0} max={48} step={1} onChange={(radiusTop) => onChange({ radiusTop })} p={p} />
+            )}
           </>,
         )}
       {kind === "carousel" &&

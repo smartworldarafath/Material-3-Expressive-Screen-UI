@@ -883,8 +883,8 @@ function Body({ item, p, tabScroll, menuShown }: { item: Item; p: Palette; tabSc
   if (MEASURED.includes(item.kind)) return <MeasuredContent item={item} p={p} />;
 
   switch (item.kind) {
-    case "box":
-      return item.checked ? (
+    case "bottomSheet":
+      return (
         <div style={{ display: "flex", justifyContent: "center", paddingTop: 16 }}>
           <div
             style={{
@@ -896,7 +896,7 @@ function Body({ item, p, tabScroll, menuShown }: { item: Item; p: Palette; tabSc
             }}
           />
         </div>
-      ) : null;
+      );
 
     case "iconButton":
       /* the icon is the one the M3 size the circle lands on asks for */
@@ -1692,7 +1692,8 @@ export function contentColor(item: Item, p: Palette): string {
 export function boxStyle(item: Item, p: Palette): React.CSSProperties {
   if (NO_BOX.includes(item.kind) || menuOpen(item)) return { background: "transparent", border: "none" };
   switch (item.kind) {
-    case "box": {
+    case "box":
+    case "bottomSheet": {
       const t = item.fill ?? "surfaceContainerLow";
       return { background: p[t], color: onToken(t, p), border: "none" };
     }

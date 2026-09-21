@@ -358,7 +358,9 @@ function itemJa(it: Item): string {
     case "divider":
       return "区切り線";
     case "box":
-      return `${it.size ?? PHONE_W}×${it.size2 ?? 220}dp の${it.checked ? "ボトムシート（上部にドラッグハンドル。" : "ボックス（"}背景 ${it.fill ?? "surfaceContainerLow"}、${boxCorners(it, "ja")}）`;
+      return `${it.size ?? PHONE_W}×${it.size2 ?? 220}dp のボックス（背景 ${it.fill ?? "surfaceContainerLow"}、${boxCorners(it, "ja")}）`;
+    case "bottomSheet":
+      return `${it.size ?? PHONE_W}×${it.size2 ?? 320}dp のボトムシート（上部にドラッグハンドル。背景 ${it.fill ?? "surfaceContainerLow"}、上の角丸 ${it.radiusTop ?? 28}dp）`;
     case "loadingIndicator":
       return `M3 Expressive の形が変化するローディングインジケータ${it.contained ? "（コンテナ付き）" : ""}`;
     case "linearProgress":
@@ -453,7 +455,9 @@ function itemEn(it: Item): string {
     case "divider":
       return "a divider";
     case "box":
-      return `a ${it.size ?? PHONE_W}×${it.size2 ?? 220}dp ${it.checked ? "bottom sheet with a drag handle at the top" : "box"} (background ${it.fill ?? "surfaceContainerLow"}, ${boxCorners(it, "en")})`;
+      return `a ${it.size ?? PHONE_W}×${it.size2 ?? 220}dp box (background ${it.fill ?? "surfaceContainerLow"}, ${boxCorners(it, "en")})`;
+    case "bottomSheet":
+      return `a ${it.size ?? PHONE_W}×${it.size2 ?? 320}dp bottom sheet with a drag handle at the top (background ${it.fill ?? "surfaceContainerLow"}, ${it.radiusTop ?? 28}dp top corners)`;
     case "loadingIndicator":
       return `the M3 Expressive shape-morphing loading indicator${it.contained ? " (contained)" : ""}`;
     case "linearProgress":
@@ -548,7 +552,9 @@ function itemZh(it: Item): string {
     case "divider":
       return "分割线";
     case "box":
-      return `${it.size ?? PHONE_W}×${it.size2 ?? 220}dp 的${it.checked ? "底部面板（顶部带拖动条，" : "容器框（"}背景 ${it.fill ?? "surfaceContainerLow"}，${boxCorners(it, "zh")}）`;
+      return `${it.size ?? PHONE_W}×${it.size2 ?? 220}dp 的容器框（背景 ${it.fill ?? "surfaceContainerLow"}，${boxCorners(it, "zh")}）`;
+    case "bottomSheet":
+      return `${it.size ?? PHONE_W}×${it.size2 ?? 320}dp 的底部面板（顶部带拖动条，背景 ${it.fill ?? "surfaceContainerLow"}，上方圆角 ${it.radiusTop ?? 28}dp）`;
     case "loadingIndicator":
       return `M3 Expressive 形状变化的加载指示器${it.contained ? "（带容器）" : ""}`;
     case "linearProgress":
@@ -620,7 +626,8 @@ function itemKo(it: Item): string {
     case "camera": return `${viewSize(it, 4 / 3)} 카메라 미리보기`;
     case "map": return `${viewSize(it, 3 / 4)} 지도`;
     case "divider": return "구분선";
-    case "box": return `${it.size ?? PHONE_W}×${it.size2 ?? 220}dp ${it.checked ? "하단 시트(위쪽 드래그 핸들 포함)" : "상자"}(배경 ${it.fill ?? "surfaceContainerLow"}, ${boxCorners(it, "ko")})`;
+    case "box": return `${it.size ?? PHONE_W}×${it.size2 ?? 220}dp 상자(배경 ${it.fill ?? "surfaceContainerLow"}, ${boxCorners(it, "ko")})`;
+    case "bottomSheet": return `${it.size ?? PHONE_W}×${it.size2 ?? 320}dp 하단 시트(위쪽 드래그 핸들 포함, 배경 ${it.fill ?? "surfaceContainerLow"}, 위 모서리 ${it.radiusTop ?? 28}dp)`;
     case "loadingIndicator": return `M3 Expressive 형태 변환 로딩 표시기${it.contained ? "(컨테이너 포함)" : ""}`;
     case "linearProgress": return `${it.wavy ? "물결 모양 " : ""}선형 진행 표시기(${it.value === undefined ? "불확정" : `${it.value}%`}${progressThickness(it) !== 4 ? `, 트랙 두께 ${progressThickness(it)}dp` : ""})`;
     case "circularProgress": return `${it.wavy ? "물결 모양 " : ""}원형 진행 표시기(${it.value === undefined ? "불확정" : `${it.value}%`}${progressThickness(it) !== 4 ? `, 트랙 두께 ${progressThickness(it)}dp` : ""})`;
@@ -718,7 +725,8 @@ function groupName(g: Group, lang: Lang): string {
   const noun = KIND_TEXT[lang][it.kind]?.noun ?? it.kind;
   const q = quote(lang);
   if (g.items.length > 1) return lang === "en" ? `the ${noun} group` : lang === "zh" ? `${noun}组` : lang === "ko" ? `${noun} 그룹` : `${noun}のグループ`;
-  if (it.kind === "box") return lang === "en" ? (it.checked ? "the bottom sheet" : "the box") : lang === "zh" ? (it.checked ? "底部面板" : "容器框") : lang === "ko" ? (it.checked ? "하단 시트" : "상자") : it.checked ? "ボトムシート" : "ボックス";
+  if (it.kind === "box") return lang === "en" ? "the box" : lang === "zh" ? "容器框" : lang === "ko" ? "상자" : "ボックス";
+  if (it.kind === "bottomSheet") return lang === "en" ? "the bottom sheet" : lang === "zh" ? "底部面板" : lang === "ko" ? "하단 시트" : "ボトムシート";
   if (hasText(it.label) && it.kind !== "text") return lang === "en" ? `the ${q(it.label)} ${noun}` : `${q(it.label)}${lang === "ko" ? " " : ""}${noun}`;
   return lang === "en" ? `the ${noun}` : noun;
 }
@@ -1072,8 +1080,8 @@ function paletteLines(p: Palette): string[] {
 /* ---------- per-component style notes ---------- */
 
 /** How each kind should look; only the kinds on the canvas are written out.
- *  `boxSheet` is the box note used when at least one box has its handle on. */
-const STYLE_NOTES: Record<Lang, Partial<Record<Kind | "boxSheet", string>>> = {
+ */
+const STYLE_NOTES: Record<Lang, Partial<Record<Kind, string>>> = {
   ja: {
     button:
       "ボタン: 高さ 56dp のミディアムサイズで、角は完全な丸（ピル型）。塗りつぶしは primary、トーナルは secondaryContainer、アウトラインは outline の 1dp 枠。横に連結したボタングループは 3dp の隙間で並べ、隣り合う内側の角だけ 8dp に小さくし、外側の角は丸のままにする（M3 Expressive の Connected button group）。高さを指定されたボタンは M3 のサイズ（XS 32dp / S 40dp / M 56dp / L 96dp / XL 136dp）に従い、左右の余白・文字・アイコンをそのサイズのものにし、角丸は高さの半分にする。",
@@ -1114,8 +1122,7 @@ const STYLE_NOTES: Record<Lang, Partial<Record<Kind | "boxSheet", string>>> = {
     map: "地図: 角丸 20dp。地図 SDK のビューをこの領域に置き、読み込み中は surfaceContainerHighest に地図アイコンを置く。",
     divider: "区切り線: 1dp の outlineVariant、左右に 16dp の余白。",
     box: "ボックス: 指定した背景色と角丸を持つ単なるコンテナ。中に重ねる部品の背景として使い、独自の挙動は付けない。",
-    boxSheet:
-      "ボックス / ボトムシート: 指定した背景色と角丸を持つコンテナ。ドラッグハンドル付きと書いたものだけはモーダルボトムシート（ModalBottomSheet）として下から出し、それ以外のボックスは単なる背景コンテナにする。",
+    bottomSheet: "ボトムシート: ModalBottomSheet として下から出す。上部中央にドラッグハンドルを置き、指定した背景色と上の角丸を使い、下の角は直角のまま。",
     loadingIndicator:
       "ローディング表示: M3 Expressive の形が変化する LoadingIndicator（回転しながら多角形の間を変形するもの）を使う。コンテナ付きは secondaryContainer の円の中に置く。",
     linearProgress: "リニアプログレス: 指定された太さ（指定がなければ 4dp）で、端を丸くする。波形指定のときは M3 Expressive の wavy スタイルにする。トラックは secondaryContainer、進捗は primary。",
@@ -1169,8 +1176,7 @@ const STYLE_NOTES: Record<Lang, Partial<Record<Kind | "boxSheet", string>>> = {
     map: "Map: 20dp corners. Place the map SDK view in this area; while it loads, show a map icon on surfaceContainerHighest.",
     divider: "Dividers: 1dp outlineVariant with 16dp horizontal insets.",
     box: "Boxes: plain containers with the specified background token and corner radii. They are the background for whatever is layered on them and have no behavior of their own.",
-    boxSheet:
-      "Boxes / bottom sheets: containers with the specified background token and corner radii. Only the ones described with a drag handle are modal bottom sheets that slide up from the bottom; every other box is a plain background container.",
+    bottomSheet: "Bottom sheets: modal bottom sheets that slide up from the bottom edge, with a drag handle centered at the top, the specified background token and top corner radius; the bottom corners stay square.",
     loadingIndicator:
       "Loading: use the M3 Expressive shape-morphing LoadingIndicator (the rotating polygon that morphs between shapes). The contained variant sits inside a secondaryContainer circle.",
     linearProgress: "Linear progress: use the stated track thickness (4dp unless stated) with round caps, and the M3 Expressive wavy style when specified. Track is secondaryContainer, progress is primary.",
@@ -1223,7 +1229,7 @@ const STYLE_NOTES: Record<Lang, Partial<Record<Kind | "boxSheet", string>>> = {
     map: "地图：圆角 20dp。在此区域放置地图 SDK 视图；加载期间在 surfaceContainerHighest 上显示地图图标。",
     divider: "分割线：1dp 的 outlineVariant，左右留 16dp 边距。",
     box: "容器框：只是带指定背景色和圆角的容器，作为叠放在其上的组件的背景，本身没有任何行为。",
-    boxSheet: "容器框／底部面板：带指定背景色和圆角的容器。只有描述中带拖动条的才做成从底部滑出的模态底部面板（ModalBottomSheet），其余容器框只是普通的背景容器。",
+    bottomSheet: "底部面板：做成从底部滑出的模态底部面板（ModalBottomSheet），顶部居中放拖动条，使用指定的背景色和上方圆角，下方保持直角。",
     loadingIndicator: "加载指示：使用 M3 Expressive 形状变化的 LoadingIndicator（旋转并在多边形之间变形）。带容器的放在 secondaryContainer 的圆形中。",
     linearProgress: "线性进度条：使用指定的轨道粗细（未指定则为 4dp）和圆形端帽。指定波浪形时使用 M3 Expressive 的 wavy 样式。轨道为 secondaryContainer，进度为 primary。",
     circularProgress: "圆形进度条：使用指定的轨道粗细（未指定则为 4dp）和圆形端帽。指定波浪形时使用 M3 Expressive 的 wavy 样式。",
@@ -1268,7 +1274,7 @@ const STYLE_NOTES: Record<Lang, Partial<Record<Kind | "boxSheet", string>>> = {
     map: "지도: 모서리 20dp. 이 영역에 지도 SDK 뷰를 두고, 불러오는 동안은 surfaceContainerHighest 위에 지도 아이콘을 둔다.",
     divider: "구분선: 1dp outlineVariant, 좌우 여백 16dp.",
     box: "상자: 지정된 배경 토큰과 모서리를 가진 단순 컨테이너. 겹쳐 놓은 부품의 배경으로 사용하며 자체 동작은 넣지 않는다.",
-    boxSheet: "상자/하단 시트: 지정된 배경과 모서리를 가진 컨테이너. 드래그 핸들이 명시된 것만 아래에서 올라오는 ModalBottomSheet로 만들고 나머지는 단순 배경 컨테이너로 둔다.",
+    bottomSheet: "하단 시트: 아래에서 올라오는 ModalBottomSheet로 만든다. 위쪽 가운데에 드래그 핸들을 두고 지정된 배경과 위 모서리를 쓰며 아래 모서리는 직각으로 둔다.",
     loadingIndicator: "로딩: 다각형이 회전하며 형태가 바뀌는 M3 Expressive LoadingIndicator를 사용한다. 컨테이너형은 secondaryContainer 원 안에 둔다.",
     linearProgress: "선형 진행 표시기: 지정된 트랙 두께(지정이 없으면 4dp)와 둥근 끝을 사용한다. 지정된 경우 M3 Expressive 물결 스타일을 사용하며 트랙은 secondaryContainer, 진행은 primary로 표시한다.",
     circularProgress: "원형 진행 표시기: 지정된 트랙 두께(지정이 없으면 4dp)와 둥근 끝을 사용한다. 지정된 경우 M3 Expressive 물결 스타일을 사용한다.",
@@ -1700,20 +1706,18 @@ export function buildPrompt(doc: Doc, widths: Record<string, number>, onlyFrameI
   }
 
   const kindsUsed: Kind[] = [];
-  let sheet = false;
   let wideRail = false;
   let legacyRail = false;
   for (const g of groups)
     for (const it of g.items) {
       if (!kindsUsed.includes(it.kind)) kindsUsed.push(it.kind);
-      if (it.kind === "box" && it.checked) sheet = true;
       if (it.kind === "navRail") {
         if (isWideRail(it)) wideRail = true;
         else legacyRail = true;
       }
     }
   const styleNotes = kindsUsed
-    .map((k) => (k === "navRail" && wideRail ? `${legacyRail ? `${STYLE_NOTES[lang].navRail} ` : ""}${WIDE_RAIL_STYLE[lang]}` : k === "box" && sheet ? STYLE_NOTES[lang].boxSheet : (platform === "web" && STYLE_NOTES_WEB[lang][k]) || STYLE_NOTES[lang][k]))
+    .map((k) => (k === "navRail" && wideRail ? `${legacyRail ? `${STYLE_NOTES[lang].navRail} ` : ""}${WIDE_RAIL_STYLE[lang]}` : (platform === "web" && STYLE_NOTES_WEB[lang][k]) || STYLE_NOTES[lang][k]))
     .filter((s): s is string => !!s);
 
   const title = only ? ph.titleOnly(q(only.name || ph.screen)) : doc.title.trim() || ph.titleAll(frames.length);
