@@ -945,6 +945,10 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
 
   /* ---------- coordinates ---------- */
   const canvasRect = () => canvasRef.current?.getBoundingClientRect();
+  const inCanvas = (clientX: number, clientY: number) => {
+    const r = canvasRect();
+    return !!r && clientX >= r.left && clientX <= r.right && clientY >= r.top && clientY <= r.bottom;
+  };
   const toWorld = (clientX: number, clientY: number) => {
     const r = canvasRect();
     const v = viewRef.current;
@@ -1708,25 +1712,17 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
         return;
       }
 
-      const rect = canvasRect();
-      const v = viewRef.current;
-      /* a Ctrl drop lands where the cursor is, untouched by any guide hold */
-      const rawX = loose ? d.px - d.offX : d.guide?.x ?? d.px - d.offX;
-      const rawY = loose ? d.py - d.offY : d.guide?.y ?? d.py - d.offY;
-      const screenL = (rawX + sz.w) * v.z + v.x;
-      const screenT = (rawY + sz.h) * v.z + v.y;
-      const screenR = rawX * v.z + v.x;
-      const screenB = rawY * v.z + v.y;
-      const cw = rect?.width ?? 0;
-      const ch = rect?.height ?? 0;
-      if (
-        d.fromPalette &&
-        (screenL < 0 || screenT < 0 || screenR > cw || screenB > ch)
-      ) {
+      /* A palette part is accepted by the canvas only when the pointer is released over it.
+       * Testing the part's bounds here made a click in the palette add any wide part whose
+       * preview happened to overlap the canvas. */
+      if (d.fromPalette && !inCanvas(e.clientX, e.clientY)) {
         setSelectedIds((cur) => cur.filter((x) => x !== item.id));
         setDrag(null);
         return;
       }
+      /* a Ctrl drop lands where the cursor is, untouched by any guide hold */
+      const rawX = loose ? d.px - d.offX : d.guide?.x ?? d.px - d.offX;
+      const rawY = loose ? d.py - d.offY : d.guide?.y ?? d.py - d.offY;
       if (d.fromPalette) snapshot();
       /* the screen the part was let go over, whatever size that screen is */
       const targetFrame = framesRef.current.find((f) => {
