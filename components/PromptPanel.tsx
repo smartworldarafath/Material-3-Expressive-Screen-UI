@@ -257,7 +257,9 @@ function PromptBox({
   }, [jump, areaRef]);
   const caret = () => areaRef.current && onCaret(areaRef.current.selectionStart);
   const [a, b] = lit >= 0 && lit < marks.length ? rangeOf(starts, marks, lit) : [0, 0];
-  const type: React.CSSProperties = { fontSize: FONT, lineHeight: LINE, fontFamily: "inherit", whiteSpace: "pre-wrap", wordBreak: "break-word", padding: `${PAD}px ${PAD}px ${FOOT}px`, boxSizing: "border-box" };
+  /* both layers keep the room a scrollbar takes, so the copy wraps where the text does even
+   * when only the text has a scrollbar to show */
+  const type: React.CSSProperties = { fontSize: FONT, lineHeight: LINE, fontFamily: "inherit", whiteSpace: "pre-wrap", wordBreak: "break-word", padding: `${PAD}px ${PAD}px ${FOOT}px`, boxSizing: "border-box", scrollbarGutter: "stable" };
   const fade = (top: boolean): React.CSSProperties => ({
     position: "absolute",
     left: 0,
