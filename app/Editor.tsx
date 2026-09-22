@@ -155,6 +155,9 @@ const OPEN = {
   mass: 0.55,
 };
 const INSTANT = { duration: 0 };
+/** a cancelled part shrinking away: long enough to be seen, short enough not to be waited for */
+const VANISH_MS = 180;
+const VANISH = { duration: VANISH_MS / 1000, ease: [0.3, 0, 0.8, 0.15] as const };
 /** a hole opening or closing: the run's offset travels on the same curve the hole's own width does */
 const GAP_TWEEN = { duration: SETTLE_MS / 1000, ease: [0.2, 0, 0, 1] as const };
 
@@ -205,6 +208,8 @@ type DragState = {
   overBin: boolean;
   snap: Snap | null;
   settling: boolean;
+  /** let go where it cannot land: the ghost shrinks away before the state is cleared */
+  vanishing: boolean;
 };
 
 type Gesture =
@@ -1262,6 +1267,12 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
   const [landed, setLanded] = useState<{ id: string; x: number; y: number } | null>(null);
   const landTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => { if (landTimer.current) clearTimeout(landTimer.current); }, []);
+  /* a drop that adds or deletes nothing: the ghost fades and shrinks where it was let go, so the
+   * cancel is seen rather than the part simply blinking out */
+  const vanishDrag = (d: DragState) => {
+    setDrag({ ...d, vanishing: true, overBin: false, snap: null, guide: null });
+    window.setTimeout(() => setDrag((cur) => (cur?.vanishing ? null : cur)), VANISH_MS);
+  };
   const lightLands = (id: string, x: number, y: number) => {
     setLanded({ id, x, y });
     if (landTimer.current) clearTimeout(landTimer.current);
@@ -1331,6 +1342,7 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
       overBin: false,
       snap: null,
       settling: false,
+      vanishing: false,
       guide: null,
     };
     dragRef.current = d;
@@ -1368,6 +1380,7 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
       overBin: false,
       snap: null,
       settling: false,
+      vanishing: false,
       guide: null,
     };
     dragRef.current = d;
@@ -1677,7 +1690,7 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
 
       if (d.overBin) {
         setSelectedIds((cur) => cur.filter((x) => x !== item.id));
-        setDrag(null);
+        vanishDrag(d);
         return;
       }
 
@@ -1724,7 +1737,7 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
        * preview happened to overlap the canvas. */
       if (d.fromPalette && !inCanvas(e.clientX, e.clientY)) {
         setSelectedIds((cur) => cur.filter((x) => x !== item.id));
-        setDrag(null);
+        vanishDrag(d);
         return;
       }
       /* a Ctrl drop lands where the cursor is, untouched by any guide hold */
@@ -3896,15 +3909,19 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
             zIndex: 50,
           }}
           animate={{
-            opacity: drag.overBin ? 0.4 : 1,
-            scale: drag.overBin ? 0.84 : 1,
+            opacity: drag.vanishing ? 0 : drag.overBin ? 0.4 : 1,
+            scale: drag.vanishing ? 0.6 : drag.overBin ? 0.84 : 1,
           }}
-          transition={{
-            type: "spring",
-            stiffness: 520,
-            damping: 34,
-            mass: 0.6,
-          }}
+          transition={
+            drag.vanishing
+              ? VANISH
+              : {
+                  type: "spring",
+                  stiffness: 520,
+                  damping: 34,
+                  mass: 0.6,
+                }
+          }
         >
           <M3Node
             item={drag.item}
