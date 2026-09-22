@@ -1633,8 +1633,11 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
 
       /* a part being added from the palette has nothing to delete yet; dropping it back there just cancels */
       d.overBin = !d.fromPalette && inBin(e.clientX);
+      /* a palette part only lands where the pointer is released inside the canvas, so it must
+       * not join a run (nor hold a gap open) while the pointer is still over the palette */
+      const outside = d.fromPalette && !inCanvas(e.clientX, e.clientY);
       d.snap =
-        d.overBin || ctrlHeld
+        d.overBin || ctrlHeld || outside
           ? null
           : findSnap(d.base, pt.x - d.baseOffX, pt.y - d.baseOffY);
       /* the run that is standing still sets the size: the part in flight takes it while it is
