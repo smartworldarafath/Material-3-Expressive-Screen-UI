@@ -965,6 +965,62 @@ function rowText(row: LNode[], where: string, lang: Lang, within: Rect): string 
   return `${where}, in one row from left to right: ${descs.join(", ")} (keep them on the same line, vertically centered; never stack or wrap them${stretch}).`;
 }
 
+/** kinds whose side-by-side rows can read as one grid */
+const GRID_KINDS: Kind[] = ["card", "image"];
+/** the farthest two column edges or cell widths may be apart and still count as one grid */
+const GRID_SNAP = 6;
+
+type Grid = { rows: LNode[][]; cols: number; colGap: number; rowGap: number };
+
+/** Rows starting at `from` that line up as a grid: single cards (or single images) of one
+ *  kind, at least two rows of at least two cells, every row with the same column count
+ *  except a shorter last one, columns sharing their left edges and all cells one width.
+ *  Anything with parts on top of it is left to the row-by-row description. */
+function gridAt(rows: LNode[][], from: number): Grid | null {
+  const first = rows[from];
+  if (first.length < 2) return null;
+  const kind = first[0].g.items[0].kind;
+  if (!GRID_KINDS.includes(kind)) return null;
+  const cell = (n: LNode) => n.g.items.length === 1 && n.g.items[0].kind === kind && !n.children.length;
+  const width = first[0].bb.r - first[0].bb.l;
+  const fits = (row: LNode[]) =>
+    row.length <= first.length &&
+    row.every((n, j) => cell(n) && Math.abs(n.bb.l - first[j].bb.l) <= GRID_SNAP && Math.abs(n.bb.r - n.bb.l - width) <= GRID_SNAP);
+  if (!fits(first)) return null;
+  const out = [first];
+  for (let i = from + 1; i < rows.length; i++) {
+    if (!fits(rows[i])) break;
+    out.push(rows[i]);
+    if (rows[i].length < first.length) break; // a short row closes the grid
+  }
+  if (out.length < 2) return null;
+  const bottom = (row: LNode[]) => Math.max(...row.map((n) => n.bb.b));
+  const top = (row: LNode[]) => Math.min(...row.map((n) => n.bb.t));
+  return {
+    rows: out,
+    cols: first.length,
+    colGap: Math.max(0, Math.round(first[1].bb.l - first[0].bb.r)),
+    rowGap: Math.max(0, Math.round(top(out[1]) - bottom(out[0]))),
+  };
+}
+
+/** the grid phrase: how many columns, the gaps, then every cell in reading order */
+function gridText(grid: Grid, where: string, lang: Lang): string {
+  const cells = grid.rows.flat();
+  const kind = cells[0].g.items[0].kind;
+  const noun = KIND_TEXT[lang][kind]?.noun ?? kind;
+  const n = cells.length;
+  const c = grid.cols;
+  const list = cells.map((x, i) => `(${i + 1}) ${groupText(x.g, lang)}`).join(lang === "en" || lang === "ko" ? "; " : "；");
+  if (lang === "ja")
+    return `${where}、${noun}${n}個を${c}列のグリッドに並べます（列の間隔 ${grid.colGap}dp、行の間隔 ${grid.rowGap}dp。セルはすべて同じ幅で、左から右へ、上の行から順に埋める。1行に並べたり縦1列に積んだりせず${c}列を保つ）: ${list}。`;
+  if (lang === "zh")
+    return `${where}，将 ${n} 个${noun}排成 ${c} 列网格（列间距 ${grid.colGap}dp，行间距 ${grid.rowGap}dp；所有单元格等宽，从左到右、从上一行开始依次填充；保持 ${c} 列，不要排成一行或竖着堆叠）：${list}。`;
+  if (lang === "ko")
+    return `${where}, ${noun} ${n}개를 ${c}열 그리드로 배치합니다(열 간격 ${grid.colGap}dp, 행 간격 ${grid.rowGap}dp. 모든 칸은 같은 너비이며 왼쪽에서 오른쪽으로, 위 행부터 채운다. 한 줄로 늘어놓거나 세로로 쌓지 않고 ${c}열을 유지): ${list}.`;
+  return `${where}, a grid of ${n} ${noun}s in ${c} columns (${grid.colGap}dp between columns, ${grid.rowGap}dp between rows; every cell the same width, filled left to right, row by row; keep ${c} columns rather than one long row or a single stack): ${list}.`;
+}
+
 function describeNodes(lines: string[], nodes: LNode[], within: Rect | null, widths: Record<string, number>, lang: Lang, depth: number, phone: boolean) {
   const rows = rowsOf(nodes);
   const pad = "  ".repeat(depth);
@@ -974,7 +1030,10 @@ function describeNodes(lines: string[], nodes: LNode[], within: Rect | null, wid
     r: Math.max(...nodes.map((n) => n.bb.r)),
     b: Math.max(...nodes.map((n) => n.bb.b)),
   };
-  rows.forEach((row, i) => {
+  for (let i = 0; i < rows.length; i++) {
+    /* rows that line up as a grid are written once, as the grid, in place of each row */
+    const grid = gridAt(rows, i);
+    const row = grid ? grid.rows.flat() : rows[i];
     const first = row[0];
     const rowRect: Rect = {
       l: Math.min(...row.map((n) => n.bb.l)),
@@ -985,6 +1044,11 @@ function describeNodes(lines: string[], nodes: LNode[], within: Rect | null, wid
     let where: string;
     if (within) where = zone(rowRect, box, lang, phone);
     else where = lang === "ja" ? (i === 0 ? "まず" : "その下に") : lang === "zh" ? (i === 0 ? "首先" : "其下方") : lang === "ko" ? (i === 0 ? "먼저" : "그 아래에") : i === 0 ? "First" : "Below that";
+    if (grid) {
+      lines.push(`${pad}- ${gridText(grid, where, lang)}`);
+      i += grid.rows.length - 1;
+      continue;
+    }
     /* a part that partly covers an earlier sibling is drawn on top of it */
     const overlaps: string[] = [];
     if (row.length === 1) {
@@ -1008,7 +1072,7 @@ function describeNodes(lines: string[], nodes: LNode[], within: Rect | null, wid
       );
       describeNodes(lines, n.children, n.bb, widths, lang, depth + 2, false);
     }
-  });
+  }
 }
 
 const RAIL_LEAD: Record<Lang, string> = { ja: "左端に", en: "Along the left edge: ", zh: "左缘：", ko: "왼쪽 가장자리에 " };

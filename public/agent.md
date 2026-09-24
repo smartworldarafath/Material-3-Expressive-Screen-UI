@@ -151,6 +151,7 @@ Icons are Material Symbols names (`home`, `search`, `add`, `favorite`, `settings
 - Prefer the plain variant (`"filled"`) and the default sizes; the person retunes the theme afterwards.
 - Buttons: a main action on its own gets `"size": 380` (full content width); two side by side get `"size": 182` each in one connected group; a button next to text stays text-sized. Do not scatter small buttons around a screen.
 - Cards: give one a `size2` only when it holds more than a headline and a line of body, and keep a stack of cards the same height. A list of similar rows is a `listItem` run, not a column of cards.
+- Grids: put cards or images of one width in rows whose columns share their left edges, each part in its own group (on a phone, two columns of `"size": 182`, 16 apart). Two or more such rows are written into the prompt as one grid.
 
 ## A good sketch
 

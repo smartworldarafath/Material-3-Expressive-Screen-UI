@@ -385,3 +385,63 @@ describe("bottom sheet", () => {
     expect(prompt).not.toContain("modal bottom sheets");
   });
 });
+
+describe("cards and images laid out as a grid", () => {
+  afterEach(() => setGlobalLang("ja"));
+
+  const GRID: Record<Lang, (cols: number) => string> = {
+    ja: (c) => `${c}列のグリッド`,
+    en: (c) => `in ${c} columns`,
+    zh: (c) => `${c} 列网格`,
+    ko: (c) => `${c}열 그리드`,
+  };
+  const ONE_ROW: Record<Lang, string> = { ja: "横一列に並べます", en: "in one row from left to right", zh: "横向排成一行", ko: "한 행에 다음 항목을 배치합니다" };
+
+  /* cells of `w` wide cards (or images) at the given column and row offsets inside a phone screen */
+  function layout(lang: Lang, cells: { x: number; y: number; kind?: Item["kind"]; w?: number }[]) {
+    setGlobalLang(lang);
+    const doc = fixture();
+    doc.groups = cells.map((c, i) => ({
+      id: `g${i}`,
+      x: c.x,
+      y: c.y,
+      axis: "x" as const,
+      items: [{ ...makeItem(c.kind ?? "card"), id: `c${i}`, label: `Cell ${i + 1}`, size: c.w ?? 182, size2: 200 }],
+    }));
+    const prompt = buildPrompt(doc, {}, undefined, lang);
+    return prompt.slice(prompt.indexOf(SECTIONS[lang][2]), prompt.indexOf(SECTIONS[lang][4]));
+  }
+  const square = (cols: number, count: number, kind?: Item["kind"]) =>
+    Array.from({ length: count }, (_, i) => ({ x: 16 + (i % cols) * 198, y: 100 + Math.floor(i / cols) * 216, kind }));
+
+  it.each(LANGS)("writes aligned rows of cards as one grid with its gaps, every cell in reading order, in %s", (lang) => {
+    const text = layout(lang, square(2, 4));
+    expect(text).toContain(GRID[lang](2));
+    expect(text).toContain("16dp");
+    expect(text).not.toContain(ONE_ROW[lang]);
+    const at = [1, 2, 3, 4].map((n) => text.indexOf(`Cell ${n}`));
+    expect(at.every((p) => p >= 0)).toBe(true);
+    expect([...at].sort((a, b) => a - b)).toEqual(at);
+  });
+
+  it.each(LANGS)("keeps a shorter last row inside the grid in %s", (lang) => {
+    const text = layout(lang, square(2, 3));
+    expect(text).toContain(GRID[lang](2));
+    expect(text).toContain("Cell 3");
+    expect(text).not.toContain(ONE_ROW[lang]);
+  });
+
+  it.each(LANGS)("reads images the same way in %s", (lang) => {
+    expect(layout(lang, square(2, 4, "image"))).toContain(GRID[lang](2));
+  });
+
+  it.each(LANGS)("leaves a single row, mixed kinds and cells off the columns as rows in %s", (lang) => {
+    expect(layout(lang, square(2, 2))).not.toContain(GRID[lang](2));
+    const mixed = square(2, 4).map((c, i) => (i === 3 ? { ...c, kind: "image" as const } : c));
+    expect(layout(lang, mixed)).toContain(ONE_ROW[lang]);
+    const shifted = square(2, 4).map((c, i) => (i === 2 ? { ...c, x: c.x + 40 } : c));
+    expect(layout(lang, shifted)).not.toContain(GRID[lang](2));
+    const narrow = square(2, 4).map((c, i) => (i === 3 ? { ...c, w: 160 } : c));
+    expect(layout(lang, narrow)).not.toContain(GRID[lang](2));
+  });
+});
