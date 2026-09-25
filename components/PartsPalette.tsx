@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { CATEGORIES, KIND_ORDER, KIND_SPEC, Category, Kind, Palette } from "@/lib/tokens";
+import { CATEGORIES, KIND_ORDER, KIND_SPEC, PALETTE_HIDDEN, Category, Kind, Palette } from "@/lib/tokens";
 import { Icon } from "./M3Node";
 import { KIND_TEXT, t, useLang } from "@/lib/i18n";
 import { Field, Section, Tile } from "./ui";
@@ -25,14 +25,16 @@ export function PartsPalette({
 }) {
   const lang = useLang();
   const [q, setQ] = useState("");
-  const labelOf = (k: Kind) => lang === "en" ? KIND_SPEC[k].label : KIND_TEXT[lang][k]?.noun ?? KIND_SPEC[k].label;
+  const labelOf = (k: Kind) => (lang === "en" ? KIND_SPEC[k].label : (KIND_TEXT[lang][k]?.noun ?? KIND_SPEC[k].label));
 
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase();
-    if (!s) return KIND_ORDER;
-    return KIND_ORDER.filter((k) => {
+    /* the shapes a part switches into in its own panel are not tiles of their own */
+    const listed = KIND_ORDER.filter((k) => !PALETTE_HIDDEN.includes(k));
+    if (!s) return listed;
+    return listed.filter((k) => {
       const sp = KIND_SPEC[k];
-      return labelOf(k).toLowerCase().includes(s) || sp.label.toLowerCase().includes(s) || sp.noun.includes(s) || k.toLowerCase().includes(s);
+      return labelOf(k).toLowerCase().includes(s) || sp.label.toLowerCase().includes(s) || sp.noun.toLowerCase().includes(s) || k.toLowerCase().includes(s);
     });
   }, [q, lang]);
 
@@ -66,22 +68,23 @@ export function PartsPalette({
       <div className="no-scrollbar" style={{ flex: 1, overflowY: "auto", overflowX: "hidden", padding: "0 8px" }}>
         {!q && favorites.length > 0 && (
           <Section id="fav" icon="star" title={t("favorites", lang)} p={p}>
-            <div style={grid}>{favorites.filter((k) => KIND_SPEC[k]).map(tile)}</div>
+            <div style={grid}>{favorites.filter((k) => KIND_SPEC[k] && !PALETTE_HIDDEN.includes(k)).map(tile)}</div>
           </Section>
         )}
         {q ? (
           <div style={{ ...grid, padding: "4px 4px 12px" }}>
             {filtered.map(tile)}
             {filtered.length === 0 && (
-              <div style={{ gridColumn: "1 / -1", color: p.outline, fontSize: 13, padding: 12, textAlign: "center" }}>
+              <div role="status" style={{ gridColumn: "1 / -1", color: p.outline, fontSize: 13, padding: 12, textAlign: "center", display: "grid", placeItems: "center", gap: 6 }}>
                 <Icon name="search_off" size={28} />
+                <span>{t("noMatch", lang)}</span>
               </div>
             )}
           </div>
         ) : (
           CATEGORIES.map((c) => (
             <Section key={c.key} id={`cat:${c.key}`} icon={c.icon} title={lang === "en" ? c.label : CATEGORY_TEXT[lang][c.key]} p={p}>
-              <div style={grid}>{KIND_ORDER.filter((k) => KIND_SPEC[k].category === c.key).map(tile)}</div>
+              <div style={grid}>{KIND_ORDER.filter((k) => KIND_SPEC[k].category === c.key && !PALETTE_HIDDEN.includes(k)).map(tile)}</div>
             </Section>
           ))
         )}

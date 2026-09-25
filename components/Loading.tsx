@@ -105,7 +105,8 @@ const LINEAR_WAVELENGTH = 40;
 const LINEAR_AMPLITUDE = 3;
 const WAVE_SPEED = 40; // px per second
 
-function wavePath(x0: number, x1: number, mid: number, amp: number, phase: number, wl: number) {
+/** the track as a line of sine: also what the panel draws its small pictures of a bar with */
+export function wavePath(x0: number, x1: number, mid: number, amp: number, phase: number, wl: number) {
   if (x1 - x0 < 0.5) return "";
   const step = amp > 0 ? 2 : Math.max(2, x1 - x0);
   let d = "";
@@ -215,7 +216,8 @@ const circEase = bezier(0.4, 0, 0.2, 1);
 const CIRC_WAVELENGTH = 20;
 const CIRC_AMPLITUDE = 1.5;
 
-function arcPath(
+/** the same, bent around a circle: the panel draws its pictures of a ring with it */
+export function arcPath(
   cx: number,
   cy: number,
   r: number,

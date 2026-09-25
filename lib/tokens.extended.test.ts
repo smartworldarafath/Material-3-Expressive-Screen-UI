@@ -52,6 +52,8 @@ import {
   frameRadius,
   frameIconOf,
   carryItemSize,
+  baseRadii,
+  migrateSheetBox,
   connectSpecOf,
   canJoin,
   iconSlotsOf,
@@ -70,8 +72,6 @@ import {
   isTextToken,
   cardImagePosOf,
   cardImageSizeOf,
-  cardLayoutOf,
-  cardLayoutPatch,
   CARD_IMAGE_MIN,
   sizeOf,
   isCardImagePos,
@@ -409,6 +409,32 @@ describe("makeItem", () => {
     expect(box.radiusTop).toBe(28);
     expect(box.radiusBottom).toBe(28);
   });
+
+  it("a box is no longer made with a handle state", () => {
+    expect(makeItem("box").checked).toBeUndefined();
+  });
+
+  it("a bottom sheet starts 320dp tall on surfaceContainerLow, rounded only at the top", () => {
+    const sheet = makeItem("bottomSheet");
+    expect(sheet.size2).toBe(320);
+    expect(sheet.fill).toBe("surfaceContainerLow");
+    expect(sheet.radiusTop).toBe(28);
+    expect(sheet.radiusBottom).toBeUndefined();
+    expect(baseRadii({ ...sheet, radiusTop: 12 })).toEqual({ tl: 12, tr: 12, bl: 0, br: 0 });
+  });
+
+  it("a box saved with its handle on is read back as a bottom sheet", () => {
+    const old: Item = { id: "1", kind: "box", label: "", icon: null, variant: "filled", checked: true, size2: 300, radiusTop: 20, radiusBottom: 20, fill: "surfaceContainerHigh" };
+    const out = migrateSheetBox(old);
+    expect(out.kind).toBe("bottomSheet");
+    expect(out.checked).toBeUndefined();
+    expect(out.radiusBottom).toBeUndefined();
+    expect(out.radiusTop).toBe(20);
+    expect(out.size2).toBe(300);
+    expect(out.fill).toBe("surfaceContainerHigh");
+    const plain = { ...old, checked: false };
+    expect(migrateSheetBox(plain)).toBe(plain);
+  });
 });
 
 describe("card image placement helpers", () => {
@@ -421,8 +447,8 @@ describe("card image placement helpers", () => {
   });
 
   it("accepts exactly the four placements", () => {
-    for (const pos of ["top", "leading", "trailing", "background"]) expect(isCardImagePos(pos)).toBe(true);
-    for (const bad of [undefined, null, "bottom", "left", 3]) expect(isCardImagePos(bad)).toBe(false);
+    for (const pos of ["top", "bottom", "leading", "trailing", "background"]) expect(isCardImagePos(pos)).toBe(true);
+    for (const bad of [undefined, null, "middle", "left", 3]) expect(isCardImagePos(bad)).toBe(false);
   });
 
   it("keeps sketches saved before placement existed on top", () => {
@@ -487,13 +513,5 @@ describe("card image placement helpers", () => {
     expect(cardScrimOf("#ffffff", "center")).toMatch(/^rgba\(0,0,0,/);
   });
 
-  it("folds the image switch and its placement into one layout choice", () => {
-    expect(cardLayoutOf(makeItem("card"))).toBe("top");
-    expect(cardLayoutOf({ ...makeItem("card"), noImage: true, imagePos: "leading" })).toBe("none");
-    expect(cardLayoutOf({ ...makeItem("card"), imagePos: "background" })).toBe("background");
-    expect(cardLayoutPatch("top")).toEqual({ noImage: undefined, imagePos: undefined });
-    expect(cardLayoutPatch("trailing")).toEqual({ noImage: undefined, imagePos: "trailing" });
-    expect(cardLayoutPatch("none")).toEqual({ noImage: true, imagePos: undefined });
-  });
 });
 

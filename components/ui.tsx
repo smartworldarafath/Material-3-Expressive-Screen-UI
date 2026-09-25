@@ -1,11 +1,256 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { COLOR_TOKENS, CardLayout, ColorToken, PLACES, Palette, Place, R_INNER, TEXT_TOKENS, TextToken, clamp } from "@/lib/tokens";
-import { AnimatePresence, motion } from "motion/react";
-import { COLOR_TOKEN_TEXT, TEXT_TOKEN_TEXT, t, useLang } from "@/lib/i18n";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { COLOR_TOKENS, ColorToken, PLACES, Palette, Place, R_INNER, SETTLE_MS, clamp, draftGradient } from "@/lib/tokens";
+import { AnimatePresence, animate, motion, useReducedMotion } from "motion/react";
+import { COLOR_TOKEN_TEXT, t, useLang } from "@/lib/i18n";
 import { Icon } from "./M3Node";
-import { onColorFor } from "@/lib/color";
+
+/** the row of tabs and the clear gap under it, and the band a panel with no tabs fades its top with */
+const PANEL_TABS_H = 48;
+const PANEL_TABS_GAP = 16;
+export const PANEL_FADE_H = 28;
+/** how the lock comes over the panel and goes away again: the blur first, then the switch and
+ *  the line under it; on the way out the switch turns itself off before any of it fades */
+const VEIL_IN = 0.22;
+const BADGE_IN = 0.18;
+const SWITCH_OFF = 0.26;
+const LOCK_OUT_MS = Math.round((SWITCH_OFF + 0.2) * 1000) + 40;
+/** a cover that has nothing to undo has only its own fade to wait for */
+const AWAY_MS = 240;
+
+/** A part's panel: the title row and the tabs stay where they are, and everything that changes
+ *  the part scrolls under them. While the part is locked that whole area goes behind a blur and
+ *  out of reach -- the design is still there to read, and the tabs still turn, so the author can
+ *  look the part over without being able to touch it. The switch in the middle of the blur is
+ *  the lock itself, and turning it off is how the part comes back. */
+export function PanelShell({
+  p,
+  locked,
+  onUnlock,
+  head,
+  tabs,
+  children,
+}: {
+  p: Palette;
+  locked?: boolean;
+  onUnlock?: () => void;
+  head: React.ReactNode;
+  /** the row of tabs, if the part has one: it floats over what scrolls rather than sitting on it */
+  tabs?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  /* The cover leaves in one of two ways. Turned off at its own switch, it undoes itself in plain
+     sight: the switch goes off first and the blur only then. Gone for any other reason -- the
+     panel is showing another part now -- there is nothing to undo, so it simply fades, and the
+     author is not told a lock came off when none did. */
+  const [drawn, setDrawn] = useState(!!locked);
+  const [phase, setPhase] = useState<"on" | "off" | "away">(locked ? "on" : "away");
+  const bySwitch = useRef(false);
+  useEffect(() => {
+    if (locked) {
+      bySwitch.current = false;
+      setDrawn(true);
+      setPhase("on");
+      return;
+    }
+    if (!drawn || phase !== "on") return;
+    const undone = bySwitch.current;
+    bySwitch.current = false;
+    setPhase(undone ? "off" : "away");
+    const id = setTimeout(() => setDrawn(false), undone ? LOCK_OUT_MS : AWAY_MS);
+    return () => clearTimeout(id);
+  }, [locked, drawn, phase]);
+
+  return (
+    <div style={{ height: "100%", display: "flex", flexDirection: "column", minHeight: 0 }}>
+      <div style={{ padding: "12px 12px 0", flex: "0 0 auto" }}>{head}</div>
+      <div style={{ position: "relative", flex: 1, minHeight: 0 }}>
+        <div
+          className="no-scrollbar"
+          inert={locked || undefined}
+          /* under a row of tabs the content starts below them; with none, it starts under the fade's thick part */
+          style={{ padding: `${tabs ? PANEL_TABS_H + PANEL_TABS_GAP : PANEL_FADE_H / 2}px 12px 20px`, overflowY: "auto", height: "100%" }}
+        >
+          {children}
+        </div>
+        {/* the tabs keep their place while the rest scrolls under them, and the panel's own colour
+            is drawn behind them, thinning out to nothing by where the row ends: what passes up
+            behind the two words dissolves into the panel rather than being cut off against a rule */}
+        <div
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            /* the panel's colour reaches exactly as far as the rule used to, and thins out
+               across the two words on its way there */
+            height: tabs ? PANEL_TABS_H : PANEL_FADE_H,
+            /* the tabs ride above the lock's blur: they are what stays usable while it is on */
+            zIndex: tabs ? 4 : 2,
+            background: tabs
+              ? `linear-gradient(to bottom, ${p.surface} 0%, ${p.surface} 24%, ${p.surface}00 100%)`
+              : `linear-gradient(to bottom, ${p.surface}, ${p.surface}00)`,
+            pointerEvents: tabs ? undefined : "none",
+          }}
+        >
+          {tabs}
+        </div>
+        {drawn && (
+          <LockedCover
+            p={p}
+            phase={phase}
+            onUnlock={
+              onUnlock &&
+              (() => {
+                bySwitch.current = true;
+                onUnlock();
+              })
+            }
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** what a locked part's panel is covered with: the blur, the lock on its switch, and a line saying
+ *  what the switch is for */
+function LockedCover({ p, phase, onUnlock }: { p: Palette; phase: "on" | "off" | "away"; onUnlock?: () => void }) {
+  const lang = useLang();
+  const reducedMotion = useReducedMotion();
+  const on = phase === "on";
+  /* on its way out with the lock still on: the switch keeps its place and only the cover fades */
+  const away = phase === "away";
+  const out = (d: number) => (reducedMotion ? { duration: 0 } : { duration: d, ease: [0.2, 0, 0, 1] as const, ...(away ? {} : { delay: SWITCH_OFF }) });
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: on ? 1 : 0 }}
+      transition={reducedMotion ? { duration: 0 } : on ? { duration: VEIL_IN, ease: [0.2, 0, 0, 1] } : out(0.2)}
+      onPointerDown={(e) => e.preventDefault()}
+      style={{
+        position: "absolute",
+        inset: 0,
+        zIndex: 3,
+        display: "grid",
+        placeItems: "center",
+        padding: 24,
+        pointerEvents: on ? undefined : "none",
+        backdropFilter: "blur(3px)",
+        WebkitBackdropFilter: "blur(3px)",
+        background: `color-mix(in srgb, ${p.surface} 55%, transparent)`,
+      }}
+    >
+      <motion.div
+        initial={{ opacity: 0, y: 6 }}
+        animate={{ opacity: on ? 1 : 0, y: on ? 0 : 6 }}
+        transition={reducedMotion ? { duration: 0 } : on ? { duration: 0.2, ease: [0.2, 0, 0, 1], delay: BADGE_IN } : out(0.18)}
+        style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12, textAlign: "center" }}
+      >
+        {/* a cover that is only fading away keeps the lock shut: nothing was undone */}
+        <LockSwitch on={on || away} p={p} onOff={on ? onUnlock : undefined} />
+        <span style={{ fontSize: 12, lineHeight: 1.5, color: p.onSurfaceVariant, whiteSpace: "nowrap", maxWidth: "100%" }}>{t("lockedEdit", lang)}</span>
+      </motion.div>
+    </motion.div>
+  );
+}
+
+/* the switch the lock sits on: on is locked, and the lock itself rides in the knob. It is turned
+ * off by a tap or by dragging the knob back, the way a real one would be. */
+const TRACK_W = 56;
+const TRACK_H = 34;
+const KNOB = 26;
+const KNOB_INSET = 4;
+const TRAVEL = TRACK_W - KNOB - KNOB_INSET * 2;
+
+function LockSwitch({ on, p, onOff }: { on: boolean; p: Palette; onOff?: () => void }) {
+  const lang = useLang();
+  const reducedMotion = useReducedMotion();
+  const [drag, setDrag] = useState<number | null>(null);
+  const from = useRef(0);
+  const moved = useRef(0);
+  const x = drag !== null ? drag : on ? TRAVEL : 0;
+
+  const start = (e: React.PointerEvent) => {
+    if (!onOff || !on) return;
+    e.preventDefault();
+    e.stopPropagation();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    from.current = e.clientX;
+    moved.current = 0;
+    setDrag(TRAVEL);
+  };
+  const move = (e: React.PointerEvent) => {
+    if (drag === null) return;
+    const dx = e.clientX - from.current;
+    moved.current = Math.max(moved.current, Math.abs(dx));
+    setDrag(clamp(TRAVEL + dx, 0, TRAVEL));
+  };
+  const end = (e: React.PointerEvent) => {
+    if (drag === null) return;
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
+    /* a tap turns it off; so does a drag that has taken the knob most of the way back */
+    const off = moved.current < 4 || drag < TRAVEL / 2;
+    setDrag(null);
+    if (off) onOff?.();
+  };
+
+  return (
+    <span
+      role="switch"
+      aria-checked={on}
+      aria-label={t(on ? "unlock" : "lock", lang)}
+      title={t(on ? "unlock" : "lock", lang)}
+      tabIndex={0}
+      onPointerDown={start}
+      onPointerMove={move}
+      onPointerUp={end}
+      onPointerCancel={end}
+      onKeyDown={(e) => {
+        if (e.key !== "Enter" && e.key !== " ") return;
+        /* the key is the switch's own: the canvas shortcuts behind the panel do not hear it */
+        e.preventDefault();
+        e.stopPropagation();
+        if (on) onOff?.();
+      }}
+      style={{
+        position: "relative",
+        width: TRACK_W,
+        height: TRACK_H,
+        borderRadius: TRACK_H / 2,
+        boxSizing: "border-box",
+        background: on ? p.primary : p.surfaceContainerHighest,
+        border: on ? "2px solid transparent" : `2px solid ${p.outline}`,
+        transition: "background 200ms, border-color 200ms",
+        cursor: onOff ? "pointer" : "default",
+        touchAction: "none",
+        display: "block",
+      }}
+    >
+      <motion.span
+        initial={{ x: 0 }}
+        animate={{ x }}
+        transition={reducedMotion || drag !== null ? { duration: 0 } : { type: "spring", stiffness: 480, damping: 36, mass: 0.6 }}
+        style={{
+          position: "absolute",
+          left: KNOB_INSET - 2,
+          top: KNOB_INSET - 2,
+          width: KNOB,
+          height: KNOB,
+          borderRadius: KNOB / 2,
+          display: "grid",
+          placeItems: "center",
+          background: on ? p.onPrimary : p.outline,
+          color: on ? p.onPrimaryContainer : p.surfaceContainerHighest,
+          transition: "background 200ms, color 200ms",
+        }}
+      >
+        <Icon name={on ? "lock" : "lock_open"} size={16} />
+      </motion.span>
+    </span>
+  );
+}
 
 export function IconBtn({
   icon,
@@ -17,6 +262,8 @@ export function IconBtn({
   danger,
   disabled,
   fill,
+  hasPopup,
+  expanded,
 }: {
   icon: string;
   on?: boolean;
@@ -27,9 +274,14 @@ export function IconBtn({
   danger?: boolean;
   disabled?: boolean;
   fill?: boolean;
+  /** the button opens a menu or a list, and whether it is open now */
+  hasPopup?: "menu" | "listbox";
+  expanded?: boolean;
 }) {
   return (
     <button
+      aria-haspopup={hasPopup}
+      aria-expanded={expanded}
       onClick={onClick}
       title={title}
       aria-label={title}
@@ -59,9 +311,26 @@ export function IconBtn({
   );
 }
 
-export type SegOption<K extends string> = { key: K; icon?: string; label?: string; title?: string; /** small marker: this option carries something */ dot?: boolean; /** this option alone takes the spare width */ grow?: boolean; /** an icon-only option that should not shrink to a square */ wide?: boolean };
+export type SegOption<K extends string> = {
+  key: K;
+  icon?: string;
+  label?: string;
+  title?: string;
+  /** a drawing of the choice, shown in place of an icon: a small picture of the thing itself */
+  node?: React.ReactNode;
+  /** small marker: this option carries something */
+  dot?: boolean;
+  /** this option alone takes the spare width */
+  grow?: boolean;
+  /** an icon-only option that should not shrink to a square */
+  wide?: boolean;
+  /** how this one cell is painted, over the run's own look: a cell that shows a style wears it */
+  style?: React.CSSProperties;
+};
 
-/** Connected-button group with the same fused corners as the canvas. */
+/** Connected-button group with the same fused corners as the canvas. It is one choice among a
+ *  few, so it is read as a radio group: the arrow keys walk the run, and only the chosen cell is
+ *  a tab stop. */
 export function Segmented<K extends string>({
   options,
   value,
@@ -69,6 +338,8 @@ export function Segmented<K extends string>({
   p,
   height = 40,
   grow = true,
+  tight = false,
+  label,
 }: {
   options: SegOption<K>[];
   value: K;
@@ -76,9 +347,30 @@ export function Segmented<K extends string>({
   p: Palette;
   height?: number;
   grow?: boolean;
+  /** the cells may be narrower than they are tall: a long run still fits the panel */
+  tight?: boolean;
+  /** what the run as a whole chooses, for a screen reader */
+  label?: string;
 }) {
+  const group = useRef<HTMLDivElement | null>(null);
+  const picked = Math.max(0, options.findIndex((o) => o.key === value));
+  const walk = (e: React.KeyboardEvent, d: 1 | -1) => {
+    e.preventDefault();
+    const next = options[(picked + d + options.length) % options.length];
+    onChange(next.key);
+    (group.current?.querySelector(`[data-key="${next.key}"]`) as HTMLElement | null)?.focus();
+  };
   return (
-    <div style={{ display: "flex", gap: 3 }}>
+    <div
+      ref={group}
+      role="radiogroup"
+      aria-label={label}
+      onKeyDown={(e) => {
+        if (e.key === "ArrowRight" || e.key === "ArrowDown") walk(e, 1);
+        else if (e.key === "ArrowLeft" || e.key === "ArrowUp") walk(e, -1);
+      }}
+      style={{ display: "flex", gap: 3 }}
+    >
       {options.map((o, i) => {
         const on = o.key === value;
         const first = i === 0;
@@ -87,13 +379,17 @@ export function Segmented<K extends string>({
         return (
           <button
             key={o.key}
+            data-key={o.key}
+            role="radio"
+            aria-checked={on}
+            tabIndex={i === picked ? 0 : -1}
             onClick={() => onChange(o.key)}
             title={o.title ?? o.label}
             aria-label={o.title ?? o.label}
             className="m3-press"
             style={{
               flex: (o.grow ?? grow) ? 1 : "0 0 auto",
-              minWidth: o.wide ? height * 1.4 : height,
+              minWidth: tight ? 0 : o.wide ? height * 1.4 : height,
               height,
               padding: o.label ? "0 14px" : 0,
               border: "none",
@@ -112,9 +408,12 @@ export function Segmented<K extends string>({
               fontWeight: on ? 600 : 500,
               transition: "background 120ms, color 120ms, border-radius 160ms",
               position: "relative",
+              overflow: "hidden",
+              whiteSpace: "nowrap",
+              ...o.style,
             }}
           >
-            {o.icon && <Icon name={o.icon} size={Math.round(height * 0.5)} fill={on} />}
+            {o.node ?? (o.icon && <Icon name={o.icon} size={Math.round(height * 0.5)} fill={on} />)}
             {o.label && <span>{o.label}</span>}
             {o.dot && (
               <span
@@ -137,41 +436,407 @@ export function Segmented<K extends string>({
   );
 }
 
+export type SelectOption = { key: string; label: string; icon?: string };
+
+/** A single-choice dropdown: the trigger shows what is picked, and the list that drops from it
+ *  scrolls in place once the choices outgrow the box. */
+export function Select({
+  options,
+  value,
+  onChange,
+  p,
+  label,
+}: {
+  options: SelectOption[];
+  value: string;
+  onChange: (k: string) => void;
+  p: Palette;
+  label: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const box = useRef<HTMLDivElement | null>(null);
+  const trigger = useRef<HTMLButtonElement | null>(null);
+  const list = useRef<HTMLDivElement | null>(null);
+  const current = options.find((o) => o.key === value) ?? options[0];
+  /* the list closes back onto the button that opened it, so focus has somewhere to land */
+  const close = () => {
+    setOpen(false);
+    trigger.current?.focus();
+  };
+  useEffect(() => {
+    if (!open) return;
+    /* focus goes to the chosen entry, so the arrow keys start from where the list does */
+    (list.current?.querySelector('[aria-selected="true"]') as HTMLElement | null)?.focus();
+    const onDown = (e: PointerEvent) => {
+      if (!box.current?.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        setOpen(false);
+        trigger.current?.focus();
+      }
+    };
+    window.addEventListener("pointerdown", onDown, true);
+    window.addEventListener("keydown", onKey, true);
+    return () => {
+      window.removeEventListener("pointerdown", onDown, true);
+      window.removeEventListener("keydown", onKey, true);
+    };
+  }, [open]);
+  /* the arrow keys walk the entries, Home and End jump to either end */
+  const onListKey = (e: React.KeyboardEvent) => {
+    const items = Array.from(list.current?.querySelectorAll<HTMLElement>('[role="option"]') ?? []);
+    if (!items.length) return;
+    const at = items.indexOf(document.activeElement as HTMLElement);
+    let next = -1;
+    if (e.key === "ArrowDown") next = (at + 1) % items.length;
+    else if (e.key === "ArrowUp") next = (at - 1 + items.length) % items.length;
+    else if (e.key === "Home") next = 0;
+    else if (e.key === "End") next = items.length - 1;
+    if (next < 0) return;
+    e.preventDefault();
+    items[next].focus();
+  };
+  return (
+    <div ref={box} style={{ position: "relative" }}>
+      <button
+        ref={trigger}
+        onClick={() => setOpen((o) => !o)}
+        onKeyDown={(e) => {
+          if (!open && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
+            e.preventDefault();
+            setOpen(true);
+          }
+        }}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-label={label}
+        className="m3-press"
+        style={{
+          width: "100%",
+          height: 48,
+          padding: "0 12px 0 14px",
+          borderRadius: open ? "12px 12px 4px 4px" : 12,
+          border: "none",
+          background: p.surfaceContainerHigh,
+          color: p.onSurface,
+          cursor: "pointer",
+          display: "flex",
+          alignItems: "center",
+          gap: 10,
+          fontSize: 14,
+          fontWeight: 600,
+          textAlign: "left",
+          transition: "border-radius 120ms",
+        }}
+      >
+        {current?.icon && <Icon name={current.icon} size={20} />}
+        <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{current?.label ?? ""}</span>
+        <Icon name={open ? "expand_less" : "expand_more"} size={20} />
+      </button>
+      {open && (
+        <div
+          ref={list}
+          role="listbox"
+          aria-label={label}
+          onKeyDown={onListKey}
+          className="no-scrollbar"
+          style={{
+            position: "absolute",
+            left: 0,
+            right: 0,
+            top: 52,
+            zIndex: 40,
+            maxHeight: 232,
+            overflowY: "auto",
+            overscrollBehavior: "contain",
+            padding: 4,
+            borderRadius: 12,
+            background: p.surfaceContainerHigh,
+            boxShadow: "0 8px 24px rgba(0,0,0,0.18), 0 2px 6px rgba(0,0,0,0.10)",
+          }}
+        >
+          {options.map((o) => {
+            const on = o.key === value;
+            return (
+              <button
+                key={o.key}
+                role="option"
+                aria-selected={on}
+                tabIndex={-1}
+                onClick={() => {
+                  onChange(o.key);
+                  close();
+                }}
+                className="m3-press"
+                style={{
+                  width: "100%",
+                  height: 44,
+                  padding: "0 10px",
+                  border: "none",
+                  borderRadius: 8,
+                  background: on ? p.secondaryContainer : "transparent",
+                  color: on ? p.onSecondaryContainer : p.onSurface,
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 10,
+                  fontSize: 14,
+                  fontWeight: on ? 600 : 500,
+                  textAlign: "left",
+                }}
+              >
+                {o.icon && <Icon name={o.icon} size={20} />}
+                <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{o.label}</span>
+                {on && <Icon name="check" size={18} />}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** how wide the band is that a field wears while a model writes into it */
+const RING = 3;
+/** the room a control standing inside a field takes */
+const LEAD_W = 32;
+
 export function Field({
   value,
   onChange,
   placeholder,
   p,
   icon,
+  leading,
   multiline,
   rows = 3,
   grow,
   height = 44,
+  action,
+  maxHeight,
+  aiBusy,
+  invalid,
+  describedBy,
 }: {
   value: string;
   onChange: (v: string) => void;
   placeholder?: string;
   p: Palette;
   icon?: string;
+  /** a control standing inside the field after its mark, the words starting after it */
+  leading?: React.ReactNode;
   multiline?: boolean;
   rows?: number;
+  /** a control that joins the clear button in a run pinned over the bottom right of a multiline
+   *  field; the text runs the full width and passes under it */
+  action?: React.ReactNode;
+  /** tallest a growing field gets before it starts to scroll */
+  maxHeight?: number;
+  /** a model is writing into this field: it wears the same drifting gradient the screens wear,
+   *  and the text it hands back is written out a letter at a time instead of dropped in */
+  aiBusy?: boolean;
   /** a multiline field that grows with its text instead of scrolling, starting at `rows` lines;
    *  it wraps but never takes a line break, since the canvas wraps the text on its own */
   grow?: boolean;
   height?: number;
+  /** what is in the field is not accepted, and the id of the line under it that says why */
+  invalid?: boolean;
+  describedBy?: string;
 }) {
   const lang = useLang();
   const filled = value.length > 0;
   const areaRef = useRef<HTMLTextAreaElement>(null);
+  const reduced = useReducedMotion();
+  /* the ring stays mounted through its own fade out, so the gradient leaves as quietly as it came */
+  const [ring, setRing] = useState(false);
+  const [ringOn, setRingOn] = useState(false);
+  useEffect(() => {
+    if (aiBusy) {
+      setRing(true);
+      /* the second frame is the one that has the ring on screen at nothing: turning it up from
+       * there is what the eye reads as a fade rather than a light being switched on */
+      let next = 0;
+      const id = requestAnimationFrame(() => {
+        next = requestAnimationFrame(() => setRingOn(true));
+      });
+      return () => {
+        cancelAnimationFrame(id);
+        cancelAnimationFrame(next);
+      };
+    }
+    setRingOn(false);
+    /* the ring is taken down once its fade has run; one that was never up simply stays down */
+    const id = setTimeout(() => setRing(false), 320);
+    return () => clearTimeout(id);
+  }, [aiBusy]);
+
+  /* What the model wrote is already in the field, drawn exactly as the field will keep it.
+   * Nothing is copied: the field is covered, grows to the height the text needs, and is then
+   * uncovered word by word, so no letter ever moves. */
+  const [reveal, setReveal] = useState<{ phase: "grow" | "wipe"; p: number } | null>(null);
+  /* the lines to uncover, measured off the field once the text is in it */
+  const [lines, setLines] = useState<{ n: number; top: number; left: number; width: number; height: number } | null>(null);
+  const wasAi = useRef(false);
+  const easeHeight = useRef(false);
+  const before = useRef(value);
+  useEffect(() => {
+    if (aiBusy) {
+      wasAi.current = true;
+      return;
+    }
+    /* the run is over: whatever text arrives with it is the model's, anything later is the author's */
+    const id = setTimeout(() => (wasAi.current = false), 400);
+    return () => clearTimeout(id);
+  }, [aiBusy]);
+  /* before the field is given its new height: the height is then eased into, not jumped to */
+  useLayoutEffect(() => {
+    const was = before.current;
+    before.current = value;
+    if (!wasAi.current || value === was || !value) return;
+    wasAi.current = false;
+    if (!multiline) return;
+    /* only a field that grows has a height to ease; a fixed one just uncovers its text */
+    easeHeight.current = !!grow;
+    setReveal({ phase: "grow", p: 0 });
+  }, [value, multiline, grow]);
+  const phase = reveal?.phase;
+  useLayoutEffect(() => {
+    const el = areaRef.current;
+    if (phase !== "wipe" || !el) return;
+    const cs = getComputedStyle(el);
+    const lh = parseFloat(cs.lineHeight) || parseFloat(cs.fontSize) * 1.55;
+    const top = parseFloat(cs.paddingTop);
+    const left = parseFloat(cs.paddingLeft);
+    const width = el.clientWidth - left - parseFloat(cs.paddingRight);
+    const text = el.scrollHeight - top - parseFloat(cs.paddingBottom);
+    setLines({ n: Math.max(1, Math.round(text / lh)), top, left, width, height: lh });
+  }, [phase, value]);
+  useEffect(() => {
+    if (!phase) return;
+    if (reduced) {
+      setReveal(null);
+      return;
+    }
+    if (phase === "grow") {
+      /* the box settles first; only then does the text come out from under the cover */
+      const id = setTimeout(() => setReveal({ phase: "wipe", p: 0 }), SETTLE_MS);
+      return () => clearTimeout(id);
+    }
+    const span = clamp(value.length * 10, 450, 900);
+    const start = performance.now();
+    let frame = requestAnimationFrame(function step() {
+      const k = Math.min(1, (performance.now() - start) / span);
+      setReveal((cur) => (cur?.phase === "wipe" ? { phase: "wipe", p: k } : cur));
+      if (k < 1) frame = requestAnimationFrame(step);
+      else setReveal(null);
+    });
+    return () => cancelAnimationFrame(frame);
+    /* the sweep runs off its own clock: only a change of phase may start it over */
+  }, [phase, reduced, value.length]);
+  /* the cover: one soft band lying over the whole text, drawn off downwards. The band is deep
+   * enough that the words fade up rather than being wiped away, the top ones a little ahead of
+   * the ones below them. */
+  const cover = (() => {
+    if (!reveal) return null;
+    const clear = "linear-gradient(rgba(0,0,0,0), rgba(0,0,0,0))";
+    if (reveal.phase === "grow" || !lines) return { WebkitMaskImage: clear, maskImage: clear };
+    /* the soft edge is two thirds of the text's own height, so a short note fades in as one */
+    const soft = 0.66;
+    const at = -soft + reveal.p * (1 + soft);
+    const block = lines.n * lines.height;
+    const image = `linear-gradient(to bottom, #000 ${(at * 100).toFixed(1)}%, rgba(0,0,0,0) ${((at + soft) * 100).toFixed(1)}%)`;
+    const position = `${lines.left}px ${lines.top}px`;
+    const size = `${lines.width}px ${block}px`;
+    return {
+      WebkitMaskImage: image,
+      maskImage: image,
+      WebkitMaskPosition: position,
+      maskPosition: position,
+      WebkitMaskSize: size,
+      maskSize: size,
+      WebkitMaskRepeat: "no-repeat",
+      maskRepeat: "no-repeat",
+    };
+  })();
   useEffect(() => {
     const el = areaRef.current;
     if (!el || !grow) return;
+    /* the model's text arrives whole: the field takes its new height over the same time a part
+     * on the canvas takes to settle, and reads its own height back without the easing in the way */
+    const ease = easeHeight.current && !reduced;
+    easeHeight.current = false;
+    const from = ease ? el.offsetHeight : 0;
+    el.style.transition = "none";
     el.style.height = "auto";
-    el.style.height = `${el.scrollHeight}px`;
-  }, [value, grow]);
+    /* a growing field is never shorter than the lines it was asked for, so an empty one still
+       offers the room its words will take */
+    const line = parseFloat(getComputedStyle(el).lineHeight) || 21;
+    const least = Math.round(rows * line + 24);
+    const full = Math.max(el.scrollHeight, least);
+    const capped = maxHeight ? Math.min(full, maxHeight) : full;
+    if (ease) {
+      el.style.height = `${from}px`;
+      void el.offsetHeight;
+      el.style.transition = `height ${SETTLE_MS}ms cubic-bezier(0.2, 0, 0, 1)`;
+    }
+    el.style.height = `${capped}px`;
+    el.style.overflowY = full > capped ? "auto" : "hidden";
+    if (!ease) el.style.transition = "";
+  }, [value, grow, maxHeight, rows, reduced]);
+  /* with a pinned run the text keeps the full width and passes under it; otherwise the clear
+   * button takes a column of its own at the trailing edge */
+  const pinned = !!(multiline && action);
+  const padRight = !pinned && filled ? 40 : 14;
+  /* the words start after the mark, and after whatever stands beside it */
+  const padLeft = (icon ? 42 : 14) + (leading ? LEAD_W : 0);
+  /* as tall as the fade, so the line being typed always sits clear of it */
+  const padBottom = pinned ? 40 : 12;
+  /* one cell of the pinned run: a faint plate behind the button, rounded on the outer side only */
+  const run = (child: React.ReactNode, first: boolean, last: boolean) => (
+    <span
+      style={{
+        display: "inline-flex",
+        overflow: "hidden",
+        background: p.surfaceContainerHighest,
+        borderTopLeftRadius: first ? 15 : R_INNER,
+        borderBottomLeftRadius: first ? 15 : R_INNER,
+        borderTopRightRadius: last ? 15 : R_INNER,
+        borderBottomRightRadius: last ? 15 : R_INNER,
+      }}
+    >
+      {child}
+    </span>
+  );
+  /* the one button that empties the field, wherever the field puts it */
+  const clearBtn = (
+    <button
+      onClick={() => onChange("")}
+      title={t("clear", lang)}
+      aria-label={t("clear", lang)}
+      style={{
+        width: 30,
+        height: 30,
+        borderRadius: 15,
+        border: "none",
+        background: "transparent",
+        color: p.onSurfaceVariant,
+        cursor: "pointer",
+        display: "grid",
+        placeItems: "center",
+      }}
+    >
+      <Icon name="close" size={16} />
+    </button>
+  );
   const base: React.CSSProperties = {
+    /* a block: an inline field leaves a line box's descender under it, and a ring drawn around
+     * that box would be thicker along the bottom than anywhere else */
+    display: "block",
     width: "100%",
-    padding: multiline ? `12px ${filled ? 40 : 14}px 12px ${icon ? 42 : 14}px` : `0 ${filled ? 40 : 14}px 0 ${icon ? 42 : 14}px`,
+    padding: multiline ? `12px ${padRight}px ${padBottom}px ${padLeft}px` : `0 ${padRight}px 0 ${padLeft}px`,
     borderRadius: multiline ? 18 : height / 2,
     border: "none",
     background: p.surfaceContainerHigh,
@@ -185,6 +850,34 @@ export function Field({
   };
   return (
     <div style={{ position: "relative", width: "100%" }}>
+      {ring && (
+        <div
+          aria-hidden
+          style={{
+            position: "absolute",
+            inset: -RING,
+            borderRadius: (multiline ? 18 : height / 2) + RING,
+            backgroundImage: draftGradient(p),
+            backgroundSize: "300% 300%",
+            animation: "m3e-drift 3s ease-in-out infinite",
+            opacity: ringOn ? 1 : 0,
+            transition: "opacity 300ms ease",
+            pointerEvents: "none",
+          }}
+        />
+      )}
+      {cover && (
+        <div
+          aria-hidden
+          style={{
+            position: "absolute",
+            inset: 0,
+            borderRadius: multiline ? 18 : height / 2,
+            background: p.surfaceContainerHigh,
+            pointerEvents: "none",
+          }}
+        />
+      )}
       {icon && (
         <span
           style={{
@@ -194,51 +887,73 @@ export function Field({
             color: p.onSurfaceVariant,
             pointerEvents: "none",
             lineHeight: 1,
+            /* the field itself is positioned, so the mark it carries sits above it */
+            zIndex: 1,
           }}
         >
           <Icon name={icon} size={20} />
         </span>
       )}
+      {leading && (
+        <span style={{ position: "absolute", left: icon ? 36 : 6, top: (height - LEAD_W) / 2, width: LEAD_W, height: LEAD_W, display: "grid", placeItems: "center", zIndex: 1 }}>{leading}</span>
+      )}
       {multiline ? (
         <textarea
           ref={areaRef}
+          className={maxHeight ? "no-scrollbar" : undefined}
           value={value}
           rows={rows}
           onChange={(e) => onChange(grow ? e.target.value.replace(/[\r\n]+/g, " ") : e.target.value)}
           onKeyDown={grow ? (e) => { if (e.key === "Enter") e.preventDefault(); } : undefined}
           placeholder={placeholder}
-          style={grow ? { ...base, overflow: "hidden" } : base}
+          aria-invalid={invalid || undefined}
+          aria-describedby={describedBy}
+          onFocus={() => {
+            setReveal(null);
+            setLines(null);
+          }}
+          style={{
+            ...base,
+            ...(grow ? { overflow: "hidden" } : null),
+            position: "relative",
+            /* the cover masks the whole field, so while it is on, the field's own colour is
+             * painted by the plate behind it and the text is all that can be hidden */
+            ...(cover ? { background: "transparent", caretColor: "transparent", ...cover } : null),
+          }}
         />
       ) : (
         <input
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}
-          style={{ ...base, height }}
+          aria-invalid={invalid || undefined}
+          aria-describedby={describedBy}
+          style={{ ...base, height, position: "relative" }}
         />
       )}
-      {filled && (
-        <button
-          onClick={() => onChange("")}
-          title={t("clear", lang)}
-          aria-label={t("clear", lang)}
-          style={{
-            position: "absolute",
-            right: 6,
-            top: multiline ? 8 : (height - 30) / 2,
-            width: 30,
-            height: 30,
-            borderRadius: 15,
-            border: "none",
-            background: "transparent",
-            color: p.onSurfaceVariant,
-            cursor: "pointer",
-            display: "grid",
-            placeItems: "center",
-          }}
-        >
-          <Icon name="close" size={16} />
-        </button>
+      {pinned ? (
+        <>
+          {/* the text fades out into the field's own colour as it passes under the run */}
+          <div
+            aria-hidden
+            style={{
+              position: "absolute",
+              left: 2,
+              right: 2,
+              bottom: 2,
+              height: 40,
+              borderRadius: "0 0 16px 16px",
+              background: `linear-gradient(to top, ${p.surfaceContainerHigh}, transparent)`,
+              pointerEvents: "none",
+            }}
+          />
+          <div style={{ position: "absolute", right: 6, bottom: 6, display: "flex", gap: 2 }}>
+            {filled && run(clearBtn, true, false)}
+            {run(action, !filled, true)}
+          </div>
+        </>
+      ) : (
+        filled && <span style={{ position: "absolute", right: 6, top: multiline ? 8 : (height - 30) / 2, display: "inline-flex" }}>{clearBtn}</span>
       )}
     </div>
   );
@@ -302,6 +1017,56 @@ export function Slider({
     setEditing(false);
     setText(String(value));
   };
+  /* a value set from elsewhere — a preset, another control — travels to its new place over the
+   * same time the part on the canvas takes to grow, so the knob and the part move together.
+   * What the author does on the slider itself is followed exactly. */
+  const reduced = useReducedMotion();
+  const [shown, setShown] = useState(value);
+  const shownRef = useRef(value);
+  const mine = useRef(false);
+  /* whether the knob is on its way: read at render, so it is state rather than a ref */
+  const [travelling, setTravelling] = useState(false);
+  const travellingRef = useRef(false);
+  const travel = (on: boolean) => {
+    travellingRef.current = on;
+    setTravelling(on);
+  };
+  useEffect(() => {
+    const from = shownRef.current;
+    const land = () => {
+      shownRef.current = value;
+      setShown(value);
+    };
+    /* a value that keeps arriving is a part already on its way — a width that follows the text
+     * inside it, say. Then the knob follows each value exactly instead of trailing its own easing. */
+    if (mine.current || reduced || travellingRef.current || from === value) {
+      mine.current = false;
+      travel(false);
+      land();
+      return;
+    }
+    travel(true);
+    const run = animate(from, value, {
+      duration: SETTLE_MS / 1000,
+      ease: [0.2, 0, 0, 1],
+      onUpdate: (v) => {
+        shownRef.current = v;
+        setShown(v);
+      },
+      onComplete: () => {
+        travel(false);
+        land();
+      },
+    });
+    return () => run.stop();
+  }, [value, reduced]);
+  const emit = (v: number) => {
+    /* a value the part already has never comes back through the effect, so it is not waited for */
+    mine.current = v !== value;
+    shownRef.current = v;
+    setShown(v);
+    onChange(v);
+  };
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
       <span title={title} style={{ color: p.onSurfaceVariant, lineHeight: 1, flex: "0 0 auto", display: "inline-flex" }}>
@@ -313,9 +1078,11 @@ export function Slider({
         aria-label={title}
         min={min}
         max={max}
-        step={step}
-        value={value}
-        onChange={(e) => onChange(Number(e.target.value))}
+        /* on its way the knob is free of the step, so it sweeps across instead of
+           ticking from one stop to the next; the author's own drag keeps the step */
+        step={travelling ? "any" : step}
+        value={shown}
+        onChange={(e) => emit(clamp(Math.round(Number(e.target.value) / step) * step, min, max))}
         style={{ "--track": p.secondaryContainer, "--thumb": p.primary } as React.CSSProperties}
       />
       <span style={{ position: "relative", flex: "0 0 auto", display: "inline-flex", alignItems: "center" }}>
@@ -335,7 +1102,7 @@ export function Slider({
             setText(e.target.value);
             // apply as you type once the number is already in range, so the canvas follows
             const n = Math.round(Number(e.target.value));
-            if (e.target.value.trim() !== "" && Number.isFinite(n) && n >= min && n <= max) onChange(n);
+            if (e.target.value.trim() !== "" && Number.isFinite(n) && n >= min && n <= max) emit(n);
           }}
           onBlur={commit}
           onKeyDown={(e) => {
@@ -379,6 +1146,39 @@ export function Slider({
         )}
       </span>
     </div>
+  );
+}
+
+/** the look of a cell that carries a short word: room for five of them across a panel */
+export const RUN_CELL: React.CSSProperties = { minWidth: 0, padding: "0 4px", fontSize: 12, fontWeight: 600, textOverflow: "ellipsis" };
+
+/** The sizes a part is named at, as one connected run: S, M, L, the way Material names a size
+ *  everywhere else. The letter is what the cell carries, and the dp it comes to is in the hover
+ *  text, because a row of raw numbers tells an author nothing about which one to reach for. */
+export function NamedSizes({
+  steps,
+  value,
+  onChange,
+  p,
+  label,
+}: {
+  steps: readonly { key: string; value: number }[];
+  value: number;
+  onChange: (v: number) => void;
+  p: Palette;
+  /** what the run sizes, for a screen reader; the size itself when left out */
+  label?: string;
+}) {
+  const lang = useLang();
+  return (
+    <Segmented<string>
+      options={steps.map((s) => ({ key: s.key, label: s.key.toUpperCase(), title: `${s.value}dp`, style: RUN_CELL }))}
+      value={steps.find((s) => s.value === value)?.key ?? ""}
+      onChange={(k) => onChange(steps.find((s) => s.key === k)!.value)}
+      p={p}
+      label={label ?? t("size", lang)}
+      tight
+    />
   );
 }
 
@@ -441,96 +1241,99 @@ export function SizePresets({
   );
 }
 
-/** The five card layouts as small pictures of a card: where the image sits, or no image.
- *  A picture reads faster than "leading" or "trailing", so no words are needed beyond the caption. */
-const CARD_LAYOUTS: { key: CardLayout; label: "imageTop" | "imageLeading" | "imageTrailing" | "background" | "noImageLayout" }[] = [
-  { key: "top", label: "imageTop" },
-  { key: "leading", label: "imageLeading" },
-  { key: "trailing", label: "imageTrailing" },
-  { key: "background", label: "background" },
-  { key: "none", label: "noImageLayout" },
-];
+/** the longest side a picked picture is kept at: enough for a sketch, small enough to save */
+const MAX_IMAGE_PX = 1200;
 
-function CardLayoutThumb({ layout, on, p }: { layout: CardLayout; on: boolean; p: Palette }) {
-  const ink = on ? p.onPrimaryContainer : p.onSurfaceVariant;
-  const image = on ? p.primary : p.outline;
-  const line = (w: string) => <div style={{ height: 3, width: w, borderRadius: 2, background: ink, opacity: 0.55 }} />;
-  const lines = (
-    <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 3, justifyContent: "center" }}>
-      {line("80%")}
-      {line("55%")}
-    </div>
-  );
-  const box: React.CSSProperties = { width: 44, height: 34, borderRadius: 6, border: `1.5px solid ${ink}`, boxSizing: "border-box", padding: 5, display: "flex", gap: 4, overflow: "hidden", position: "relative" };
-  if (layout === "background") {
-    return (
-      <div style={{ ...box, background: image, alignItems: "flex-end", padding: 5 }}>
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 3 }}>
-          <div style={{ height: 3, width: "80%", borderRadius: 2, background: on ? p.onPrimary : p.surface }} />
-          <div style={{ height: 3, width: "55%", borderRadius: 2, background: on ? p.onPrimary : p.surface, opacity: 0.7 }} />
-        </div>
-      </div>
-    );
-  }
-  const media = <div style={{ background: image, borderRadius: 3, flex: "0 0 auto", ...(layout === "top" ? { height: 10 } : { width: 12 }) }} />;
+export function readImage(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const s = Math.min(1, MAX_IMAGE_PX / Math.max(img.width, img.height));
+      const c = document.createElement("canvas");
+      c.width = Math.max(1, Math.round(img.width * s));
+      c.height = Math.max(1, Math.round(img.height * s));
+      const ctx = c.getContext("2d");
+      URL.revokeObjectURL(url);
+      if (!ctx) {
+        reject(new Error("canvas"));
+        return;
+      }
+      ctx.drawImage(img, 0, 0, c.width, c.height);
+      resolve(c.toDataURL("image/webp", 0.86));
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("image"));
+    };
+    img.src = url;
+  });
+}
+
+/** A text field for a web address: what is typed stays in the box, and only a complete
+ *  http(s) address (or an emptied box) reaches the part. */
+export function UrlField({ value, onChange, placeholder, p }: { value: string; onChange: (src: string | undefined) => void; placeholder: string; p: Palette }) {
+  const [text, setText] = useState(value);
+  useEffect(() => setText(value), [value]);
   return (
-    <div style={{ ...box, flexDirection: layout === "top" ? "column" : "row" }}>
-      {layout === "top" || layout === "leading" ? media : null}
-      {lines}
-      {layout === "trailing" ? media : null}
+    <div>
+      <Field
+        value={text}
+        onChange={(v) => {
+          setText(v);
+          const s = v.trim();
+          /* an emptied box removes a URL; a picked file (which shows as an empty box) is left alone */
+          if (!s && value) onChange(undefined);
+          else if (/^https?:\/\/\S+$/.test(s)) onChange(s);
+        }}
+        placeholder={placeholder}
+        p={p}
+        icon="link"
+      />
     </div>
   );
 }
 
-/** Radio row of card layouts drawn as thumbnails, with a short caption under each. */
-export function CardLayoutPicker({ value, onChange, p }: { value: CardLayout; onChange: (layout: CardLayout) => void; p: Palette }) {
+/** The picture on a part, and the two ways one arrives: an address on the web typed into the
+ *  box, or a file off the machine picked with the button at the end of it. It is one row
+ *  wherever a part can carry a picture -- a card, an image, a carousel card. */
+export function ImageRow({ value, onChange, p }: { value?: string; onChange: (src: string | undefined) => void; p: Palette }) {
   const lang = useLang();
-  /* one tab stop for the group; the arrow keys move the choice, as a native radio group does */
-  const step = (e: React.KeyboardEvent, i: number) => {
-    const d = e.key === "ArrowRight" || e.key === "ArrowDown" ? 1 : e.key === "ArrowLeft" || e.key === "ArrowUp" ? -1 : 0;
-    if (!d) return;
-    e.preventDefault();
-    const next = CARD_LAYOUTS[(i + d + CARD_LAYOUTS.length) % CARD_LAYOUTS.length].key;
-    onChange(next);
-    (e.currentTarget.parentElement?.querySelector(`[data-layout="${next}"]`) as HTMLElement | null)?.focus();
-  };
+  const fileRef = useRef<HTMLInputElement>(null);
+  /* a file the browser could not read as a picture says so under the row, until the next pick */
+  const [failed, setFailed] = useState(false);
   return (
-    <div role="radiogroup" aria-label={t("cardLayout", lang)} style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 4 }}>
-      {CARD_LAYOUTS.map((o, i) => {
-        const on = o.key === value;
-        const label = t(o.label, lang);
-        return (
-          <button
-            key={o.key}
-            type="button"
-            role="radio"
-            aria-checked={on}
-            aria-label={label}
-            title={label}
-            data-layout={o.key}
-            tabIndex={on ? 0 : -1}
-            onKeyDown={(e) => step(e, i)}
-            onClick={() => onChange(o.key)}
-            className="m3-press"
-            style={{
-              border: "none",
-              borderRadius: 10,
-              padding: "6px 2px 4px",
-              background: on ? p.primaryContainer : "transparent",
-              color: on ? p.onPrimaryContainer : p.onSurfaceVariant,
-              cursor: "pointer",
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              gap: 4,
-              minWidth: 0,
-            }}
-          >
-            <CardLayoutThumb layout={o.key} on={on} p={p} />
-            <span style={{ fontSize: 10, fontWeight: 600, lineHeight: "12px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "100%" }}>{label}</span>
-          </button>
-        );
-      })}
+    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+    <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+      <input
+        ref={fileRef}
+        type="file"
+        accept="image/*"
+        hidden
+        onChange={async (e) => {
+          const f = e.target.files?.[0];
+          e.target.value = "";
+          if (!f) return;
+          try {
+            onChange(await readImage(f));
+            setFailed(false);
+          } catch {
+            setFailed(true);
+          }
+        }}
+      />
+      {/* a picked file shows as data and is not editable here, so the box stays empty for it */}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <UrlField value={value && /^https?:\/\//.test(value) ? value : ""} onChange={onChange} placeholder={t("imageUrl", lang)} p={p} />
+      </div>
+      <IconBtn icon="upload" p={p} size={44} on onClick={() => fileRef.current?.click()} title={t("pickImage", lang)} />
+      {value && <IconBtn icon="close" p={p} size={44} onClick={() => onChange(undefined)} title={t("removeImage", lang)} />}
+    </div>
+    {failed && (
+      <div role="alert" style={{ fontSize: 12, lineHeight: 1.5, color: p.error, padding: "0 6px" }}>
+        {t("imageFailed", lang)}
+      </div>
+    )}
     </div>
   );
 }
@@ -831,20 +1634,6 @@ export function TokenChips({
       )}
       {COLOR_TOKENS.map((tk) => (
         <TokenDisc key={tk.key} color={p[tk.key]} label={lang === "en" ? tk.label : COLOR_TOKEN_TEXT[lang][tk.key]} on={!noneOn && tk.key === value} onClick={() => onChange(tk.key)} p={p} />
-      ))}
-    </div>
-  );
-}
-
-/** Chips for a text color role, drawn like the background chips: color discs led by an
- *  automatic chip in the color the card would pick on its own. */
-export function TextTokenChips({ value, auto, onChange, p }: { value?: TextToken; auto: string; onChange: (t?: TextToken) => void; p: Palette }) {
-  const lang = useLang();
-  return (
-    <div role="group" aria-label={t("textColor", lang)} style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-      <TokenDisc color={auto} label={t("autoColor", lang)} on={!value} onClick={() => onChange(undefined)} p={p} icon="restart_alt" iconColor={onColorFor(auto)} />
-      {TEXT_TOKENS.map((tk) => (
-        <TokenDisc key={tk.key} color={p[tk.key]} label={lang === "en" ? tk.label : TEXT_TOKEN_TEXT[lang][tk.key]} on={value === tk.key} onClick={() => onChange(tk.key)} p={p} />
       ))}
     </div>
   );
