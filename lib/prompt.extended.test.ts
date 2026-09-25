@@ -29,6 +29,7 @@ import {
   WATCH_W,
   WATCH_H,
   makeItem,
+  LINK_TARGET,
 } from "./tokens";
 
 const widths: Record<string, number> = {};
@@ -226,6 +227,22 @@ describe("buildPrompt — behavior / actions", () => {
     const doc = baseDoc({ groups: [{ id: "g", x: 100, y: 100, axis: "x", items: [item] }] });
     const out = buildPrompt(doc, widths, undefined, "en");
     expect(out).toMatch(/go back|previous screen/i);
+  });
+
+  it("a button with a link action names the address it opens, and says nothing without one", () => {
+    const linked: Item = { id: "b1", kind: "button", label: "Docs", icon: null, variant: "filled", action: { to: LINK_TARGET, transition: "none", url: "example.com/docs" } };
+    const doc = baseDoc({ groups: [{ id: "g", x: 100, y: 100, axis: "x", items: [linked] }] });
+    expect(buildPrompt(doc, widths, undefined, "en")).toContain("opens https://example.com/docs in a new browser tab");
+    const blank = baseDoc({ groups: [{ id: "g", x: 100, y: 100, axis: "x", items: [{ ...linked, action: { to: LINK_TARGET, transition: "none" } }] }] });
+    expect(buildPrompt(blank, widths, undefined, "en")).not.toMatch(/browser tab/);
+  });
+
+  it("a button that was given a height says so, with the M3 size it lands on", () => {
+    const tall: Item = { id: "b1", kind: "button", label: "Start", icon: null, variant: "filled", size2: 96 };
+    const doc = baseDoc({ groups: [{ id: "g", x: 100, y: 100, axis: "x", items: [tall] }] });
+    expect(buildPrompt(doc, widths, undefined, "en")).toContain("(96dp tall / M3 L)");
+    const plain = baseDoc({ groups: [{ id: "g", x: 100, y: 100, axis: "x", items: [{ ...tall, size2: undefined }] }] });
+    expect(buildPrompt(plain, widths, undefined, "en")).not.toMatch(/\(\d+dp tall/);
   });
 
   it("an item with action.to=<frameId> generates an 'opens the ... screen' note", () => {

@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
-import { LogoLoading } from "@/components/LogoLoading";
+import { Skeleton } from "@/components/Skeleton";
 import { isLang, setGlobalLang, type Lang } from "@/lib/i18n";
 
 const loadEditor = () => import("./Editor");
@@ -12,12 +12,12 @@ if (typeof window !== "undefined") void loadEditor();
 
 const Editor = dynamic(loadEditor, { ssr: false, loading: () => null });
 
-/** the static page: the mark as a loading indicator, and it stays over the editor
- *  until the document has been read, then fades away */
+/** the static page: the editor's shell with nothing in it, standing over the editor until
+ *  the document has been read, then fading away to show the real one in its place */
 function Boot({ done }: { done: boolean }) {
   return (
     <div className="m3e-boot" data-done={done ? "" : undefined} aria-busy={!done} aria-hidden={done}>
-      <LogoLoading size={48} color="#6750a4" />
+      <Skeleton />
     </div>
   );
 }
@@ -32,7 +32,7 @@ function initialLanguage(): Lang {
 }
 
 /** how long the overlay takes to fade; matches .m3e-boot in globals.css */
-const BOOT_FADE_MS = 360;
+const BOOT_FADE_MS = 420;
 
 export default function Page() {
   const [lang, setLang] = useState<Lang | null>(null);

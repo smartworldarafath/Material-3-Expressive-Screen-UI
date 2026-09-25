@@ -1,4 +1,4 @@
-import { Doc, KIND_ORDER, Kind, VARIANTS, isCardAlign, isCardImagePos, isPlace, isTextToken, isPlatform, isTrackThickness } from "./tokens";
+import { CAROUSEL_LAYOUTS, DATE_LAYOUTS, Doc, KIND_ORDER, Kind, TIME_LAYOUTS, VARIANTS, isCardAlign, isCardImagePos, isPlace, isTextToken, isPlatform, isTrackThickness } from "./tokens";
 
 /* A project file is the Doc as JSON, nothing more. Reading one back only checks
  * the shape the editor relies on; the same migrations that run on a saved
@@ -9,9 +9,13 @@ const isRecord = (value: unknown): value is Record<string, unknown> => typeof va
 const KINDS = new Set<string>(KIND_ORDER);
 
 const validTabs = (tabs: unknown) =>
-  tabs === undefined || (Array.isArray(tabs) && tabs.every((tab) => isRecord(tab) && typeof tab.label === "string" && (typeof tab.icon === "string" || tab.icon === null || tab.icon === undefined)));
+  tabs === undefined || (Array.isArray(tabs) && tabs.every((tab) => isRecord(tab) && typeof tab.label === "string" && (typeof tab.icon === "string" || tab.icon === null || tab.icon === undefined) && (tab.src === undefined || typeof tab.src === "string")));
 
 const validCorners = (c: unknown) => c === undefined || (isRecord(c) && ["tl", "tr", "bl", "br"].every((k) => Number.isFinite(c[k])));
+
+/** the layouts a carousel and the two pickers may be saved with */
+const LAYOUTS = new Set<string>([...CAROUSEL_LAYOUTS, ...DATE_LAYOUTS, ...TIME_LAYOUTS].map((l) => l.key));
+const optionalNumber = (v: unknown) => v === undefined || Number.isFinite(v);
 
 const validItem = (item: unknown) =>
   isRecord(item) &&
@@ -22,6 +26,7 @@ const validItem = (item: unknown) =>
   (item.imagePos === undefined || isCardImagePos(item.imagePos)) &&
   (item.imageSize === undefined || (Number.isFinite(item.imageSize) && (item.imageSize as number) > 0)) &&
   (item.contentAlign === undefined || isCardAlign(item.contentAlign)) &&
+  (item.textAlign === undefined || isCardAlign(item.textAlign)) &&
   (item.textColor === undefined || isTextToken(item.textColor)) &&
   typeof item.id === "string" &&
   typeof item.kind === "string" &&
@@ -32,6 +37,8 @@ const validItem = (item: unknown) =>
   (item.supporting === undefined || typeof item.supporting === "string") &&
   (item.selected === undefined || Number.isFinite(item.selected)) &&
   (item.note === undefined || typeof item.note === "string") &&
+  (item.layout === undefined || (typeof item.layout === "string" && LAYOUTS.has(item.layout))) &&
+  optionalNumber(item.count) &&
   validTabs(item.tabs);
 
 const validGroup = (group: unknown) =>
@@ -58,7 +65,7 @@ const validFrame = (frame: unknown) =>
 
 /** whether a parsed file has the shape of a document the editor can open */
 export const isProject = (value: unknown): value is Doc =>
-  isRecord(value) && Array.isArray(value.groups) && Array.isArray(value.frames) && value.groups.every(validGroup) && value.frames.every(validFrame) && (value.platform === undefined || isPlatform(value.platform));
+  isRecord(value) && Array.isArray(value.groups) && Array.isArray(value.frames) && value.groups.every(validGroup) && value.frames.every(validFrame) && (value.platform === undefined || isPlatform(value.platform)) && (value.promptOptions === undefined || (Array.isArray(value.promptOptions) && value.promptOptions.every((o) => typeof o === "string")));
 
 /** the file name a project is saved under: m3e-canvas, followed by the app's name when it has one */
 export const projectFileName = (doc: Doc) => {

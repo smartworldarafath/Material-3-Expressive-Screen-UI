@@ -6,6 +6,21 @@ import {
   Platform,
   Action,
   BACK_TARGET,
+  H,
+  hasMenu,
+  carouselCountOf,
+  carouselLayoutOf,
+  dateLayoutOf,
+  timeLayoutOf,
+  LINK_TARGET,
+  MENU_TARGET,
+  opensMenu,
+  splitOpens,
+  buttonHeightOf,
+  buttonSizeKeyOf,
+  CHIP_H_MIN,
+  chipHeightOf,
+  linkUrlOf,
   Doc,
   FONTS,
   Frame,
@@ -23,6 +38,7 @@ import {
   frameRect,
   frameSizeOf,
   cardImagePosOf,
+  isCardImageBand,
   cardImageSizeOf,
   groupBounds,
   isPhoneFrame,
@@ -35,6 +51,12 @@ import {
   railWidth,
   progressThickness,
   isScrollableTabs,
+  CarouselLayout,
+  DateLayout,
+  TimeLayout,
+  carouselCardsOf,
+  TOP_BAR_SIZES,
+  topBarHeightOf,
 } from "./tokens";
 
 const VARIANT_TEXT: Record<Lang, Record<Variant, string>> = {
@@ -54,7 +76,8 @@ function cardImage(it: Item, lang: Lang): string {
   const size = pos !== "background" && it.imageSize !== undefined ? cardImageSizeOf(it) : undefined;
   if (lang === "ja") {
     const what = url ? ` ${url} の画像` : it.src ? "指定の画像" : `${it.icon ? `${it.icon} アイコンの` : ""}プレースホルダー画像`;
-    const sized = size ? `（${pos === "top" ? "高さ" : "幅"} ${size}dp）` : "";
+    const sized = size ? `（${isCardImageBand(pos) ? "高さ" : "幅"} ${size}dp）` : "";
+    if (pos === "bottom") return `下部に${what}${sized}、`;
     if (pos === "leading") return `先頭側（全高）に${what}${sized}、`;
     if (pos === "trailing") return `末尾側（全高）に${what}${sized}、`;
     if (pos === "background") return `背景全面に${what}（テキストの背後にスクリム）、`;
@@ -62,7 +85,8 @@ function cardImage(it: Item, lang: Lang): string {
   }
   if (lang === "zh") {
     const what = url ? ` ${url} 的图片` : it.src ? "指定的图片" : `${it.icon ? `${it.icon} 图标的` : ""}占位图片`;
-    const sized = size ? `（${pos === "top" ? "高" : "宽"} ${size}dp）` : "";
+    const sized = size ? `（${isCardImageBand(pos) ? "高" : "宽"} ${size}dp）` : "";
+    if (pos === "bottom") return `底部是${what}${sized}，`;
     if (pos === "leading") return `左侧（全高）是${what}${sized}，`;
     if (pos === "trailing") return `右侧（全高）是${what}${sized}，`;
     if (pos === "background") return `整张卡片的背景是${what}（文字后方加渐变遮罩），`;
@@ -70,14 +94,16 @@ function cardImage(it: Item, lang: Lang): string {
   }
   if (lang === "ko") {
     const what = url ? `${url}의 이미지` : it.src ? "지정한 이미지" : `${it.icon ? `${it.icon} 아이콘의 ` : ""}자리표시자 이미지`;
-    const sized = size ? `(${pos === "top" ? "높이" : "너비"} ${size}dp)` : "";
+    const sized = size ? `(${isCardImageBand(pos) ? "높이" : "너비"} ${size}dp)` : "";
+    if (pos === "bottom") return `아래쪽에 ${what}${sized}, `;
     if (pos === "leading") return `앞쪽(전체 높이)에 ${what}${sized}, `;
     if (pos === "trailing") return `뒤쪽(전체 높이)에 ${what}${sized}, `;
     if (pos === "background") return `배경 전체에 ${what}(텍스트 뒤에 스크림), `;
     return `위쪽에 ${what}${sized}, `;
   }
   const what = url ? `an image from ${url}` : it.src ? "the provided image" : `a placeholder image${it.icon ? ` (${it.icon} icon)` : ""}`;
-  const sized = size ? ` (${size}dp ${pos === "top" ? "tall" : "wide"})` : "";
+  const sized = size ? ` (${size}dp ${isCardImageBand(pos) ? "tall" : "wide"})` : "";
+  if (pos === "bottom") return `with ${what}${sized} along the bottom, `;
   if (pos === "leading") return `with ${what}${sized} filling the leading side, `;
   if (pos === "trailing") return `with ${what}${sized} filling the trailing side, `;
   if (pos === "background") return `with ${what} as a full-bleed background behind a scrim under the text, `;
@@ -92,6 +118,11 @@ function cardText(it: Item, lang: Lang): string {
   if (align && align !== auto) {
     const pos = lang === "ja" ? { start: "上", center: "中央", end: "下" } : lang === "zh" ? { start: "顶部", center: "垂直居中", end: "底部" } : lang === "ko" ? { start: "위", center: "가운데", end: "아래" } : { start: "top", center: "middle", end: "bottom" };
     parts.push(lang === "ja" ? `文字は${pos[align]}寄せ` : lang === "zh" ? `文字${pos[align]}对齐` : lang === "ko" ? `텍스트 ${pos[align]} 정렬` : `text aligned to the ${pos[align]}`);
+  }
+  const across = it.textAlign;
+  if (across && across !== "start") {
+    const word = lang === "ja" ? { center: "文字は中央揃え", end: "文字は右揃え" } : lang === "zh" ? { center: "文字居中", end: "文字右对齐" } : lang === "ko" ? { center: "텍스트 가운데 정렬", end: "텍스트 오른쪽 정렬" } : { center: "text centred", end: "text aligned to the end" };
+    parts.push(word[across]);
   }
   if (it.textColor) parts.push(lang === "ja" ? `文字色 ${it.textColor}` : lang === "zh" ? `文字颜色 ${it.textColor}` : lang === "ko" ? `텍스트 색상 ${it.textColor}` : `text in ${it.textColor}`);
   if (!parts.length) return "";
@@ -114,6 +145,11 @@ const imageSrc = (it: Item) => (it.src && /^https?:\/\//.test(it.src) ? it.src :
 const viewSize = (it: Item, ratio: number) => {
   const w = it.size ?? CONTENT_W;
   return `${w}×${it.size2 ?? Math.round(w * ratio)}dp`;
+};
+/** a picture's box: square until it was given a height of its own */
+const imageDims = (it: Item) => {
+  const w = it.size ?? 200;
+  return `${w}×${it.size2 ?? w}dp`;
 };
 
 /** which destination of a bar, rail or tab row is selected, in words */
@@ -146,23 +182,141 @@ function railStateText(it: Item, lang: Lang): string {
 
 /* ================= single parts ================= */
 
+/** how big a button is: the width the author set, and the height whenever it leaves M3's medium
+ *  one, named by the M3 size it lands on so the code can reach for that size directly */
+function buttonSize(it: Item, lang: Lang): string {
+  const h = buttonHeightOf(it);
+  const key = buttonSizeKeyOf(h);
+  const named = key ? ` / M3 ${key.toUpperCase()}` : "";
+  const parts: string[] = [];
+  if (it.size) parts.push(lang === "ja" ? `幅 ${it.size}dp` : lang === "zh" ? `宽 ${it.size}dp` : lang === "ko" ? `너비 ${it.size}dp` : `${it.size}dp wide`);
+  if (h !== H) parts.push((lang === "ja" ? `高さ ${h}dp` : lang === "zh" ? `高 ${h}dp` : lang === "ko" ? `높이 ${h}dp` : `${h}dp tall`) + named);
+  if (!parts.length) return "";
+  const body = parts.join(lang === "ja" || lang === "zh" ? "、" : ", ");
+  return lang === "en" || lang === "ko" ? ` (${body})` : `（${body}）`;
+}
+
+/** how big an icon button is: its one measure, named by the M3 size it lands on. The medium
+ *  56dp one is what the notes already describe, so it goes unsaid. */
+function iconButtonSize(it: Item, lang: Lang): string {
+  const d = buttonHeightOf(it);
+  if (d === H) return "";
+  const key = buttonSizeKeyOf(d);
+  const named = key ? ` / M3 ${key.toUpperCase()}` : "";
+  if (lang === "ja") return `（${d}dp${named}）`;
+  if (lang === "zh") return `（${d}dp${named}）`;
+  if (lang === "ko") return `(${d}dp${named})`;
+  return ` (${d}dp${named})`;
+}
+
+/** a top app bar taller than the small one names the M3 size it is: medium or large, with the title on its own line */
+function topBarSizeText(it: Item, lang: Lang): string {
+  const h = topBarHeightOf(it);
+  const size = [...TOP_BAR_SIZES].reverse().find((b) => h >= b.h) ?? TOP_BAR_SIZES[0];
+  if (size.key === "s") return "";
+  const name = size.key === "m" ? (lang === "ja" ? "ミディアム" : lang === "zh" ? "中号" : lang === "ko" ? "중간" : "medium") : lang === "ja" ? "ラージ" : lang === "zh" ? "大号" : lang === "ko" ? "대형" : "large";
+  if (lang === "ja") return `（${name}サイズ、高さ ${h}dp、タイトルはアイコン列の下の行）`;
+  if (lang === "zh") return `（${name}，高 ${h}dp，标题位于图标行下方）`;
+  if (lang === "ko") return `(${name} 크기, 높이 ${h}dp, 제목은 아이콘 줄 아래)`;
+  return ` (${name} size, ${h}dp tall, title on its own line under the icons)`;
+}
+
+/** what a carousel's cards say, in order, for the cards that say anything */
+function carouselCardsText(it: Item, lang: Lang): string {
+  const q = quote(lang);
+  const words = carouselCardsOf(it).map((c, i) => ({ i, label: c.label.trim() })).filter((c) => c.label);
+  if (!words.length) return "";
+  const list = words.map((c) => `${c.i + 1}: ${q(c.label)}`).join(lang === "ja" || lang === "zh" ? "、" : ", ");
+  if (lang === "ja") return `、カードの見出し ${list}`;
+  if (lang === "zh") return `，卡片标题 ${list}`;
+  if (lang === "ko") return `, 카드 제목 ${list}`;
+  return `, card titles ${list}`;
+}
+
+/** a run of chips drawn at one height other than M3's 32dp says so; a run that does not share
+ *  one is left to its parts */
+function chipRunHeightText(items: Item[], lang: Lang): string {
+  const h = chipHeightOf(items[0]);
+  return items.every((it) => chipHeightOf(it) === h) ? chipHeightText(items[0], lang) : "";
+}
+
+/** the words each language uses for a carousel's layout and a picker's shape */
+const CAROUSEL_TEXT: Record<Lang, Record<CarouselLayout, string>> = {
+  ja: { multiBrowse: "マルチブラウズ", uncontained: "アンコンテインド", hero: "ヒーロー", fullScreen: "全画面" },
+  en: { multiBrowse: "multi-browse", uncontained: "uncontained", hero: "hero", fullScreen: "full-screen" },
+  zh: { multiBrowse: "多浏览", uncontained: "等宽滚动", hero: "主图", fullScreen: "全屏" },
+  ko: { multiBrowse: "멀티 브라우즈", uncontained: "언컨테인드", hero: "히어로", fullScreen: "전체 화면" },
+};
+const DATE_TEXT: Record<Lang, Record<DateLayout, string>> = {
+  ja: { modal: "モーダルのダイアログ", docked: "入力欄に付くドッキング", input: "入力欄のみ" },
+  en: { modal: "modal dialog", docked: "docked under a field", input: "text input only" },
+  zh: { modal: "模态对话框", docked: "停靠在输入框下", input: "仅输入框" },
+  ko: { modal: "모달 대화상자", docked: "입력란에 붙는 도킹", input: "입력란만" },
+};
+const TIME_TEXT: Record<Lang, Record<TimeLayout, string>> = {
+  ja: { dial: "時計盤", input: "入力欄" },
+  en: { dial: "dial", input: "text input" },
+  zh: { dial: "表盘", input: "输入框" },
+  ko: { dial: "시계판", input: "입력란" },
+};
+
+/** a chip drawn at anything but the 32dp M3 asks for says so */
+function chipHeightText(it: Item, lang: Lang): string {
+  const h = chipHeightOf(it);
+  if (h === CHIP_H_MIN) return "";
+  if (lang === "ja") return `（高さ ${h}dp）`;
+  if (lang === "zh") return `（高 ${h}dp）`;
+  if (lang === "ko") return `(높이 ${h}dp)`;
+  return ` (${h}dp tall)`;
+}
+
+/** the menu a FAB opens, if it has one: the entries it offers, in the order they rise */
+function fabMenuText(it: Item, lang: Lang): string {
+  if (!hasMenu(it)) return "";
+  const q = quote(lang);
+  const items = (it.tabs ?? []).map((t) => `${q(t.label || "-")}(${t.icon || "-"})`).join(lang === "en" ? ", " : "、");
+  const n = it.tabs?.length ?? 0;
+  if (lang === "ja") return `。タップすると ${n} 項目のメニュー（${items}）がボタンの上にせり上がり、アイコンは close に変わる（M3 Expressive の FloatingActionButtonMenu）`;
+  if (lang === "zh") return `。点击后在按钮上方展开 ${n} 个菜单项（${items}），图标变为 close（M3 Expressive 的 FloatingActionButtonMenu）`;
+  if (lang === "ko") return `. 탭하면 버튼 위로 ${n}개 항목 메뉴(${items})가 올라오고 아이콘은 close로 바뀐다(M3 Expressive FloatingActionButtonMenu)`;
+  return `; tapping it raises a menu of ${n} items (${items}) above the button and turns its icon into close (the M3 Expressive FloatingActionButtonMenu)`;
+}
+
+/** what a split button's arrow opens, and which way it goes */
+function splitMenuText(it: Item, lang: Lang): string {
+  if (!splitOpens(it)) return "";
+  const q = quote(lang);
+  const items = (it.tabs ?? []).map((t) => `${q(t.label || "-")}(${t.icon || "-"})`).join(lang === "en" ? ", " : "、");
+  const n = it.tabs?.length ?? 0;
+  if (lang === "ja") return `。矢印をタップすると ${n} 項目のメニュー（${items}）が開き、ボタンの下に収まらないときは上に開く`;
+  if (lang === "zh") return `。点击箭头展开 ${n} 个菜单项（${items}）；按钮下方放不下时改为向上展开`;
+  if (lang === "ko") return `. 화살표를 탭하면 ${n}개 항목 메뉴(${items})가 열리고, 버튼 아래에 공간이 없으면 위로 열린다`;
+  return `; tapping the arrow opens a menu of ${n} items (${items}) below the button, and above it where there is no room below`;
+}
+
 function itemJa(it: Item): string {
   const q = qj;
   const v = VARIANT_TEXT.ja[it.variant];
   const noun = KIND_TEXT.ja[it.kind]?.noun ?? it.kind;
   switch (it.kind) {
     case "button":
-      return `${hasText(it.label) ? q(it.label) : "ラベルなし"}の${v}ボタン${it.icon ? `（${it.icon} アイコン付き）` : ""}${it.size ? `（幅 ${it.size}dp）` : ""}`;
+      return `${hasText(it.label) ? q(it.label) : "ラベルなし"}の${v}ボタン${it.icon ? `（${it.icon} アイコン付き）` : ""}${buttonSize(it, "ja")}`;
+    case "carousel":
+      return `${CAROUSEL_TEXT.ja[carouselLayoutOf(it)]}レイアウトのカルーセル（カード ${carouselCountOf(it)} 枚、高さ ${it.size2 ?? 180}dp、各カードは角丸 16dp、横スクロール${carouselCardsText(it, "ja")}）`;
+    case "datePicker":
+      return `${DATE_TEXT.ja[dateLayoutOf(it)]}の日付ピッカー（今日の日付を選択中${dateLayoutOf(it) === "input" ? "" : "、月のグリッドとキャンセル／OK"}）`;
+    case "timePicker":
+      return `${TIME_TEXT.ja[timeLayoutOf(it)]}の時刻ピッカー（現在時刻を選択中、AM/PM 切り替えとキャンセル／OK）`;
     case "iconButton":
-      return `${it.icon ?? "空"} アイコンの${v}アイコンボタン`;
+      return `${it.icon ?? "空"} アイコンの${v}アイコンボタン${iconButtonSize(it, "ja")}`;
     case "fab":
-      return `${it.icon ?? "空"} アイコンの${v} FAB${it.size && it.size >= 96 ? "（大サイズ）" : it.size && it.size <= 40 ? "（小サイズ）" : ""}`;
+      return `${it.icon ?? "空"} アイコンの${v} FAB${it.size && it.size >= 96 ? "（大サイズ）" : it.size && it.size <= 40 ? "（小サイズ）" : ""}${fabMenuText(it, "ja")}`;
     case "extendedFab":
-      return `${q(it.label)}${it.icon ? `と ${it.icon} アイコン` : ""}の拡張 FAB（${v}）`;
+      return `${q(it.label)}${it.icon ? `と ${it.icon} アイコン` : ""}の拡張 FAB（${v}${it.size2 && it.size2 !== 56 ? `、高さ ${it.size2}dp` : ""}）${fabMenuText(it, "ja")}`;
     case "chip":
-      return `${q(it.label)}のチップ${it.checked ? "（選択状態）" : ""}${it.icon && !it.checked ? `（${it.icon} アイコン付き）` : ""}`;
+      return `${q(it.label)}のチップ${it.checked ? "（選択状態）" : ""}${it.icon && !it.checked ? `（${it.icon} アイコン付き）` : ""}${chipHeightText(it, "ja")}`;
     case "topAppBar":
-      return `タイトル${q(it.label)}のトップアプリバー${it.icon ? `。左に ${it.icon}` : ""}${it.icon2 ? `、右に ${it.icon2}` : ""}${it.icon || it.icon2 ? " のアイコンボタン" : ""}`;
+      return `タイトル${q(it.label)}のトップアプリバー${topBarSizeText(it, "ja")}${it.icon ? `。左に ${it.icon}` : ""}${it.icon2 ? `、右に ${it.icon2}` : ""}${it.icon || it.icon2 ? " のアイコンボタン" : ""}`;
     case "bottomNav": {
       const tabs = (it.tabs ?? []).map((t) => `${q(t.label || "ラベルなし")}(${t.icon || "アイコンなし"})`);
       return `${tabs.length}項目のナビゲーションバー（${tabs.join("、")}。${selectedText(it, "ja")}）`;
@@ -172,7 +326,7 @@ function itemJa(it: Item): string {
       return `${tabs.length}項目のナビゲーションレール（${tabs.join("、")}。${selectedText(it, "ja")}）${railStateText(it, "ja")}`;
     }
     case "searchBar":
-      return `プレースホルダー${q(it.label)}の検索バー${it.icon2 ? `（右端に ${it.icon2} アイコン）` : ""}`;
+      return `プレースホルダー${q(it.label)}の${it.variant === "outlined" ? "枠線スタイルの" : ""}検索バー${it.icon2 ? `（右端に ${it.icon2} アイコン）` : ""}`;
     case "card": {
       const style = it.variant === "elevated" ? "エレベーテッド" : it.variant === "outlined" ? "アウトライン" : "塗りつぶし";
       return `${style}カード${it.size2 ? `（高さ ${it.size2}dp）` : ""}${cardLook(it, "ja")}。${cardImage(it, "ja")}見出し${q(it.label)}${hasText(it.supporting) ? `、本文${q(it.supporting!)}` : ""}${cardText(it, "ja")}`;
@@ -191,7 +345,7 @@ function itemJa(it: Item): string {
       return `ラベル${q(it.label)}の${it.variant === "filled" ? "塗りつぶし" : "アウトライン"}ドロップダウン（タップでメニューを開いて 1 つ選ぶ。選択肢は${opts.join("、")}${initial}）${it.icon ? `（先頭に ${it.icon} アイコン）` : ""}${hasText(it.supporting) ? `。補助テキストは${q(it.supporting!)}` : ""}`;
     }
     case "switch":
-      return `${q(it.label)}のスイッチ（初期状態は${it.checked ? "オン" : "オフ"}${it.noCheck ? "、オン時のハンドルにチェックアイコンなし" : ""}）`;
+      return `${q(it.label)}のスイッチ（初期状態は${it.checked ? "オン" : "オフ"}）`;
     case "checkbox":
       return `${q(it.label)}のチェックボックス（初期状態は${it.checked ? "チェック済み" : "未チェック"}）`;
     case "slider":
@@ -199,7 +353,7 @@ function itemJa(it: Item): string {
     case "text":
       return `${it.bold ? "太字の" : ""}テキスト${q(it.label)}（${it.size ?? 28}sp）`;
     case "image":
-      return `${it.size ?? 200}dp 角の画像${imageSrc(it) ? `（${imageSrc(it)} の画像を表示）` : it.src ? "（指定の画像を表示）" : "プレースホルダー"}`;
+      return `${imageDims(it)} の画像${imageSrc(it) ? `（${imageSrc(it)} の画像を表示）` : it.src ? "（指定の画像を表示）" : "プレースホルダー"}`;
     case "camera":
       return `${viewSize(it, 4 / 3)} のカメラプレビュー`;
     case "map":
@@ -207,7 +361,9 @@ function itemJa(it: Item): string {
     case "divider":
       return "区切り線";
     case "box":
-      return `${it.size ?? PHONE_W}×${it.size2 ?? 220}dp の${it.checked ? "ボトムシート（上部にドラッグハンドル。" : "ボックス（"}背景 ${it.fill ?? "surfaceContainerLow"}、${boxCorners(it, "ja")}）`;
+      return `${it.size ?? PHONE_W}×${it.size2 ?? 220}dp のボックス（背景 ${it.fill ?? "surfaceContainerLow"}、${boxCorners(it, "ja")}）`;
+    case "bottomSheet":
+      return `${it.size ?? PHONE_W}×${it.size2 ?? 320}dp のボトムシート（上部にドラッグハンドル。背景 ${it.fill ?? "surfaceContainerLow"}、上の角丸 ${it.radiusTop ?? 28}dp）`;
     case "loadingIndicator":
       return `M3 Expressive の形が変化するローディングインジケータ${it.contained ? "（コンテナ付き）" : ""}`;
     case "linearProgress":
@@ -215,7 +371,7 @@ function itemJa(it: Item): string {
     case "circularProgress":
       return `${it.wavy ? "波形の" : ""}サーキュラープログレス（${it.value === undefined ? "不確定" : `${it.value}%`}${progressThickness(it) !== 4 ? `、トラックの太さ ${progressThickness(it)}dp` : ""}）`;
     case "splitButton":
-      return `${q(it.label)}${it.icon ? `（${it.icon} アイコン付き）` : ""}の${v}スプリットボタン（右側にメニューを開く矢印のセグメント）`;
+      return `${q(it.label)}${it.icon ? `（${it.icon} アイコン付き）` : ""}の${v}スプリットボタン（右側にメニューを開く矢印のセグメント）${buttonSize(it, "ja")}${splitMenuText(it, "ja")}`;
     case "fabMenu": {
       const items = (it.tabs ?? []).map((t) => `${q(t.label || "ラベルなし")}(${t.icon || "アイコンなし"})`);
       return `${v} FAB から開く FAB メニュー（開いた状態で描き、上に ${items.join("、")} の ${items.length} 項目が縦に並ぶ）`;
@@ -230,8 +386,6 @@ function itemJa(it: Item): string {
     }
     case "radio":
       return `${q(it.label)}のラジオボタン（初期状態は${it.checked ? "選択" : "未選択"}）`;
-    case "badge":
-      return hasText(it.label) ? `${q(it.label)}と表示するバッジ` : "小さな点のバッジ";
     default:
       return noun;
   }
@@ -243,17 +397,23 @@ function itemEn(it: Item): string {
   const noun = KIND_TEXT.en[it.kind]?.noun ?? it.kind;
   switch (it.kind) {
     case "button":
-      return `a ${v} button ${hasText(it.label) ? q(it.label) : "with no label"}${it.icon ? ` with a ${it.icon} icon` : ""}${it.size ? ` (${it.size}dp wide)` : ""}`;
+      return `a ${v} button ${hasText(it.label) ? q(it.label) : "with no label"}${it.icon ? ` with a ${it.icon} icon` : ""}${buttonSize(it, "en")}`;
+    case "carousel":
+      return `a ${CAROUSEL_TEXT.en[carouselLayoutOf(it)]} carousel of ${carouselCountOf(it)} cards (${it.size2 ?? 180}dp tall, each card with 16dp corners, scrolling sideways${carouselCardsText(it, "en")})`;
+    case "datePicker":
+      return `a date picker as a ${DATE_TEXT.en[dateLayoutOf(it)]} (today's date selected${dateLayoutOf(it) === "input" ? "" : ", with the month grid and Cancel / OK"})`;
+    case "timePicker":
+      return `a time picker on a ${TIME_TEXT.en[timeLayoutOf(it)]} set to the current time, with the AM/PM toggle and Cancel / OK`;
     case "iconButton":
-      return `a ${v} icon button with the ${it.icon ?? "empty"} icon`;
+      return `a ${v} icon button with the ${it.icon ?? "empty"} icon${iconButtonSize(it, "en")}`;
     case "fab":
-      return `a ${it.size && it.size >= 96 ? "large " : it.size && it.size <= 40 ? "small " : ""}${v} FAB with the ${it.icon ?? "empty"} icon`;
+      return `a ${it.size && it.size >= 96 ? "large " : it.size && it.size <= 40 ? "small " : ""}${v} FAB with the ${it.icon ?? "empty"} icon${fabMenuText(it, "en")}`;
     case "extendedFab":
-      return `a ${v} extended FAB ${q(it.label)}${it.icon ? ` with a ${it.icon} icon` : ""}`;
+      return `a ${v} extended FAB ${q(it.label)}${it.icon ? ` with a ${it.icon} icon` : ""}${it.size2 && it.size2 !== 56 ? ` (${it.size2}dp tall)` : ""}${fabMenuText(it, "en")}`;
     case "chip":
-      return `a chip ${q(it.label)}${it.checked ? " (selected)" : ""}${it.icon && !it.checked ? ` with a ${it.icon} icon` : ""}`;
+      return `a chip ${q(it.label)}${it.checked ? " (selected)" : ""}${it.icon && !it.checked ? ` with a ${it.icon} icon` : ""}${chipHeightText(it, "en")}`;
     case "topAppBar":
-      return `a top app bar titled ${q(it.label)}${it.icon ? ` with a ${it.icon} icon button on the left` : ""}${it.icon2 ? `${it.icon ? " and" : " with"} ${it.icon2} on the right` : ""}`;
+      return `a top app bar titled ${q(it.label)}${topBarSizeText(it, "en")}${it.icon ? ` with a ${it.icon} icon button on the left` : ""}${it.icon2 ? `${it.icon ? " and" : " with"} ${it.icon2} on the right` : ""}`;
     case "bottomNav": {
       const tabs = (it.tabs ?? []).map((t) => `${q(t.label || "unlabeled")} (${t.icon || "no icon"})`);
       return `a navigation bar with ${tabs.length} destinations: ${tabs.join(", ")}; ${selectedText(it, "en")}`;
@@ -263,7 +423,7 @@ function itemEn(it: Item): string {
       return `a navigation rail with ${tabs.length} destinations: ${tabs.join(", ")}; ${selectedText(it, "en")}${railStateText(it, "en")}`;
     }
     case "searchBar":
-      return `a search bar with the placeholder ${q(it.label)}${it.icon2 ? ` and a ${it.icon2} icon at the end` : ""}`;
+      return `${it.variant === "outlined" ? "an outlined" : "a"} search bar with the placeholder ${q(it.label)}${it.icon2 ? ` and a ${it.icon2} icon at the end` : ""}`;
     case "card": {
       const style = it.variant === "elevated" ? "an elevated" : it.variant === "outlined" ? "an outlined" : "a filled";
       return `${style} card${it.size2 ? ` (${it.size2}dp tall)` : ""}${cardLook(it, "en")} ${cardImage(it, "en") || "with "}the headline ${q(it.label)}${hasText(it.supporting) ? ` and the body ${q(it.supporting!)}` : ""}${cardText(it, "en")}`;
@@ -282,7 +442,7 @@ function itemEn(it: Item): string {
       return `${it.variant === "filled" ? "a filled" : "an outlined"} dropdown labeled ${q(it.label)} that opens a menu to pick one option (options ${opts.join(", ")}${initial})${it.icon ? `, with a leading ${it.icon} icon` : ""}${hasText(it.supporting) ? `; supporting text ${q(it.supporting!)}` : ""}`;
     }
     case "switch":
-      return `a switch ${q(it.label)} (initially ${it.checked ? "on" : "off"}${it.noCheck ? "; no check icon on the handle when on" : ""})`;
+      return `a switch ${q(it.label)} (initially ${it.checked ? "on" : "off"})`;
     case "checkbox":
       return `a checkbox ${q(it.label)} (initially ${it.checked ? "checked" : "unchecked"})`;
     case "slider":
@@ -290,7 +450,7 @@ function itemEn(it: Item): string {
     case "text":
       return `${it.bold ? "bold " : ""}text ${q(it.label)} at ${it.size ?? 28}sp`;
     case "image":
-      return `a ${it.size ?? 200}dp square image${imageSrc(it) ? ` (load it from ${imageSrc(it)})` : it.src ? " (use the provided image)" : " placeholder"}`;
+      return `a ${imageDims(it)} image${imageSrc(it) ? ` (load it from ${imageSrc(it)})` : it.src ? " (use the provided image)" : " placeholder"}`;
     case "camera":
       return `a ${viewSize(it, 4 / 3)} camera preview`;
     case "map":
@@ -298,7 +458,9 @@ function itemEn(it: Item): string {
     case "divider":
       return "a divider";
     case "box":
-      return `a ${it.size ?? PHONE_W}×${it.size2 ?? 220}dp ${it.checked ? "bottom sheet with a drag handle at the top" : "box"} (background ${it.fill ?? "surfaceContainerLow"}, ${boxCorners(it, "en")})`;
+      return `a ${it.size ?? PHONE_W}×${it.size2 ?? 220}dp box (background ${it.fill ?? "surfaceContainerLow"}, ${boxCorners(it, "en")})`;
+    case "bottomSheet":
+      return `a ${it.size ?? PHONE_W}×${it.size2 ?? 320}dp bottom sheet with a drag handle at the top (background ${it.fill ?? "surfaceContainerLow"}, ${it.radiusTop ?? 28}dp top corners)`;
     case "loadingIndicator":
       return `the M3 Expressive shape-morphing loading indicator${it.contained ? " (contained)" : ""}`;
     case "linearProgress":
@@ -306,7 +468,7 @@ function itemEn(it: Item): string {
     case "circularProgress":
       return `a ${it.wavy ? "wavy " : ""}circular progress indicator (${it.value === undefined ? "indeterminate" : `${it.value}%`}${progressThickness(it) !== 4 ? `, ${progressThickness(it)}dp track thickness` : ""})`;
     case "splitButton":
-      return `a ${v} split button ${q(it.label)}${it.icon ? ` with a ${it.icon} icon` : ""} and a trailing menu segment with a down arrow`;
+      return `a ${v} split button ${q(it.label)}${it.icon ? ` with a ${it.icon} icon` : ""} and a trailing menu segment with a down arrow${buttonSize(it, "en")}${splitMenuText(it, "en")}`;
     case "fabMenu": {
       const items = (it.tabs ?? []).map((t) => `${q(t.label || "unlabeled")} (${t.icon || "no icon"})`);
       return `a FAB menu opening from a ${v} FAB, drawn open with ${items.length} items stacked above it: ${items.join(", ")}`;
@@ -321,8 +483,6 @@ function itemEn(it: Item): string {
     }
     case "radio":
       return `a radio button ${q(it.label)} (initially ${it.checked ? "selected" : "unselected"})`;
-    case "badge":
-      return hasText(it.label) ? `a badge reading ${q(it.label)}` : "a small dot badge";
     default:
       return noun;
   }
@@ -334,17 +494,23 @@ function itemZh(it: Item): string {
   const noun = KIND_TEXT.zh[it.kind]?.noun ?? it.kind;
   switch (it.kind) {
     case "button":
-      return `${hasText(it.label) ? q(it.label) : "无标签"}的${v}按钮${it.icon ? `（带 ${it.icon} 图标）` : ""}${it.size ? `（宽 ${it.size}dp）` : ""}`;
+      return `${hasText(it.label) ? q(it.label) : "无标签"}的${v}按钮${it.icon ? `（带 ${it.icon} 图标）` : ""}${buttonSize(it, "zh")}`;
+    case "carousel":
+      return `${CAROUSEL_TEXT.zh[carouselLayoutOf(it)]}布局的轮播（${carouselCountOf(it)} 张卡片，高 ${it.size2 ?? 180}dp，每张卡片圆角 16dp，横向滚动${carouselCardsText(it, "zh")}）`;
+    case "datePicker":
+      return `${DATE_TEXT.zh[dateLayoutOf(it)]}形式的日期选择器（已选中今天的日期${dateLayoutOf(it) === "input" ? "" : "，含月份网格与取消／确定"}）`;
+    case "timePicker":
+      return `${TIME_TEXT.zh[timeLayoutOf(it)]}形式的时间选择器（已选中当前时间，含 AM/PM 切换与取消／确定）`;
     case "iconButton":
-      return `${it.icon ?? "空"} 图标的${v}图标按钮`;
+      return `${it.icon ?? "空"} 图标的${v}图标按钮${iconButtonSize(it, "zh")}`;
     case "fab":
-      return `${it.icon ?? "空"} 图标的${v} FAB${it.size && it.size >= 96 ? "（大尺寸）" : it.size && it.size <= 40 ? "（小尺寸）" : ""}`;
+      return `${it.icon ?? "空"} 图标的${v} FAB${it.size && it.size >= 96 ? "（大尺寸）" : it.size && it.size <= 40 ? "（小尺寸）" : ""}${fabMenuText(it, "zh")}`;
     case "extendedFab":
-      return `${q(it.label)}${it.icon ? `和 ${it.icon} 图标` : ""}的扩展 FAB（${v}）`;
+      return `${q(it.label)}${it.icon ? `和 ${it.icon} 图标` : ""}的扩展 FAB（${v}${it.size2 && it.size2 !== 56 ? `，高 ${it.size2}dp` : ""}）${fabMenuText(it, "zh")}`;
     case "chip":
-      return `${q(it.label)}标签片${it.checked ? "（选中状态）" : ""}${it.icon && !it.checked ? `（带 ${it.icon} 图标）` : ""}`;
+      return `${q(it.label)}标签片${it.checked ? "（选中状态）" : ""}${it.icon && !it.checked ? `（带 ${it.icon} 图标）` : ""}${chipHeightText(it, "zh")}`;
     case "topAppBar":
-      return `标题为${q(it.label)}的顶部应用栏${it.icon ? `，左侧是 ${it.icon}` : ""}${it.icon2 ? `，右侧是 ${it.icon2}` : ""}${it.icon || it.icon2 ? " 图标按钮" : ""}`;
+      return `标题为${q(it.label)}的顶部应用栏${topBarSizeText(it, "zh")}${it.icon ? `，左侧是 ${it.icon}` : ""}${it.icon2 ? `，右侧是 ${it.icon2}` : ""}${it.icon || it.icon2 ? " 图标按钮" : ""}`;
     case "bottomNav": {
       const tabs = (it.tabs ?? []).map((t) => `${q(t.label || "无标签")}(${t.icon || "无图标"})`);
       return `${tabs.length}个项目的导航栏（${tabs.join("、")}，${selectedText(it, "zh")}）`;
@@ -354,7 +520,7 @@ function itemZh(it: Item): string {
       return `${tabs.length}个项目的侧边导航栏（${tabs.join("、")}，${selectedText(it, "zh")}）${railStateText(it, "zh")}`;
     }
     case "searchBar":
-      return `占位文字为${q(it.label)}的搜索栏${it.icon2 ? `（右端有 ${it.icon2} 图标）` : ""}`;
+      return `占位文字为${q(it.label)}的${it.variant === "outlined" ? "描边" : ""}搜索栏${it.icon2 ? `（右端有 ${it.icon2} 图标）` : ""}`;
     case "card": {
       const style = it.variant === "elevated" ? "浮起" : it.variant === "outlined" ? "描边" : "填充";
       return `${style}卡片${it.size2 ? `（高 ${it.size2}dp）` : ""}${cardLook(it, "zh")}。${cardImage(it, "zh")}标题${q(it.label)}${hasText(it.supporting) ? `，正文${q(it.supporting!)}` : ""}${cardText(it, "zh")}`;
@@ -373,7 +539,7 @@ function itemZh(it: Item): string {
       return `标签为${q(it.label)}的${it.variant === "filled" ? "填充" : "描边"}下拉菜单（点击展开菜单选择一项，选项为${opts.join("、")}${initial}）${it.icon ? `（左侧显示 ${it.icon} 图标）` : ""}${hasText(it.supporting) ? `，辅助文本为${q(it.supporting!)}` : ""}`;
     }
     case "switch":
-      return `${q(it.label)}开关（初始状态为${it.checked ? "开" : "关"}${it.noCheck ? "，开启时手柄上不显示勾选图标" : ""}）`;
+      return `${q(it.label)}开关（初始状态为${it.checked ? "开" : "关"}）`;
     case "checkbox":
       return `${q(it.label)}复选框（初始状态为${it.checked ? "已勾选" : "未勾选"}）`;
     case "slider":
@@ -381,7 +547,7 @@ function itemZh(it: Item): string {
     case "text":
       return `${it.bold ? "粗体" : ""}文本${q(it.label)}（${it.size ?? 28}sp）`;
     case "image":
-      return `${it.size ?? 200}dp 见方的图片${imageSrc(it) ? `（显示 ${imageSrc(it)} 的图片）` : it.src ? "（显示指定的图片）" : "占位符"}`;
+      return `${imageDims(it)} 的图片${imageSrc(it) ? `（显示 ${imageSrc(it)} 的图片）` : it.src ? "（显示指定的图片）" : "占位符"}`;
     case "camera":
       return `${viewSize(it, 4 / 3)} 的相机预览`;
     case "map":
@@ -389,7 +555,9 @@ function itemZh(it: Item): string {
     case "divider":
       return "分割线";
     case "box":
-      return `${it.size ?? PHONE_W}×${it.size2 ?? 220}dp 的${it.checked ? "底部面板（顶部带拖动条，" : "容器框（"}背景 ${it.fill ?? "surfaceContainerLow"}，${boxCorners(it, "zh")}）`;
+      return `${it.size ?? PHONE_W}×${it.size2 ?? 220}dp 的容器框（背景 ${it.fill ?? "surfaceContainerLow"}，${boxCorners(it, "zh")}）`;
+    case "bottomSheet":
+      return `${it.size ?? PHONE_W}×${it.size2 ?? 320}dp 的底部面板（顶部带拖动条，背景 ${it.fill ?? "surfaceContainerLow"}，上方圆角 ${it.radiusTop ?? 28}dp）`;
     case "loadingIndicator":
       return `M3 Expressive 形状变化的加载指示器${it.contained ? "（带容器）" : ""}`;
     case "linearProgress":
@@ -397,7 +565,7 @@ function itemZh(it: Item): string {
     case "circularProgress":
       return `${it.wavy ? "波浪形" : ""}圆形进度条（${it.value === undefined ? "不确定进度" : `${it.value}%`}${progressThickness(it) !== 4 ? `，轨道粗细 ${progressThickness(it)}dp` : ""}）`;
     case "splitButton":
-      return `${q(it.label)}${it.icon ? `（带 ${it.icon} 图标）` : ""}的${v}拆分按钮（右侧为带向下箭头的菜单段）`;
+      return `${q(it.label)}${it.icon ? `（带 ${it.icon} 图标）` : ""}的${v}拆分按钮（右侧为带向下箭头的菜单段）${buttonSize(it, "zh")}${splitMenuText(it, "zh")}`;
     case "fabMenu": {
       const items = (it.tabs ?? []).map((t) => `${q(t.label || "无标签")}(${t.icon || "无图标"})`);
       return `从${v} FAB 展开的 FAB 菜单（按展开状态绘制，上方纵向排列 ${items.length} 项：${items.join("、")}）`;
@@ -412,8 +580,6 @@ function itemZh(it: Item): string {
     }
     case "radio":
       return `${q(it.label)}单选按钮（初始状态为${it.checked ? "选中" : "未选中"}）`;
-    case "badge":
-      return hasText(it.label) ? `显示${q(it.label)}的徽标` : "小圆点徽标";
     default:
       return noun;
   }
@@ -424,12 +590,15 @@ function itemKo(it: Item): string {
   const v = VARIANT_TEXT.ko[it.variant];
   const noun = KIND_TEXT.ko[it.kind]?.noun ?? it.kind;
   switch (it.kind) {
-    case "button": return `${hasText(it.label) ? q(it.label) : "레이블 없는"} ${v} 버튼${it.icon ? `(${it.icon} 아이콘 포함)` : ""}${it.size ? `(너비 ${it.size}dp)` : ""}`;
-    case "iconButton": return `${it.icon ?? "빈"} 아이콘의 ${v} 아이콘 버튼`;
-    case "fab": return `${it.icon ?? "빈"} 아이콘의 ${v} FAB${it.size && it.size >= 96 ? "(대형)" : it.size && it.size <= 40 ? "(소형)" : ""}`;
-    case "extendedFab": return `${q(it.label)}${it.icon ? ` 및 ${it.icon} 아이콘` : ""} 확장 FAB(${v})`;
-    case "chip": return `${q(it.label)} 칩${it.checked ? "(선택됨)" : ""}${it.icon && !it.checked ? `(${it.icon} 아이콘 포함)` : ""}`;
-    case "topAppBar": return `제목이 ${q(it.label)}인 상단 앱 바${it.icon ? `, 왼쪽 ${it.icon}` : ""}${it.icon2 ? `, 오른쪽 ${it.icon2}` : ""}${it.icon || it.icon2 ? " 아이콘 버튼" : ""}`;
+    case "button": return `${hasText(it.label) ? q(it.label) : "레이블 없는"} ${v} 버튼${it.icon ? `(${it.icon} 아이콘 포함)` : ""}${buttonSize(it, "ko")}`;
+    case "carousel": return `${CAROUSEL_TEXT.ko[carouselLayoutOf(it)]} 레이아웃 캐러셀(카드 ${carouselCountOf(it)}장, 높이 ${it.size2 ?? 180}dp, 카드마다 모서리 16dp, 가로 스크롤${carouselCardsText(it, "ko")})`;
+    case "datePicker": return `${DATE_TEXT.ko[dateLayoutOf(it)]} 형태의 날짜 선택기(오늘 날짜 선택됨${dateLayoutOf(it) === "input" ? "" : ", 월 그리드와 취소 / 확인"})`;
+    case "timePicker": return `${TIME_TEXT.ko[timeLayoutOf(it)]} 형태의 시간 선택기(현재 시각 선택됨, AM/PM 전환과 취소 / 확인)`;
+    case "iconButton": return `${it.icon ?? "빈"} 아이콘의 ${v} 아이콘 버튼${iconButtonSize(it, "ko")}`;
+    case "fab": return `${it.icon ?? "빈"} 아이콘의 ${v} FAB${it.size && it.size >= 96 ? "(대형)" : it.size && it.size <= 40 ? "(소형)" : ""}${fabMenuText(it, "ko")}`;
+    case "extendedFab": return `${q(it.label)}${it.icon ? ` 및 ${it.icon} 아이콘` : ""} 확장 FAB(${v}${it.size2 && it.size2 !== 56 ? `, 높이 ${it.size2}dp` : ""})${fabMenuText(it, "ko")}`;
+    case "chip": return `${q(it.label)} 칩${it.checked ? "(선택됨)" : ""}${it.icon && !it.checked ? `(${it.icon} 아이콘 포함)` : ""}${chipHeightText(it, "ko")}`;
+    case "topAppBar": return `제목이 ${q(it.label)}인 상단 앱 바${topBarSizeText(it, "ko")}${it.icon ? `, 왼쪽 ${it.icon}` : ""}${it.icon2 ? `, 오른쪽 ${it.icon2}` : ""}${it.icon || it.icon2 ? " 아이콘 버튼" : ""}`;
     case "bottomNav": {
       const tabs = (it.tabs ?? []).map((t) => `${q(t.label || "레이블 없음")}(${t.icon || "아이콘 없음"})`);
       return `${tabs.length}개 항목의 내비게이션 바(${tabs.join(", ")}, ${selectedText(it, "ko")})`;
@@ -438,7 +607,7 @@ function itemKo(it: Item): string {
       const tabs = (it.tabs ?? []).map((t) => `${q(t.label || "레이블 없음")}(${t.icon || "아이콘 없음"})`);
       return `${tabs.length}개 항목의 내비게이션 레일(${tabs.join(", ")}, ${selectedText(it, "ko")})${railStateText(it, "ko")}`;
     }
-    case "searchBar": return `자리표시자가 ${q(it.label)}인 검색창${it.icon2 ? `(오른쪽 끝에 ${it.icon2} 아이콘)` : ""}`;
+    case "searchBar": return `자리표시자가 ${q(it.label)}인 ${it.variant === "outlined" ? "윤곽선 " : ""}검색창${it.icon2 ? `(오른쪽 끝에 ${it.icon2} 아이콘)` : ""}`;
     case "card": {
       const style = it.variant === "elevated" ? "돌출" : it.variant === "outlined" ? "윤곽선" : "채움";
       return `${style} 카드${it.size2 ? `(높이 ${it.size2}dp)` : ""}${cardLook(it, "ko")}. ${cardImage(it, "ko")}제목 ${q(it.label)}${hasText(it.supporting) ? `, 본문 ${q(it.supporting!)}` : ""}${cardText(it, "ko")}`;
@@ -452,19 +621,20 @@ function itemKo(it: Item): string {
       const initial = it.selected !== undefined && it.tabs?.[it.selected] ? `, 초깃값은 ${q(it.tabs[it.selected].label)}` : ", 초깃값은 없음";
       return `레이블이 ${q(it.label)}인 ${it.variant === "filled" ? "채움" : "윤곽선"} 드롭다운(탭하면 메뉴가 열려 하나를 고른다. 선택지는 ${opts.join(", ")}${initial})${it.icon ? `(앞쪽 ${it.icon} 아이콘)` : ""}${hasText(it.supporting) ? `. 보조 텍스트는 ${q(it.supporting!)}` : ""}`;
     }
-    case "switch": return `${q(it.label)} 스위치(초기 상태 ${it.checked ? "켜짐" : "꺼짐"}${it.noCheck ? ", 켜졌을 때 핸들에 체크 아이콘 없음" : ""})`;
+    case "switch": return `${q(it.label)} 스위치(초기 상태 ${it.checked ? "켜짐" : "꺼짐"})`;
     case "checkbox": return `${q(it.label)} 체크박스(초기 상태 ${it.checked ? "선택됨" : "선택 안 됨"})`;
     case "slider": return `슬라이더(초깃값 ${it.value ?? 40}%)`;
     case "text": return `${it.bold ? "굵은 " : ""}텍스트 ${q(it.label)}(${it.size ?? 28}sp)`;
-    case "image": return `${it.size ?? 200}dp 정사각형 이미지${imageSrc(it) ? `(${imageSrc(it)}의 이미지 표시)` : it.src ? "(지정한 이미지 표시)" : " 자리표시자"}`;
+    case "image": return `${imageDims(it)} 이미지${imageSrc(it) ? `(${imageSrc(it)}의 이미지 표시)` : it.src ? "(지정한 이미지 표시)" : " 자리표시자"}`;
     case "camera": return `${viewSize(it, 4 / 3)} 카메라 미리보기`;
     case "map": return `${viewSize(it, 3 / 4)} 지도`;
     case "divider": return "구분선";
-    case "box": return `${it.size ?? PHONE_W}×${it.size2 ?? 220}dp ${it.checked ? "하단 시트(위쪽 드래그 핸들 포함)" : "상자"}(배경 ${it.fill ?? "surfaceContainerLow"}, ${boxCorners(it, "ko")})`;
+    case "box": return `${it.size ?? PHONE_W}×${it.size2 ?? 220}dp 상자(배경 ${it.fill ?? "surfaceContainerLow"}, ${boxCorners(it, "ko")})`;
+    case "bottomSheet": return `${it.size ?? PHONE_W}×${it.size2 ?? 320}dp 하단 시트(위쪽 드래그 핸들 포함, 배경 ${it.fill ?? "surfaceContainerLow"}, 위 모서리 ${it.radiusTop ?? 28}dp)`;
     case "loadingIndicator": return `M3 Expressive 형태 변환 로딩 표시기${it.contained ? "(컨테이너 포함)" : ""}`;
     case "linearProgress": return `${it.wavy ? "물결 모양 " : ""}선형 진행 표시기(${it.value === undefined ? "불확정" : `${it.value}%`}${progressThickness(it) !== 4 ? `, 트랙 두께 ${progressThickness(it)}dp` : ""})`;
     case "circularProgress": return `${it.wavy ? "물결 모양 " : ""}원형 진행 표시기(${it.value === undefined ? "불확정" : `${it.value}%`}${progressThickness(it) !== 4 ? `, 트랙 두께 ${progressThickness(it)}dp` : ""})`;
-    case "splitButton": return `${q(it.label)}${it.icon ? `(${it.icon} 아이콘 포함)` : ""} ${v} 분할 버튼(오른쪽에 아래쪽 화살표가 있는 메뉴 영역)`;
+    case "splitButton": return `${q(it.label)}${it.icon ? `(${it.icon} 아이콘 포함)` : ""} ${v} 분할 버튼(오른쪽에 아래쪽 화살표가 있는 메뉴 영역)${buttonSize(it, "ko")}${splitMenuText(it, "ko")}`;
     case "fabMenu": {
       const items = (it.tabs ?? []).map((t) => `${q(t.label || "레이블 없음")}(${t.icon || "아이콘 없음"})`);
       return `${v} FAB에서 열리는 FAB 메뉴(열린 상태로 표시, 위쪽에 ${items.join(", ")} 항목 ${items.length}개를 세로 배치)`;
@@ -478,7 +648,6 @@ function itemKo(it: Item): string {
       return `${labels.join(", ")}의 탭 ${labels.length}개(${selectedText(it, "ko")}${isScrollableTabs(it) ? ", 가로로 스크롤되는 탭" : ""})`;
     }
     case "radio": return `${q(it.label)} 라디오 버튼(초기 상태 ${it.checked ? "선택됨" : "선택 안 됨"})`;
-    case "badge": return hasText(it.label) ? `${q(it.label)}을 표시하는 배지` : "작은 점 배지";
     default: return noun;
   }
 }
@@ -519,7 +688,7 @@ function groupText(g: Group, lang: Lang): string {
   const same = g.items.every((it) => it.variant === g.items[0].variant);
   if (lang === "ja") {
     if (kind === "listItem") return `${g.items.length}項目のリスト。上から ${g.items.map(itemJa).join("、")}`;
-    if (kind === "chip") return `${g.items.map((it) => q(it.label) + (it.checked ? "(選択中)" : "")).join("")}のチップが横に並ぶチップグループ`;
+    if (kind === "chip") return `${g.items.map((it) => q(it.label) + (it.checked ? "(選択中)" : "")).join("")}のチップが横に並ぶチップグループ${chipRunHeightText(g.items, "ja")}`;
     if (kind === "iconButton") return `${g.items.map((it) => it.icon ?? "空").join("・")} のアイコンボタンが連結したボタングループ`;
     const names = same
       ? g.items.map((it) => q(it.label || "ラベルなし")).join("")
@@ -528,7 +697,7 @@ function groupText(g: Group, lang: Lang): string {
   }
   if (lang === "zh") {
     if (kind === "listItem") return `${g.items.length}项的列表，从上到下依次为 ${g.items.map(itemZh).join("、")}`;
-    if (kind === "chip") return `由${g.items.map((it) => q(it.label) + (it.checked ? "(选中)" : "")).join("")}横向排列组成的标签片组`;
+    if (kind === "chip") return `由${g.items.map((it) => q(it.label) + (it.checked ? "(选中)" : "")).join("")}横向排列组成的标签片组${chipRunHeightText(g.items, "zh")}`;
     if (kind === "iconButton") return `由 ${g.items.map((it) => it.icon ?? "空").join("、")} 图标按钮相连组成的按钮组`;
     const names = same
       ? g.items.map((it) => q(it.label || "无标签")).join("")
@@ -537,7 +706,7 @@ function groupText(g: Group, lang: Lang): string {
   }
   if (lang === "ko") {
     if (kind === "listItem") return `${g.items.length}개 항목의 목록. 위에서부터 ${g.items.map(itemKo).join(", ")}`;
-    if (kind === "chip") return `${g.items.map((it) => q(it.label) + (it.checked ? "(선택됨)" : "")).join(", ")} 칩을 가로로 배치한 칩 그룹`;
+    if (kind === "chip") return `${g.items.map((it) => q(it.label) + (it.checked ? "(선택됨)" : "")).join(", ")} 칩을 가로로 배치한 칩 그룹${chipRunHeightText(g.items, "ko")}`;
     if (kind === "iconButton") return `${g.items.map((it) => it.icon ?? "빈 아이콘").join(", ")} 아이콘 버튼을 연결한 버튼 그룹`;
     const names = same
       ? g.items.map((it) => q(it.label || "레이블 없음")).join(", ")
@@ -545,7 +714,7 @@ function groupText(g: Group, lang: Lang): string {
     return `${names} 버튼 ${g.items.length}개를 가로로 연결한 버튼 그룹${same ? `(${vt[g.items[0].variant]})` : ""}`;
   }
   if (kind === "listItem") return `a list of ${g.items.length} items, top to bottom: ${g.items.map(itemEn).join("; ")}`;
-  if (kind === "chip") return `a chip group: ${g.items.map((it) => q(it.label) + (it.checked ? " (selected)" : "")).join(", ")}`;
+  if (kind === "chip") return `a chip group: ${g.items.map((it) => q(it.label) + (it.checked ? " (selected)" : "")).join(", ")}${chipRunHeightText(g.items, "en")}`;
   if (kind === "iconButton") return `a connected group of icon buttons: ${g.items.map((it) => it.icon ?? "empty").join(", ")}`;
   const names = same
     ? g.items.map((it) => q(it.label || "unlabeled")).join(", ")
@@ -559,7 +728,8 @@ function groupName(g: Group, lang: Lang): string {
   const noun = KIND_TEXT[lang][it.kind]?.noun ?? it.kind;
   const q = quote(lang);
   if (g.items.length > 1) return lang === "en" ? `the ${noun} group` : lang === "zh" ? `${noun}组` : lang === "ko" ? `${noun} 그룹` : `${noun}のグループ`;
-  if (it.kind === "box") return lang === "en" ? (it.checked ? "the bottom sheet" : "the box") : lang === "zh" ? (it.checked ? "底部面板" : "容器框") : lang === "ko" ? (it.checked ? "하단 시트" : "상자") : it.checked ? "ボトムシート" : "ボックス";
+  if (it.kind === "box") return lang === "en" ? "the box" : lang === "zh" ? "容器框" : lang === "ko" ? "상자" : "ボックス";
+  if (it.kind === "bottomSheet") return lang === "en" ? "the bottom sheet" : lang === "zh" ? "底部面板" : lang === "ko" ? "하단 시트" : "ボトムシート";
   if (hasText(it.label) && it.kind !== "text") return lang === "en" ? `the ${q(it.label)} ${noun}` : `${q(it.label)}${lang === "ko" ? " " : ""}${noun}`;
   return lang === "en" ? `the ${noun}` : noun;
 }
@@ -568,6 +738,16 @@ function groupName(g: Group, lang: Lang): string {
 
 function actionText(a: Action, frames: Frame[], lang: Lang): string | null {
   const q = quote(lang);
+  /* the menu a FAB opens is described with the FAB itself */
+  if (a.to === MENU_TARGET) return null;
+  if (a.to === LINK_TARGET) {
+    const href = linkUrlOf(a);
+    if (!href) return null;
+    if (lang === "ja") return `${href} をブラウザの別タブで開く`;
+    if (lang === "zh") return `在浏览器的新标签页中打开 ${href}`;
+    if (lang === "ko") return `${href}를 브라우저 새 탭에서 연다`;
+    return `opens ${href} in a new browser tab`;
+  }
   if (a.to === BACK_TARGET) {
     return lang === "ja" ? "前の画面に戻る（入ったときの遷移を逆再生する）" : lang === "zh" ? "返回上一个屏幕（反向播放进入时的过渡动画）" : lang === "ko" ? "이전 화면으로 돌아간다(진입 전환을 반대로 재생)" : "goes back to the previous screen (playing the entry transition in reverse)";
   }
@@ -587,7 +767,12 @@ function slotName(it: Item, slot: string, lang: Lang): string {
     const tab = it.tabs?.[i];
     const q = quote(lang);
     const label = tab?.label ? q(tab.label) : `#${i + 1}`;
-    return lang === "ja" ? `${label}の項目` : lang === "zh" ? `${label}项` : lang === "ko" ? `${label} 항목` : `the ${label} destination`;
+    /* an entry of a menu is picked from it; a destination on a bar is somewhere to go */
+    const menu = opensMenu(it) || it.kind === "fabMenu";
+    if (lang === "ja") return `${label}の${menu ? "メニュー項目" : "項目"}`;
+    if (lang === "zh") return `${label}${menu ? "菜单项" : "项"}`;
+    if (lang === "ko") return `${label} ${menu ? "메뉴 항목" : "항목"}`;
+    return `the ${label} ${menu ? "menu item" : "destination"}`;
   }
   const icon = slot === "icon2" ? it.icon2 : it.icon;
   if (lang === "ja") return `${slot === "icon2" ? "右" : "左"}の ${icon ?? ""} アイコンボタン`;
@@ -783,6 +968,62 @@ function rowText(row: LNode[], where: string, lang: Lang, within: Rect): string 
   return `${where}, in one row from left to right: ${descs.join(", ")} (keep them on the same line, vertically centered; never stack or wrap them${stretch}).`;
 }
 
+/** kinds whose side-by-side rows can read as one grid */
+const GRID_KINDS: Kind[] = ["card", "image"];
+/** the farthest two column edges or cell widths may be apart and still count as one grid */
+const GRID_SNAP = 6;
+
+type Grid = { rows: LNode[][]; cols: number; colGap: number; rowGap: number };
+
+/** Rows starting at `from` that line up as a grid: single cards (or single images) of one
+ *  kind, at least two rows of at least two cells, every row with the same column count
+ *  except a shorter last one, columns sharing their left edges and all cells one width.
+ *  Anything with parts on top of it is left to the row-by-row description. */
+function gridAt(rows: LNode[][], from: number): Grid | null {
+  const first = rows[from];
+  if (first.length < 2) return null;
+  const kind = first[0].g.items[0].kind;
+  if (!GRID_KINDS.includes(kind)) return null;
+  const cell = (n: LNode) => n.g.items.length === 1 && n.g.items[0].kind === kind && !n.children.length;
+  const width = first[0].bb.r - first[0].bb.l;
+  const fits = (row: LNode[]) =>
+    row.length <= first.length &&
+    row.every((n, j) => cell(n) && Math.abs(n.bb.l - first[j].bb.l) <= GRID_SNAP && Math.abs(n.bb.r - n.bb.l - width) <= GRID_SNAP);
+  if (!fits(first)) return null;
+  const out = [first];
+  for (let i = from + 1; i < rows.length; i++) {
+    if (!fits(rows[i])) break;
+    out.push(rows[i]);
+    if (rows[i].length < first.length) break; // a short row closes the grid
+  }
+  if (out.length < 2) return null;
+  const bottom = (row: LNode[]) => Math.max(...row.map((n) => n.bb.b));
+  const top = (row: LNode[]) => Math.min(...row.map((n) => n.bb.t));
+  return {
+    rows: out,
+    cols: first.length,
+    colGap: Math.max(0, Math.round(first[1].bb.l - first[0].bb.r)),
+    rowGap: Math.max(0, Math.round(top(out[1]) - bottom(out[0]))),
+  };
+}
+
+/** the grid phrase: how many columns, the gaps, then every cell in reading order */
+function gridText(grid: Grid, where: string, lang: Lang): string {
+  const cells = grid.rows.flat();
+  const kind = cells[0].g.items[0].kind;
+  const noun = KIND_TEXT[lang][kind]?.noun ?? kind;
+  const n = cells.length;
+  const c = grid.cols;
+  const list = cells.map((x, i) => `(${i + 1}) ${groupText(x.g, lang)}`).join(lang === "en" || lang === "ko" ? "; " : "；");
+  if (lang === "ja")
+    return `${where}、${noun}${n}個を${c}列のグリッドに並べます（列の間隔 ${grid.colGap}dp、行の間隔 ${grid.rowGap}dp。セルはすべて同じ幅で、左から右へ、上の行から順に埋める。1行に並べたり縦1列に積んだりせず${c}列を保つ）: ${list}。`;
+  if (lang === "zh")
+    return `${where}，将 ${n} 个${noun}排成 ${c} 列网格（列间距 ${grid.colGap}dp，行间距 ${grid.rowGap}dp；所有单元格等宽，从左到右、从上一行开始依次填充；保持 ${c} 列，不要排成一行或竖着堆叠）：${list}。`;
+  if (lang === "ko")
+    return `${where}, ${noun} ${n}개를 ${c}열 그리드로 배치합니다(열 간격 ${grid.colGap}dp, 행 간격 ${grid.rowGap}dp. 모든 칸은 같은 너비이며 왼쪽에서 오른쪽으로, 위 행부터 채운다. 한 줄로 늘어놓거나 세로로 쌓지 않고 ${c}열을 유지): ${list}.`;
+  return `${where}, a grid of ${n} ${noun}s in ${c} columns (${grid.colGap}dp between columns, ${grid.rowGap}dp between rows; every cell the same width, filled left to right, row by row; keep ${c} columns rather than one long row or a single stack): ${list}.`;
+}
+
 function describeNodes(lines: string[], nodes: LNode[], within: Rect | null, widths: Record<string, number>, lang: Lang, depth: number, phone: boolean) {
   const rows = rowsOf(nodes);
   const pad = "  ".repeat(depth);
@@ -792,7 +1033,10 @@ function describeNodes(lines: string[], nodes: LNode[], within: Rect | null, wid
     r: Math.max(...nodes.map((n) => n.bb.r)),
     b: Math.max(...nodes.map((n) => n.bb.b)),
   };
-  rows.forEach((row, i) => {
+  for (let i = 0; i < rows.length; i++) {
+    /* rows that line up as a grid are written once, as the grid, in place of each row */
+    const grid = gridAt(rows, i);
+    const row = grid ? grid.rows.flat() : rows[i];
     const first = row[0];
     const rowRect: Rect = {
       l: Math.min(...row.map((n) => n.bb.l)),
@@ -803,6 +1047,11 @@ function describeNodes(lines: string[], nodes: LNode[], within: Rect | null, wid
     let where: string;
     if (within) where = zone(rowRect, box, lang, phone);
     else where = lang === "ja" ? (i === 0 ? "まず" : "その下に") : lang === "zh" ? (i === 0 ? "首先" : "其下方") : lang === "ko" ? (i === 0 ? "먼저" : "그 아래에") : i === 0 ? "First" : "Below that";
+    if (grid) {
+      lines.push(`${pad}- ${gridText(grid, where, lang)}`);
+      i += grid.rows.length - 1;
+      continue;
+    }
     /* a part that partly covers an earlier sibling is drawn on top of it */
     const overlaps: string[] = [];
     if (row.length === 1) {
@@ -826,7 +1075,7 @@ function describeNodes(lines: string[], nodes: LNode[], within: Rect | null, wid
       );
       describeNodes(lines, n.children, n.bb, widths, lang, depth + 2, false);
     }
-  });
+  }
 }
 
 const RAIL_LEAD: Record<Lang, string> = { ja: "左端に", en: "Along the left edge: ", zh: "左缘：", ko: "왼쪽 가장자리에 " };
@@ -898,24 +1147,31 @@ function paletteLines(p: Palette): string[] {
 /* ---------- per-component style notes ---------- */
 
 /** How each kind should look; only the kinds on the canvas are written out.
- *  `boxSheet` is the box note used when at least one box has its handle on. */
-const STYLE_NOTES: Record<Lang, Partial<Record<Kind | "boxSheet", string>>> = {
+ */
+const STYLE_NOTES: Record<Lang, Partial<Record<Kind, string>>> = {
   ja: {
     button:
-      "ボタン: 高さ 56dp のミディアムサイズで、角は完全な丸（ピル型）。塗りつぶしは primary、トーナルは secondaryContainer、アウトラインは outline の 1dp 枠。横に連結したボタングループは 3dp の隙間で並べ、隣り合う内側の角だけ 8dp に小さくし、外側の角は丸のままにする（M3 Expressive の Connected button group）。",
+      "ボタン: 高さ 56dp のミディアムサイズで、角は完全な丸（ピル型）。塗りつぶしは primary、トーナルは secondaryContainer、アウトラインは outline の 1dp 枠。横に連結したボタングループは 3dp の隙間で並べ、隣り合う内側の角だけ 8dp に小さくし、外側の角は丸のままにする（M3 Expressive の Connected button group）。高さを指定されたボタンは M3 のサイズ（XS 32dp / S 40dp / M 56dp / L 96dp / XL 136dp）に従い、左右の余白・文字・アイコンをそのサイズのものにし、角丸は高さの半分にする。",
     iconButton:
-      "アイコンボタン: 48dp の円形。塗りつぶし・トーナル・アウトライン・スタンダードを指定通りに使い分ける。連結したアイコンボタン群は Connected button group として実装する。",
+      "アイコンボタン: 既定は 56dp の円形（M3 の M サイズ）。大きさを指定されたものは M3 のサイズ（XS 32dp / S 40dp / M 56dp / L 96dp / XL 136dp）に従い、アイコンもそのサイズのものにする。塗りつぶし・トーナル・アウトライン・スタンダードを指定通りに使い分ける。連結したアイコンボタン群は Connected button group として実装する。",
+    carousel:
+      "カルーセル: M3 の Carousel（Compose は HorizontalMultiBrowseCarousel / HorizontalUncontainedCarousel、Web は横スクロールのカード列）。カードは角丸 16dp のコンテナで、マルチブラウズとヒーローでは先頭のカードが大きく後ろほど小さく、均等では全カードが同じ幅、全画面では 1 枚が行を占める。画面の左右端まで使い、先頭の余白は 16dp、カード間は 8dp。カードの見出しはカードの下端に載せる。",
+    datePicker:
+      "日付ピッカー: M3 の DatePicker。モーダルは見出し・月の切り替え・曜日の行・日付のグリッド・キャンセル／OK を持つ角丸 28dp のダイアログ、ドッキングは入力欄の下に付く同じカレンダー、入力欄のみは末尾にカレンダーのアイコンが付いたアウトラインのテキストフィールド。選択日は primary の円で示す。",
+    timePicker:
+      "時刻ピッカー: M3 の TimePicker。時と分を 2 つの大きな数字プレート（選択中は primaryContainer、他は surfaceContainerHighest）と AM/PM の縦の切り替えで示す。時計盤は surfaceContainerHighest の円に primary の針、入力欄は数字を直接打ち込む。下部にキャンセル／OK と、時計盤／キーボードを切り替えるアイコン。",
     fab: "FAB: 通常は 56dp・角丸 16dp、大サイズは 96dp・角丸 28dp、小サイズは 40dp・角丸 12dp。トーナルは primaryContainer、塗りつぶしは primary。画面端から 16dp 離して浮かせ、影は Level 3。",
-    extendedFab: "拡張 FAB: 高さ 56dp、角丸 16dp、左にアイコン・右にラベル。",
-    chip: "チップ: 高さ 32dp、角丸 8dp。選択状態は secondaryContainer で塗り、先頭にチェックアイコンを出す。横並びのチップグループは 8dp 間隔で、はみ出す場合は横スクロール。",
+    extendedFab: "拡張 FAB: 高さ 56dp（M3 の 3 サイズは 56 / 80 / 96dp、角丸と文字もそれに合わせる）、角丸 16dp、左にアイコン・右にラベル。",
+    chip:
+      "チップ: 既定は高さ 32dp、角丸 8dp。高さを指定されたチップは M3 のサイズ（XS 32dp / S 40dp / M 56dp）に従い、左右の余白・文字・アイコンをそのサイズのものにする。選択状態は secondaryContainer で塗り、先頭にチェックアイコンを出す。横に連結したチップグループは 3dp の隙間で並べ、隣り合う内側の角だけ 4dp に小さくし、外側の角は丸のままにして、1 つの高さを共有する。はみ出す場合は横スクロール。",
     topAppBar:
-      "トップアプリバー: 高さ 64dp、背景は surface。背景はステータスバーの後ろまで伸ばし、その分（システムインセット）だけ上に余白を取る。タイトルは titleLarge、左右のアイコンボタンは 48dp。スクロール時に surfaceContainer へ色が変わる標準の挙動でよい。",
+      "トップアプリバー: 高さ 64dp、背景は surface。背景はステータスバーの後ろまで伸ばし、その分（システムインセット）だけ上に余白を取る。タイトルは titleLarge、左右のアイコンボタンは 48dp。スクロール時に surfaceContainer へ色が変わる標準の挙動でよい。ミディアム／ラージと指定されたバーは M3 の flexible top app bar で、高さ 112dp／152dp、アイコンは上 64dp の列に、タイトルは下段に独立した行（headlineSmall／headlineMedium）で置き、スクロールで小さいバーに縮む。",
     bottomNav:
       "ナビゲーションバー: 高さ 80dp、背景は surfaceContainer。背景は画面下端のジェスチャーナビゲーション領域まで伸ばし、その分（システムインセット）だけ下に余白を取る。選択中の項目は secondaryContainer のピル型インジケータ（幅 64dp・高さ 32dp）で示し、アイコンは塗りつぶし、ラベルは labelMedium。",
     navRail:
       "ナビゲーションレール: 幅 80dp、画面の左端に上から下まで、背景は surfaceContainer。項目は上から縦に並べ、選択中の項目は secondaryContainer のピル型インジケータ（幅 56dp・高さ 32dp）で示し、アイコンは塗りつぶし、その下に labelMedium のラベル。本文はレールの右に置く。",
-    searchBar: "検索バー: 高さ 56dp、角は完全な丸、背景は surfaceContainerHigh。先頭に検索アイコン、末尾に指定のアイコン。",
-    card: "カード: 角丸 20dp。画像領域は各カードの記述に従い、上部・先頭側・末尾側・背景全面のいずれかに置く（背景の場合はテキストの側からスクリムをかける。明るい文字なら黒、暗い文字なら白のフェード）。画像はアスペクト比を保って中央でクロップし、領域いっぱいに表示する。塗りつぶしは surfaceContainerHighest、エレベーテッドは surfaceContainerLow に Level 1 の影、アウトラインは outlineVariant の 1dp 枠。見出しは titleMedium、本文は bodyMedium。内側余白は 20dp、見出しと本文の間は 4dp、画像とテキストの間は 12dp。",
+    searchBar: "検索バー: 高さ 56dp、角は完全な丸、背景は surfaceContainerHigh（枠線スタイルは surface に outline の枠）。先頭に検索アイコン、末尾に指定のアイコン。",
+    card: "カード: 角丸 20dp。画像領域は各カードの記述に従い、上部・下部・先頭側・末尾側・背景全面のいずれかに置く（背景の場合はテキストの側からスクリムをかける。明るい文字なら黒、暗い文字なら白のフェード）。画像はアスペクト比を保って中央でクロップし、領域いっぱいに表示する。塗りつぶしは surfaceContainerHighest、エレベーテッドは surfaceContainerLow に Level 1 の影、アウトラインは outlineVariant の 1dp 枠。見出しは titleMedium、本文は bodyMedium。内側余白は 20dp、見出しと本文の間は 4dp、画像とテキストの間は 12dp。",
     listItem:
       "リスト項目: 高さ 72dp、先頭アイコンは 24dp（指定がなければ primaryContainer の 40dp の円の上）、主テキストは bodyLarge、サブテキストは bodyMedium の onSurfaceVariant。背景は指定のロール（指定がなければ surfaceContainerLow）。上下に連結したリストは 3dp の隙間で並べ、外側の角を 28dp、隣り合う内側の角を 8dp にする（M3 Expressive のリスト表現）。",
     dialog: "ダイアログ: 幅 312dp、角丸 28dp、背景は surfaceContainerHigh。見出しは headlineSmall、本文は bodyMedium、下部右寄せにテキストボタン。",
@@ -933,38 +1189,43 @@ const STYLE_NOTES: Record<Lang, Partial<Record<Kind | "boxSheet", string>>> = {
     map: "地図: 角丸 20dp。地図 SDK のビューをこの領域に置き、読み込み中は surfaceContainerHighest に地図アイコンを置く。",
     divider: "区切り線: 1dp の outlineVariant、左右に 16dp の余白。",
     box: "ボックス: 指定した背景色と角丸を持つ単なるコンテナ。中に重ねる部品の背景として使い、独自の挙動は付けない。",
-    boxSheet:
-      "ボックス / ボトムシート: 指定した背景色と角丸を持つコンテナ。ドラッグハンドル付きと書いたものだけはモーダルボトムシート（ModalBottomSheet）として下から出し、それ以外のボックスは単なる背景コンテナにする。",
+    bottomSheet: "ボトムシート: ModalBottomSheet として下から出す。上部中央にドラッグハンドルを置き、指定した背景色と上の角丸を使い、下の角は直角のまま。",
     loadingIndicator:
       "ローディング表示: M3 Expressive の形が変化する LoadingIndicator（回転しながら多角形の間を変形するもの）を使う。コンテナ付きは secondaryContainer の円の中に置く。",
     linearProgress: "リニアプログレス: 指定された太さ（指定がなければ 4dp）で、端を丸くする。波形指定のときは M3 Expressive の wavy スタイルにする。トラックは secondaryContainer、進捗は primary。",
     circularProgress: "サーキュラープログレス: 指定された太さ（指定がなければ 4dp）で、端を丸くする。波形指定のときは M3 Expressive の wavy スタイルにする。",
     splitButton:
-      "スプリットボタン: M3 Expressive の SplitButton。左のセグメントが主アクション、右の矢印セグメントがメニューを開く。2 つのセグメントは 2dp の隙間で並べ、外側の角は完全な丸、隣り合う内側の角は 8dp。メニューを開くと矢印が回転し、セグメントの角が丸くなる。",
+      "スプリットボタン: M3 Expressive の SplitButton。左のセグメントが主アクション、右の矢印セグメントがメニューを開く。2 つのセグメントは 2dp の隙間で並べ、外側の角は完全な丸、隣り合う内側の角は 8dp。高さはボタンと同じ XS 32 / S 40 / M 56 / L 96 / XL 136dp のスケールに従い、余白とアイコンもその高さに合わせる。メニューを開くと矢印が回転し、セグメントの角が丸くなる。",
     fabMenu:
       "FAB メニュー: M3 Expressive の FloatingActionButtonMenu。閉じているときは通常の FAB、タップすると項目が上に向かって順に現れ、FAB のアイコンが close に変わる。各項目は高さ 56dp、角は完全な丸、アイコンとラベル付きで右揃え。",
     toolbar:
       "フローティングツールバー: M3 Expressive の HorizontalFloatingToolbar。高さ 64dp、角は完全な丸、画面下端から 16dp 上に浮かせ、内容の上に重ねる。スタンダードは surfaceContainer、ビブラントは primaryContainer。中のアイコンボタンは 48dp。",
     tabs: "タブ: M3 のプライマリタブ。高さ 48dp、ラベルは titleSmall、選択中のタブは primary の文字とラベル幅の 3dp インジケータ（上の角丸）、下に outlineVariant の区切り線。タブをタップすると内容が切り替わる。",
     radio: "ラジオボタン: 20dp の円。選択時は primary の枠と中央の点、未選択は onSurfaceVariant の枠。同じグループ内では 1 つだけ選べる。ラベルは右に bodyLarge。",
-    badge: "バッジ: 文字なしは 6dp の点、文字ありは高さ 16dp のピル。背景は error、文字は onError の labelSmall。アイコンや項目の右上に重ねて置く。",
   },
   en: {
     button:
-      "Buttons: medium size, 56dp tall, fully rounded (pill). Filled uses primary, tonal uses secondaryContainer, outlined has a 1dp outline border. A connected button group is a row with 3dp gaps where only the inner adjoining corners shrink to 8dp and the outer corners stay round (the M3 Expressive connected button group).",
+      "Buttons: medium size, 56dp tall, fully rounded (pill). Filled uses primary, tonal uses secondaryContainer, outlined has a 1dp outline border. A connected button group is a row with 3dp gaps where only the inner adjoining corners shrink to 8dp and the outer corners stay round (the M3 Expressive connected button group). A button given a height follows the M3 size scale (XS 32dp, S 40dp, M 56dp, L 96dp, XL 136dp): take the side padding, the label size and the icon size of that size, and keep the corner radius at half the height.",
     iconButton:
-      "Icon buttons: 48dp circles in the filled / tonal / outlined / standard style as specified. A connected run of icon buttons is a connected button group.",
+      "Icon buttons: 56dp circles by default (M3's medium size); one given a size follows the M3 size scale (XS 32dp, S 40dp, M 56dp, L 96dp, XL 136dp), with the icon of that size. Filled / tonal / outlined / standard as specified. A connected run of icon buttons is a connected button group.",
+    carousel:
+      "Carousel: the M3 Carousel (HorizontalMultiBrowseCarousel / HorizontalUncontainedCarousel in Compose; a sideways-scrolling row of cards on the web). Cards are containers with 16dp corners; multi-browse and hero show the first card large and the rest smaller, uncontained shows every card at one width, full-screen gives one card the row. It runs edge to edge with a 16dp start margin and 8dp between cards. A card's title sits along its bottom edge.",
+    datePicker:
+      "Date picker: the M3 DatePicker. The modal is a 28dp-cornered dialog with a headline, the month switcher, the weekday row, the day grid and Cancel / OK; docked is the same calendar hanging under a text field; input only is an outlined text field with a calendar icon at its end. The selected day is a primary circle.",
+    timePicker:
+      "Time picker: the M3 TimePicker. The hour and minute are two large number plates (the selected one primaryContainer, the other surfaceContainerHighest) beside a vertical AM/PM toggle. The dial is a surfaceContainerHighest circle with a primary hand; the input layout types the numbers directly. Cancel / OK sit at the bottom with an icon that switches between dial and keyboard.",
     fab: "FAB: 56dp with 16dp corners; large is 96dp with 28dp corners; small is 40dp with 12dp corners. Tonal uses primaryContainer, filled uses primary. Float it 16dp from the screen edge with a level 3 shadow.",
-    extendedFab: "Extended FAB: 56dp tall, 16dp corners, icon on the left and label on the right.",
-    chip: "Chips: 32dp tall, 8dp corners. The selected state fills with secondaryContainer and shows a leading check icon. A chip group is a row with 8dp gaps that scrolls horizontally when it overflows.",
+    extendedFab: "Extended FAB: 56dp tall (M3's three sizes are 56 / 80 / 96dp, with the corners and the label growing to match), 16dp corners, icon on the left and label on the right.",
+    chip:
+      "Chips: 32dp tall by default, with 8dp corners. A chip given a height follows the M3 size scale (XS 32dp, S 40dp, M 56dp): take the side padding, the label size and the icon size of that size. The selected state fills with secondaryContainer and shows a leading check icon. A connected chip group is a row with 3dp gaps where only the inner adjoining corners shrink to 4dp, the outer corners stay round, and every chip shares one height; it scrolls horizontally when it overflows.",
     topAppBar:
-      "Top app bar: 64dp tall on surface, with its background extended behind the status bar (pad the top by the system inset). Title in titleLarge, 48dp icon buttons on each side. The standard tint to surfaceContainer on scroll is fine.",
+      "Top app bar: 64dp tall on surface, with its background extended behind the status bar (pad the top by the system inset). Title in titleLarge, 48dp icon buttons on each side. A bar named medium or large is M3's flexible top app bar: 112dp or 152dp tall, the icons in the top 64dp row and the title on its own line at the foot (headlineSmall / headlineMedium), collapsing to the small bar on scroll. The standard tint to surfaceContainer on scroll is fine.",
     bottomNav:
       "Navigation bar: 80dp tall on surfaceContainer, with its background extended down through the gesture navigation area (pad the bottom by the system inset). The active destination shows a secondaryContainer pill indicator (64×32dp), a filled icon and a labelMedium label.",
     navRail:
       "Navigation rail: 80dp wide on surfaceContainer, running the full height of the left edge. Destinations stack from the top; the active one shows a secondaryContainer pill indicator (56×32dp) with a filled icon and a labelMedium label below it. The content sits to the right of the rail.",
-    searchBar: "Search bar: 56dp tall, fully rounded, on surfaceContainerHigh, with a leading search icon and the specified trailing icon.",
-    card: "Cards: 20dp corners. Place each card's image area where its line says — on top, filling the leading or trailing side, or as a full-bleed background (a scrim fades in from the text's side: dark under light text, light under dark text). Images keep their aspect ratio and are center-cropped to fill their area. Filled uses surfaceContainerHighest, elevated uses surfaceContainerLow with a level 1 shadow, outlined has a 1dp outlineVariant border. Headline in titleMedium, body in bodyMedium. 20dp padding, 4dp between headline and body, 12dp between the image and the text.",
+    searchBar: "Search bar: 56dp tall, fully rounded, on surfaceContainerHigh (an outlined one sits on surface with an outline border), with a leading search icon and the specified trailing icon.",
+    card: "Cards: 20dp corners. Place each card's image area where its line says — on top, along the bottom, filling the leading or trailing side, or as a full-bleed background (a scrim fades in from the text's side: dark under light text, light under dark text). Images keep their aspect ratio and are center-cropped to fill their area. Filled uses surfaceContainerHighest, elevated uses surfaceContainerLow with a level 1 shadow, outlined has a 1dp outlineVariant border. Headline in titleMedium, body in bodyMedium. 20dp padding, 4dp between headline and body, 12dp between the image and the text.",
     listItem:
       "List items: 72dp tall, 24dp leading icon (on a 40dp primaryContainer circle unless stated), headline in bodyLarge, supporting text in bodyMedium on onSurfaceVariant, on the specified background role (surfaceContainerLow unless stated). A stacked list is a vertical run with 3dp gaps, 28dp outer corners and 8dp inner corners (the M3 Expressive list treatment).",
     dialog: "Dialogs: 312dp wide, 28dp corners, on surfaceContainerHigh. Headline in headlineSmall, body in bodyMedium, text buttons aligned right at the bottom.",
@@ -982,37 +1243,42 @@ const STYLE_NOTES: Record<Lang, Partial<Record<Kind | "boxSheet", string>>> = {
     map: "Map: 20dp corners. Place the map SDK view in this area; while it loads, show a map icon on surfaceContainerHighest.",
     divider: "Dividers: 1dp outlineVariant with 16dp horizontal insets.",
     box: "Boxes: plain containers with the specified background token and corner radii. They are the background for whatever is layered on them and have no behavior of their own.",
-    boxSheet:
-      "Boxes / bottom sheets: containers with the specified background token and corner radii. Only the ones described with a drag handle are modal bottom sheets that slide up from the bottom; every other box is a plain background container.",
+    bottomSheet: "Bottom sheets: modal bottom sheets that slide up from the bottom edge, with a drag handle centered at the top, the specified background token and top corner radius; the bottom corners stay square.",
     loadingIndicator:
       "Loading: use the M3 Expressive shape-morphing LoadingIndicator (the rotating polygon that morphs between shapes). The contained variant sits inside a secondaryContainer circle.",
     linearProgress: "Linear progress: use the stated track thickness (4dp unless stated) with round caps, and the M3 Expressive wavy style when specified. Track is secondaryContainer, progress is primary.",
     circularProgress: "Circular progress: use the stated track thickness (4dp unless stated) with round caps, and the M3 Expressive wavy style when specified.",
     splitButton:
-      "Split button: the M3 Expressive SplitButton. The leading segment is the main action and the trailing arrow segment opens a menu. The two segments sit 2dp apart with fully rounded outer corners and 8dp inner corners; opening the menu rotates the arrow and rounds the segment.",
+      "Split button: the M3 Expressive SplitButton. The leading segment is the main action and the trailing arrow segment opens a menu. The two segments sit 2dp apart with fully rounded outer corners and 8dp inner corners. The height follows the same XS 32 / S 40 / M 56 / L 96 / XL 136dp scale a button does, with the padding and icon that height asks for. Opening the menu rotates the arrow and rounds the segment.",
     fabMenu:
       "FAB menu: the M3 Expressive FloatingActionButtonMenu. Closed, it is a normal FAB; tapping it reveals the items upward one after another and the FAB icon becomes close. Each item is 56dp tall, fully rounded, right-aligned with an icon and a label.",
     toolbar:
       "Floating toolbar: the M3 Expressive HorizontalFloatingToolbar. 64dp tall, fully rounded, floating 16dp above the bottom edge over the content. Standard uses surfaceContainer, vibrant uses primaryContainer. The icon buttons inside are 48dp.",
     tabs: "Tabs: M3 primary tabs. 48dp tall, labels in titleSmall; the selected tab has primary text and a 3dp label-width indicator with rounded top corners, with an outlineVariant divider underneath. Tapping a tab switches the content.",
     radio: "Radio buttons: 20dp circles. Selected shows a primary ring with a center dot, unselected an onSurfaceVariant ring. Only one in a group can be selected. Label on the right in bodyLarge.",
-    badge: "Badges: a 6dp dot without text, a 16dp-tall pill with text. Background error, text onError in labelSmall. Overlay it on the top-right of an icon or item.",
   },
   zh: {
     button:
-      "按钮：中号，高 56dp，完全圆角（胶囊形）。填充用 primary，色调用 secondaryContainer，描边用 1dp 的 outline 边框。横向相连的按钮组以 3dp 间距排列，只把相邻的内侧圆角缩小到 8dp，外侧保持圆角（M3 Expressive 的 Connected button group）。",
-    iconButton: "图标按钮：48dp 圆形。按指定使用填充／色调／描边／标准样式。相连的图标按钮组实现为 Connected button group。",
+      "按钮：中号，高 56dp，完全圆角（胶囊形）。填充用 primary，色调用 secondaryContainer，描边用 1dp 的 outline 边框。横向相连的按钮组以 3dp 间距排列，只把相邻的内侧圆角缩小到 8dp，外侧保持圆角（M3 Expressive 的 Connected button group）。指定了高度的按钮遵循 M3 尺寸（XS 32dp / S 40dp / M 56dp / L 96dp / XL 136dp）：左右内边距、文字和图标取该尺寸的值，圆角为高度的一半。",
+    iconButton: "图标按钮：默认 56dp 圆形（M3 的 M 尺寸）；指定了尺寸的按 M3 尺寸（XS 32dp / S 40dp / M 56dp / L 96dp / XL 136dp）实现，图标也取该尺寸。按指定使用填充／色调／描边／标准样式。相连的图标按钮组实现为 Connected button group。",
+    carousel:
+      "轮播：M3 的 Carousel（Compose 为 HorizontalMultiBrowseCarousel / HorizontalUncontainedCarousel，Web 为横向滚动的卡片行）。卡片为圆角 16dp 的容器；多浏览与主图布局中首张卡片最大、越靠后越小，等宽滚动中每张卡片同宽，全屏布局中一张卡片占满整行。贴近屏幕左右边缘，起始留白 16dp，卡片间距 8dp。卡片标题放在卡片底部。",
+    datePicker:
+      "日期选择器：M3 的 DatePicker。模态形式是圆角 28dp 的对话框，含标题、月份切换、星期行、日期网格与取消／确定；停靠形式是挂在输入框下方的同一日历；仅输入框形式是末尾带日历图标的描边文本框。选中日期用 primary 圆形标出。",
+    timePicker:
+      "时间选择器：M3 的 TimePicker。小时与分钟是两块大数字面板（选中的用 primaryContainer，另一块用 surfaceContainerHighest），旁边是竖向的 AM/PM 切换。表盘是 surfaceContainerHighest 的圆形加 primary 指针；输入框形式直接输入数字。底部有取消／确定以及切换表盘／键盘的图标。",
     fab: "FAB：常规 56dp、圆角 16dp；大尺寸 96dp、圆角 28dp；小尺寸 40dp、圆角 12dp。色调用 primaryContainer，填充用 primary。距屏幕边缘 16dp 悬浮，阴影为 Level 3。",
-    extendedFab: "扩展 FAB：高 56dp，圆角 16dp，左侧图标、右侧标签。",
-    chip: "标签片：高 32dp，圆角 8dp。选中状态用 secondaryContainer 填充并在前面显示勾选图标。横向标签片组间距 8dp，溢出时横向滚动。",
+    extendedFab: "扩展 FAB：高 56dp（M3 的三种尺寸为 56 / 80 / 96dp，圆角与文字随之变化），圆角 16dp，左侧图标、右侧标签。",
+    chip:
+      "标签片：默认高 32dp，圆角 8dp。指定了高度的标签片遵循 M3 尺寸（XS 32dp / S 40dp / M 56dp）：左右内边距、文字和图标取该尺寸的值。选中状态用 secondaryContainer 填充并在前面显示勾选图标。横向相连的标签片组以 3dp 间距排列，只把相邻的内侧圆角缩小到 4dp，外侧保持圆角，并共享同一高度；溢出时横向滚动。",
     topAppBar:
-      "顶部应用栏：高 64dp，背景为 surface。背景延伸到状态栏后面，并按系统内边距在顶部留出空间。标题用 titleLarge，左右图标按钮 48dp。滚动时变为 surfaceContainer 的标准行为即可。",
+      "顶部应用栏：高 64dp，背景为 surface。背景延伸到状态栏后面，并按系统内边距在顶部留出空间。标题用 titleLarge，左右图标按钮 48dp。滚动时变为 surfaceContainer 的标准行为即可。指定为中号／大号的应用栏是 M3 的 flexible top app bar：高 112dp／152dp，图标位于顶部 64dp 一行，标题单独占底部一行（headlineSmall／headlineMedium），滚动时收缩为小号应用栏。",
     bottomNav:
       "导航栏：高 80dp，背景为 surfaceContainer。背景延伸到屏幕底部的手势导航区域，并按系统内边距在底部留出空间。选中项用 secondaryContainer 的胶囊指示器（宽 64dp、高 32dp）表示，图标为填充样式，标签用 labelMedium。",
     navRail:
       "侧边导航栏：宽 80dp，贴着屏幕左缘通高，背景为 surfaceContainer。项目从上往下排列，选中项用 secondaryContainer 的胶囊指示器（宽 56dp、高 32dp）表示，图标为填充样式，下方为 labelMedium 标签。内容放在导航栏右侧。",
-    searchBar: "搜索栏：高 56dp，完全圆角，背景为 surfaceContainerHigh。左侧显示搜索图标，右侧显示指定图标。",
-    card: "卡片：圆角 20dp。图片区域按每张卡片的描述放在顶部、左侧、右侧或作为整卡背景（背景时从文字一侧加渐变遮罩：浅色文字用黑色，深色文字用白色）。图片保持宽高比并居中裁剪以填满区域。填充用 surfaceContainerHighest，浮起用 surfaceContainerLow 加 Level 1 阴影，描边用 1dp 的 outlineVariant 边框。标题用 titleMedium，正文用 bodyMedium。内边距 20dp，标题与正文间距 4dp，图片与文字间距 12dp。",
+    searchBar: "搜索栏：高 56dp，完全圆角，背景为 surfaceContainerHigh（描边样式为 surface 背景加 outline 边框）。左侧显示搜索图标，右侧显示指定图标。",
+    card: "卡片：圆角 20dp。图片区域按每张卡片的描述放在顶部、底部、左侧、右侧或作为整卡背景（背景时从文字一侧加渐变遮罩：浅色文字用黑色，深色文字用白色）。图片保持宽高比并居中裁剪以填满区域。填充用 surfaceContainerHighest，浮起用 surfaceContainerLow 加 Level 1 阴影，描边用 1dp 的 outlineVariant 边框。标题用 titleMedium，正文用 bodyMedium。内边距 20dp，标题与正文间距 4dp，图片与文字间距 12dp。",
     listItem:
       "列表项：高 72dp，左侧图标 24dp（未指定时放在 40dp 的 primaryContainer 圆形上），主文本用 bodyLarge，辅助文本用 bodyMedium 的 onSurfaceVariant，背景为指定的颜色角色（未指定则为 surfaceContainerLow）。上下相连的列表以 3dp 间距排列，外侧圆角 28dp，相邻内侧圆角 8dp（M3 Expressive 的列表样式）。",
     dialog: "对话框：宽 312dp，圆角 28dp，背景为 surfaceContainerHigh。标题用 headlineSmall，正文用 bodyMedium，底部右对齐放文字按钮。",
@@ -1030,31 +1296,37 @@ const STYLE_NOTES: Record<Lang, Partial<Record<Kind | "boxSheet", string>>> = {
     map: "地图：圆角 20dp。在此区域放置地图 SDK 视图；加载期间在 surfaceContainerHighest 上显示地图图标。",
     divider: "分割线：1dp 的 outlineVariant，左右留 16dp 边距。",
     box: "容器框：只是带指定背景色和圆角的容器，作为叠放在其上的组件的背景，本身没有任何行为。",
-    boxSheet: "容器框／底部面板：带指定背景色和圆角的容器。只有描述中带拖动条的才做成从底部滑出的模态底部面板（ModalBottomSheet），其余容器框只是普通的背景容器。",
+    bottomSheet: "底部面板：做成从底部滑出的模态底部面板（ModalBottomSheet），顶部居中放拖动条，使用指定的背景色和上方圆角，下方保持直角。",
     loadingIndicator: "加载指示：使用 M3 Expressive 形状变化的 LoadingIndicator（旋转并在多边形之间变形）。带容器的放在 secondaryContainer 的圆形中。",
     linearProgress: "线性进度条：使用指定的轨道粗细（未指定则为 4dp）和圆形端帽。指定波浪形时使用 M3 Expressive 的 wavy 样式。轨道为 secondaryContainer，进度为 primary。",
     circularProgress: "圆形进度条：使用指定的轨道粗细（未指定则为 4dp）和圆形端帽。指定波浪形时使用 M3 Expressive 的 wavy 样式。",
     splitButton:
-      "拆分按钮：M3 Expressive 的 SplitButton。左段为主操作，右侧箭头段打开菜单。两段间距 2dp，外侧完全圆角，相邻内侧圆角 8dp。打开菜单时箭头旋转、段变为圆形。",
+      "拆分按钮：M3 Expressive 的 SplitButton。左段为主操作，右侧箭头段打开菜单。两段间距 2dp，外侧完全圆角，相邻内侧圆角 8dp。高度沿用按钮的 XS 32 / S 40 / M 56 / L 96 / XL 136dp 尺寸，内边距与图标随高度而定。打开菜单时箭头旋转、段变为圆形。",
     fabMenu:
       "FAB 菜单：M3 Expressive 的 FloatingActionButtonMenu。关闭时是普通 FAB，点击后各项依次向上展开，FAB 图标变为 close。每项高 56dp，完全圆角，带图标和标签并右对齐。",
     toolbar:
       "悬浮工具栏：M3 Expressive 的 HorizontalFloatingToolbar。高 64dp，完全圆角，悬浮在距屏幕底部 16dp 处并覆盖在内容之上。标准样式用 surfaceContainer，鲜明样式用 primaryContainer。内部图标按钮 48dp。",
     tabs: "标签页：M3 的主标签页。高 48dp，标签用 titleSmall，选中项文字为 primary 并带与标签同宽的 3dp 指示条（上方圆角），下方为 outlineVariant 分割线。点击标签切换内容。",
     radio: "单选按钮：20dp 圆形。选中时为 primary 的圆环加中心圆点，未选中为 onSurfaceVariant 圆环。同一组内只能选一个。标签在右侧，用 bodyLarge。",
-    badge: "徽标：无文字时为 6dp 圆点，有文字时为高 16dp 的胶囊。背景为 error，文字为 onError 的 labelSmall。叠放在图标或项目的右上角。",
   },
   ko: {
-    button: "버튼: 높이 56dp의 중간 크기, 완전 둥근 알약 모양. 채움은 primary, 토널은 secondaryContainer, 윤곽선은 1dp outline 테두리를 사용한다. 연결 버튼 그룹은 간격 3dp, 맞닿는 안쪽 모서리 8dp, 바깥쪽 모서리는 둥글게 유지한다.",
+    button: "버튼: 높이 56dp의 중간 크기, 완전 둥근 알약 모양. 채움은 primary, 토널은 secondaryContainer, 윤곽선은 1dp outline 테두리를 사용한다. 연결 버튼 그룹은 간격 3dp, 맞닿는 안쪽 모서리 8dp, 바깥쪽 모서리는 둥글게 유지한다. 높이가 지정된 버튼은 M3 크기(XS 32dp / S 40dp / M 56dp / L 96dp / XL 136dp)를 따라 좌우 여백, 글자 크기, 아이콘 크기를 그 크기의 값으로 하고 모서리는 높이의 절반으로 한다.",
     navRail: "내비게이션 레일: 너비 80dp, 배경 surfaceContainer, 왼쪽 가장자리의 전체 높이를 채운다. 항목은 위에서부터 세로로 배치한다. 선택 항목은 secondaryContainer 알약 표시기(56×32dp), 채운 아이콘과 아래쪽 labelMedium 레이블로 표시한다. 콘텐츠는 레일 오른쪽에 배치한다.",
-    iconButton: "아이콘 버튼: 48dp 원형. 지정된 채움, 토널, 윤곽선, 표준 스타일을 사용하며 연결된 아이콘 버튼은 Connected button group으로 구현한다.",
+    iconButton: "아이콘 버튼: 기본 56dp 원형(M3 M 크기). 크기가 지정된 것은 M3 크기(XS 32dp / S 40dp / M 56dp / L 96dp / XL 136dp)를 따르고 아이콘도 그 크기로 한다. 지정된 채움, 토널, 윤곽선, 표준 스타일을 사용하며 연결된 아이콘 버튼은 Connected button group으로 구현한다.",
+    carousel:
+      "캐러셀: M3 Carousel(Compose는 HorizontalMultiBrowseCarousel / HorizontalUncontainedCarousel, 웹은 가로로 스크롤하는 카드 행). 카드는 모서리 16dp 컨테이너이며, 멀티 브라우즈와 히어로는 첫 카드가 크고 뒤로 갈수록 작아지고, 언컨테인드는 모든 카드가 같은 너비, 전체 화면은 카드 한 장이 행을 차지한다. 화면 좌우 끝까지 쓰고 시작 여백 16dp, 카드 간격 8dp. 카드 제목은 카드 아래쪽에 놓는다.",
+    datePicker:
+      "날짜 선택기: M3 DatePicker. 모달은 제목, 월 전환, 요일 행, 날짜 그리드, 취소 / 확인을 갖춘 모서리 28dp 대화상자이고, 도킹은 입력란 아래에 붙는 같은 달력, 입력란만은 끝에 달력 아이콘이 있는 윤곽선 텍스트 필드다. 선택한 날은 primary 원으로 표시한다.",
+    timePicker:
+      "시간 선택기: M3 TimePicker. 시와 분은 큰 숫자 판 두 개(선택된 쪽은 primaryContainer, 다른 쪽은 surfaceContainerHighest)와 세로 AM/PM 전환으로 보여 준다. 시계판은 surfaceContainerHighest 원에 primary 바늘, 입력란은 숫자를 직접 입력한다. 아래에 취소 / 확인과 시계판 / 키보드를 전환하는 아이콘을 둔다.",
     fab: "FAB: 기본 56dp/모서리 16dp, 대형 96dp/28dp, 소형 40dp/12dp. 토널은 primaryContainer, 채움은 primary를 사용하고 화면 가장자리에서 16dp 띄워 Level 3 그림자를 적용한다.",
-    extendedFab: "확장 FAB: 높이 56dp, 모서리 16dp, 왼쪽에 아이콘, 오른쪽에 레이블을 둔다.",
-    chip: "칩: 높이 32dp, 모서리 8dp. 선택 상태는 secondaryContainer로 채우고 앞쪽에 체크 아이콘을 표시한다. 칩 그룹은 간격 8dp로 가로 배치하고 넘치면 가로 스크롤한다.",
-    topAppBar: "상단 앱 바: 높이 64dp, 배경 surface. 상태 표시줄 뒤까지 배경을 늘리고 시스템 인셋만큼 위쪽 여백을 둔다. 제목은 titleLarge, 양쪽 아이콘 버튼은 48dp를 사용한다.",
+    extendedFab: "확장 FAB: 높이 56dp(M3의 세 크기는 56 / 80 / 96dp이며 모서리와 글자도 이에 맞춘다), 모서리 16dp, 왼쪽에 아이콘, 오른쪽에 레이블을 둔다.",
+    chip:
+      "칩: 기본 높이 32dp, 모서리 8dp. 높이가 지정된 칩은 M3 크기(XS 32dp / S 40dp / M 56dp)를 따라 좌우 여백, 글자 크기, 아이콘 크기를 그 크기의 값으로 한다. 선택 상태는 secondaryContainer로 채우고 앞쪽에 체크 아이콘을 표시한다. 연결 칩 그룹은 간격 3dp, 맞닿는 안쪽 모서리 4dp, 바깥쪽 모서리는 둥글게 유지하며 하나의 높이를 공유하고, 넘치면 가로 스크롤한다.",
+    topAppBar: "상단 앱 바: 높이 64dp, 배경 surface. 상태 표시줄 뒤까지 배경을 늘리고 시스템 인셋만큼 위쪽 여백을 둔다. 제목은 titleLarge, 양쪽 아이콘 버튼은 48dp를 사용한다. 중간/대형으로 지정된 바는 M3 flexible top app bar로 높이 112dp/152dp, 아이콘은 위 64dp 줄에, 제목은 아래 별도 줄(headlineSmall/headlineMedium)에 두고 스크롤하면 작은 바로 줄어든다.",
     bottomNav: "내비게이션 바: 높이 80dp, 배경 surfaceContainer. 제스처 내비게이션 영역까지 배경을 늘리고 시스템 인셋만큼 아래쪽 여백을 둔다. 선택 항목은 64×32dp secondaryContainer 알약 표시기, 채운 아이콘, labelMedium 레이블로 표시한다.",
-    searchBar: "검색창: 높이 56dp, 완전 둥근 모서리, 배경 surfaceContainerHigh. 앞쪽 검색 아이콘과 지정된 뒤쪽 아이콘을 둔다.",
-    card: "카드: 모서리 20dp. 이미지 영역은 각 카드의 설명에 따라 위쪽·앞쪽·뒤쪽·배경 전체 중 한 곳에 배치한다(배경일 때는 텍스트 쪽에서 스크림을 넣는다. 밝은 텍스트에는 검정, 어두운 텍스트에는 흰색 페이드). 이미지는 비율을 유지한 채 가운데를 기준으로 잘라 영역을 채운다. 채움은 surfaceContainerHighest, 돌출은 surfaceContainerLow와 Level 1 그림자, 윤곽선은 1dp outlineVariant 테두리를 사용한다. 제목 titleMedium, 본문 bodyMedium. 안쪽 여백 20dp, 제목과 본문 사이 4dp, 이미지와 텍스트 사이 12dp.",
+    searchBar: "검색창: 높이 56dp, 완전 둥근 모서리, 배경 surfaceContainerHigh(윤곽선 스타일은 surface 배경에 outline 테두리). 앞쪽 검색 아이콘과 지정된 뒤쪽 아이콘을 둔다.",
+    card: "카드: 모서리 20dp. 이미지 영역은 각 카드의 설명에 따라 위쪽·아래쪽·앞쪽·뒤쪽·배경 전체 중 한 곳에 배치한다(배경일 때는 텍스트 쪽에서 스크림을 넣는다. 밝은 텍스트에는 검정, 어두운 텍스트에는 흰색 페이드). 이미지는 비율을 유지한 채 가운데를 기준으로 잘라 영역을 채운다. 채움은 surfaceContainerHighest, 돌출은 surfaceContainerLow와 Level 1 그림자, 윤곽선은 1dp outlineVariant 테두리를 사용한다. 제목 titleMedium, 본문 bodyMedium. 안쪽 여백 20dp, 제목과 본문 사이 4dp, 이미지와 텍스트 사이 12dp.",
     listItem: "목록 항목: 높이 72dp, 앞쪽 아이콘 24dp(별도 지정이 없으면 40dp primaryContainer 원 위), 주 텍스트 bodyLarge, 보조 텍스트 bodyMedium/onSurfaceVariant. 연결 목록은 간격 3dp, 바깥 모서리 28dp, 안쪽 모서리 8dp.",
     dialog: "대화상자: 너비 312dp, 모서리 28dp, 배경 surfaceContainerHigh. 제목 headlineSmall, 본문 bodyMedium, 텍스트 버튼은 아래쪽 오른쪽 정렬.",
     snackbar: "스낵바: 높이 48dp, 모서리 8dp, inverseSurface 배경과 inverseOnSurface 텍스트. 동작은 inversePrimary 텍스트 버튼으로 하고 아래쪽에서 16dp 띄워 몇 초 뒤 닫는다.",
@@ -1069,16 +1341,15 @@ const STYLE_NOTES: Record<Lang, Partial<Record<Kind | "boxSheet", string>>> = {
     map: "지도: 모서리 20dp. 이 영역에 지도 SDK 뷰를 두고, 불러오는 동안은 surfaceContainerHighest 위에 지도 아이콘을 둔다.",
     divider: "구분선: 1dp outlineVariant, 좌우 여백 16dp.",
     box: "상자: 지정된 배경 토큰과 모서리를 가진 단순 컨테이너. 겹쳐 놓은 부품의 배경으로 사용하며 자체 동작은 넣지 않는다.",
-    boxSheet: "상자/하단 시트: 지정된 배경과 모서리를 가진 컨테이너. 드래그 핸들이 명시된 것만 아래에서 올라오는 ModalBottomSheet로 만들고 나머지는 단순 배경 컨테이너로 둔다.",
+    bottomSheet: "하단 시트: 아래에서 올라오는 ModalBottomSheet로 만든다. 위쪽 가운데에 드래그 핸들을 두고 지정된 배경과 위 모서리를 쓰며 아래 모서리는 직각으로 둔다.",
     loadingIndicator: "로딩: 다각형이 회전하며 형태가 바뀌는 M3 Expressive LoadingIndicator를 사용한다. 컨테이너형은 secondaryContainer 원 안에 둔다.",
     linearProgress: "선형 진행 표시기: 지정된 트랙 두께(지정이 없으면 4dp)와 둥근 끝을 사용한다. 지정된 경우 M3 Expressive 물결 스타일을 사용하며 트랙은 secondaryContainer, 진행은 primary로 표시한다.",
     circularProgress: "원형 진행 표시기: 지정된 트랙 두께(지정이 없으면 4dp)와 둥근 끝을 사용한다. 지정된 경우 M3 Expressive 물결 스타일을 사용한다.",
-    splitButton: "분할 버튼: M3 Expressive SplitButton. 왼쪽은 주 동작, 오른쪽 화살표 영역은 메뉴를 연다. 두 영역 간격 2dp, 바깥 모서리는 완전 둥글게, 안쪽은 8dp로 한다.",
+    splitButton: "분할 버튼: M3 Expressive SplitButton. 왼쪽은 주 동작, 오른쪽 화살표 영역은 메뉴를 연다. 두 영역 간격 2dp, 바깥 모서리는 완전 둥글게, 안쪽은 8dp로 한다. 높이는 버튼과 같은 XS 32 / S 40 / M 56 / L 96 / XL 136dp 스케일을 따르고, 여백과 아이콘도 그 높이에 맞춘다.",
     fabMenu: "FAB 메뉴: M3 Expressive FloatingActionButtonMenu. 닫혔을 때는 일반 FAB이고 탭하면 항목이 위로 차례로 나타나며 아이콘은 close로 바뀐다. 각 항목은 높이 56dp, 완전 둥근 모서리, 아이콘과 레이블을 포함한다.",
     toolbar: "플로팅 도구 모음: M3 Expressive HorizontalFloatingToolbar. 높이 64dp, 완전 둥근 모서리로 화면 아래쪽에서 16dp 띄운다. 표준은 surfaceContainer, 비브런트는 primaryContainer, 내부 아이콘 버튼은 48dp.",
     tabs: "탭: M3 기본 탭. 높이 48dp, 레이블 titleSmall. 선택 탭은 primary 텍스트와 레이블 너비의 3dp 표시기를 사용하고 아래에 outlineVariant 구분선을 둔다.",
     radio: "라디오 버튼: 20dp 원형. 선택 시 primary 테두리와 가운데 점, 미선택 시 onSurfaceVariant 테두리. 그룹에서 하나만 선택되며 레이블은 오른쪽 bodyLarge.",
-    badge: "배지: 텍스트가 없으면 6dp 점, 있으면 높이 16dp 알약 모양. 배경 error, 텍스트 onError/labelSmall로 아이콘이나 항목 오른쪽 위에 겹쳐 둔다.",
   },
 };
 
@@ -1168,7 +1439,6 @@ const GENERAL: Record<Lang, (string | ((pl: Platform) => string))[]> = {
     "「〜の中に重ねて配置」と書いた部品は、その容器（ボックスやカード）を背景にした Box の上に重ねて描く。重なりは意図したものなので、レイアウトの都合で分離したり順序を変えたりしない。前後関係は記述の順（後に書いたものが前面）に従う。",
     "タップできる部品にはリップルと軽い縮小のフィードバックを付ける。「戻る」は入ったときの遷移を逆再生し、システムの戻る操作（戻るジェスチャー・戻るボタン）でも同じ動きにする。",
     "アイコンは Material Symbols Rounded を使う。",
-    (pl: Platform) => `${pl === "web" ? "ブラウザでの" : "エミュレータや実機での"}動作検証は不要。実装が終わったら${pl === "web" ? "production build を実行し、その出力" : "署名済みの release APK "}を成果物として提供する。`,
   ],
   en: [
     "Work out what kind of app this is from the purpose of the screens, and implement the features such an app is normally expected to have (create, list, detail, edit, delete, search, settings, whichever apply) even where the sketch does not show them.",
@@ -1182,7 +1452,6 @@ const GENERAL: Record<Lang, (string | ((pl: Platform) => string))[]> = {
     "Parts described as \"layered inside\" a container are drawn on top of that container (a Box with the container as its background). The overlap is intentional: do not separate or reorder them for layout reasons. Later items in the description are drawn in front of earlier ones.",
     "Give every tappable part ripple plus a slight press-scale. \"Back\" plays the entry transition in reverse, and the system back gesture / button must do the same.",
     "Use Material Symbols Rounded for icons.",
-    (pl: Platform) => `Do not verify ${pl === "web" ? "in a browser" : "on an emulator or a device"}. When the implementation is done, ${pl === "web" ? "run the production build and provide its output" : "produce a signed release APK"} as the deliverable.`,
   ],
   zh: [
     "先根据屏幕目的判断这是什么类型的应用，并实现该类应用通常应有的功能（新建、列表、详情、编辑、删除、搜索、设置等，视情况而定），即使草图中没有画出。",
@@ -1196,7 +1465,6 @@ const GENERAL: Record<Lang, (string | ((pl: Platform) => string))[]> = {
     "写明“内部叠放”的组件要绘制在该容器（容器框或卡片）之上（以容器为背景的 Box）。这种叠放是有意为之，不要因布局原因拆开或调整顺序。前后关系按描述顺序，后写的在前面。",
     "可点击的组件加涟漪和轻微缩放反馈。“返回”反向播放进入时的过渡动画，系统返回手势／返回键也要做同样的效果。",
     "图标使用 Material Symbols Rounded。",
-    (pl: Platform) => `不需要在${pl === "web" ? "浏览器" : "模拟器或真机"}上验证。实现完成后${pl === "web" ? "运行 production build 并提供其输出" : "生成已签名的 release APK "}作为交付物。`,
   ],
   ko: [
     "화면의 목적에서 앱의 종류를 판단하고, 스케치에 없더라도 그 종류의 앱에 일반적으로 필요한 기능(만들기, 목록, 상세, 편집, 삭제, 검색, 설정 등)을 구현한다.",
@@ -1210,7 +1478,6 @@ const GENERAL: Record<Lang, (string | ((pl: Platform) => string))[]> = {
     "'내부에 겹쳐 배치'한 부품은 해당 컨테이너(상자 또는 카드)를 배경으로 하는 Box 위에 그린다. 이 겹침은 의도된 것이므로 분리하거나 순서를 바꾸지 않으며 나중에 설명된 항목을 앞에 그린다.",
     "탭 가능한 부품에는 리플과 약한 축소 피드백을 준다. '뒤로'는 진입 전환을 반대로 재생하고 시스템 뒤로 제스처나 버튼도 같은 동작을 수행한다.",
     "아이콘은 Material Symbols Rounded를 사용한다.",
-    (pl: Platform) => `${pl === "web" ? "브라우저" : "에뮬레이터나 실제 기기"} 동작 검증은 필요 없다. 구현 후 ${pl === "web" ? "production build를 실행하고 그 출력" : "서명된 release APK"}을 결과물로 제공한다.`,
   ],
 };
 
@@ -1436,6 +1703,73 @@ const PH = {
   },
 };
 
+/** The lines an author may add to the general guidance with one tap: each is a short choice in
+ *  the panel and one sentence in the prompt. The deliverable is on unless it is turned off, so
+ *  a sketch saved before the choices existed reads the same. */
+export type PromptOption = "deliverable" | "tests" | "darkMode" | "languages" | "offline";
+export const PROMPT_OPTIONS: PromptOption[] = ["deliverable", "tests", "darkMode", "languages", "offline"];
+export const DEFAULT_PROMPT_OPTIONS: PromptOption[] = ["deliverable"];
+export const isPromptOption = (v: unknown): v is PromptOption => PROMPT_OPTIONS.includes(v as PromptOption);
+export const promptOptionsOf = (doc: Pick<Doc, "promptOptions">): PromptOption[] => (doc.promptOptions ? doc.promptOptions.filter(isPromptOption) : DEFAULT_PROMPT_OPTIONS);
+export const PROMPT_OPTION_TEXT: Record<Lang, Record<PromptOption, { label: string; icon: string; line: string | ((pl: Platform) => string) }>> = {
+  ja: {
+    deliverable: { label: "検証不要・成果物のみ", icon: "package_2", line: (pl) => `${pl === "web" ? "ブラウザでの" : "エミュレータや実機での"}動作検証は不要。実装が終わったら${pl === "web" ? "production build を実行し、その出力" : "署名済みの release APK "}を成果物として提供する。` },
+    tests: { label: "テストを書く", icon: "science", line: "主要なロジックにユニットテストを書き、すべて通る状態で提出する。" },
+    darkMode: { label: "ダークモード対応", icon: "dark_mode", line: "ライトとダークの両方のカラースキームに対応し、システム設定に追従する。" },
+    languages: { label: "日本語と英語", icon: "translate", line: "UI の文言は日本語と英語の両方を用意し、端末の言語設定に追従する。" },
+    offline: { label: "オフライン対応", icon: "cloud_off", line: "ネットワークがなくても主要な機能が使えるようにし、必要なら再接続時に同期する。" },
+  },
+  en: {
+    deliverable: { label: "No verification, deliverable only", icon: "package_2", line: (pl) => `Do not verify ${pl === "web" ? "in a browser" : "on an emulator or a device"}. When the implementation is done, ${pl === "web" ? "run the production build and provide its output" : "produce a signed release APK"} as the deliverable.` },
+    tests: { label: "Write tests", icon: "science", line: "Write unit tests for the main logic and hand it over with all of them passing." },
+    darkMode: { label: "Dark mode", icon: "dark_mode", line: "Support both the light and the dark color scheme, following the system setting." },
+    languages: { label: "Japanese and English", icon: "translate", line: "Provide the UI text in both Japanese and English, following the device language." },
+    offline: { label: "Works offline", icon: "cloud_off", line: "Keep the main features usable without a network, syncing when it returns if needed." },
+  },
+  zh: {
+    deliverable: { label: "无需验证，仅交付成果", icon: "package_2", line: (pl) => `不需要在${pl === "web" ? "浏览器" : "模拟器或真机"}上验证。实现完成后${pl === "web" ? "运行 production build 并提供其输出" : "生成已签名的 release APK "}作为交付物。` },
+    tests: { label: "编写测试", icon: "science", line: "为主要逻辑编写单元测试，并在全部通过的状态下交付。" },
+    darkMode: { label: "支持深色模式", icon: "dark_mode", line: "同时支持浅色与深色配色方案，并跟随系统设置。" },
+    languages: { label: "日语和英语", icon: "translate", line: "UI 文案同时提供日语和英语，并跟随设备语言设置。" },
+    offline: { label: "支持离线", icon: "cloud_off", line: "在没有网络时也能使用主要功能，必要时在重新连接后同步。" },
+  },
+  ko: {
+    deliverable: { label: "검증 없이 결과물만", icon: "package_2", line: (pl) => `${pl === "web" ? "브라우저" : "에뮬레이터나 실제 기기"} 동작 검증은 필요 없다. 구현 후 ${pl === "web" ? "production build를 실행하고 그 출력" : "서명된 release APK"}을 결과물로 제공한다.` },
+    tests: { label: "테스트 작성", icon: "science", line: "주요 로직에 단위 테스트를 작성하고 모두 통과하는 상태로 제출한다." },
+    darkMode: { label: "다크 모드 지원", icon: "dark_mode", line: "라이트와 다크 색상 스킴을 모두 지원하고 시스템 설정을 따른다." },
+    languages: { label: "일본어와 영어", icon: "translate", line: "UI 문구를 일본어와 영어로 모두 준비하고 기기 언어 설정을 따른다." },
+    offline: { label: "오프라인 지원", icon: "cloud_off", line: "네트워크가 없어도 주요 기능을 쓸 수 있게 하고, 필요하면 재연결 시 동기화한다." },
+  },
+};
+
+/** A place in the prompt the outline can point at: a section heading, or the line a screen
+ *  begins on. Read off the text itself, so an edited prompt keeps its marks while its headings
+ *  and screen names still stand. */
+export type PromptMark = { kind: "section" | "screen"; label: string; line: number; frameId?: string };
+export function promptMarks(text: string, frames: Frame[], lang: Lang = getLang()): PromptMark[] {
+  const ph = PH[lang];
+  const q = quote(lang);
+  const out: PromptMark[] = [];
+  /* the screens are written in document order, so the next screen line is the next unmatched
+   * frame: two screens with one name, or two unnamed ones, each get their own mark */
+  const left = [...frames];
+  const word = lang === "ja" ? "画面" : lang === "zh" ? "屏幕" : lang === "ko" ? " 화면" : null;
+  text.split("\n").forEach((l, i) => {
+    if (l.startsWith("## ")) {
+      out.push({ kind: "section", label: l.slice(3).trim(), line: i });
+      return;
+    }
+    const at = left.findIndex((f) => {
+      const name = q(f.name || ph.screen);
+      return word ? l.startsWith(name + word) : l.startsWith(`The ${name} screen`);
+    });
+    if (at < 0) return;
+    const f = left.splice(at, 1)[0];
+    out.push({ kind: "screen", label: f.name || ph.screen, line: i, frameId: f.id });
+  });
+  return out;
+}
+
 export function buildPrompt(doc: Doc, widths: Record<string, number>, onlyFrameId?: string, lang: Lang = getLang()): string {
   doc = { ...doc, groups: constrainModalRails(doc.groups) };
   const th = normalizeTheme(doc.theme);
@@ -1464,20 +1798,18 @@ export function buildPrompt(doc: Doc, widths: Record<string, number>, onlyFrameI
   }
 
   const kindsUsed: Kind[] = [];
-  let sheet = false;
   let wideRail = false;
   let legacyRail = false;
   for (const g of groups)
     for (const it of g.items) {
       if (!kindsUsed.includes(it.kind)) kindsUsed.push(it.kind);
-      if (it.kind === "box" && it.checked) sheet = true;
       if (it.kind === "navRail") {
         if (isWideRail(it)) wideRail = true;
         else legacyRail = true;
       }
     }
   const styleNotes = kindsUsed
-    .map((k) => (k === "navRail" && wideRail ? `${legacyRail ? `${STYLE_NOTES[lang].navRail} ` : ""}${WIDE_RAIL_STYLE[lang]}` : k === "box" && sheet ? STYLE_NOTES[lang].boxSheet : (platform === "web" && STYLE_NOTES_WEB[lang][k]) || STYLE_NOTES[lang][k]))
+    .map((k) => (k === "navRail" && wideRail ? `${legacyRail ? `${STYLE_NOTES[lang].navRail} ` : ""}${WIDE_RAIL_STYLE[lang]}` : (platform === "web" && STYLE_NOTES_WEB[lang][k]) || STYLE_NOTES[lang][k]))
     .filter((s): s is string => !!s);
 
   const title = only ? ph.titleOnly(q(only.name || ph.screen)) : doc.title.trim() || ph.titleAll(frames.length);
@@ -1546,6 +1878,13 @@ export function buildPrompt(doc: Doc, widths: Record<string, number>, onlyFrameI
   lines.push("");
   lines.push(ph.hGeneral);
   for (const s of GENERAL[lang]) lines.push(`- ${typeof s === "function" ? s(platform) : s}`);
+  /* the author's own choices come last, in the order they are offered */
+  const chosen = promptOptionsOf(doc);
+  for (const key of PROMPT_OPTIONS) {
+    if (!chosen.includes(key)) continue;
+    const line = PROMPT_OPTION_TEXT[lang][key].line;
+    lines.push(`- ${typeof line === "function" ? line(platform) : line}`);
+  }
   return lines.join("\n");
 }
 

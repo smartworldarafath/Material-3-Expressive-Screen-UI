@@ -94,6 +94,34 @@ body {
   opacity: 1;
 }
 
+/* a button that changes M3 size grows into the new one: the box, the padding it keeps
+   around its content and the type and icon inside it all travel together, over the same
+   340ms the canvas uses to settle a part. The hidden measuring copy carries the class too,
+   so a button with no set width reports its width as it eases. */
+.m3-size-ease,
+.m3-size-ease .msr {
+  /* the time and the curve are the editor's own (SETTLE_MS in lib/tokens.ts), set on the root */
+  transition: padding var(--m3-settle, 340ms) var(--m3-ease, cubic-bezier(0.2, 0, 0, 1)),
+    gap var(--m3-settle, 340ms) var(--m3-ease, cubic-bezier(0.2, 0, 0, 1)),
+    font-size var(--m3-settle, 340ms) var(--m3-ease, cubic-bezier(0.2, 0, 0, 1)),
+    height var(--m3-settle, 340ms) var(--m3-ease, cubic-bezier(0.2, 0, 0, 1)),
+    /* a segment that changes shape -- a split button's arrow while its menu is open -- rounds
+       off over the shorter time a corner takes rather than the time a size does */
+    border-radius 220ms var(--m3-ease, cubic-bezier(0.2, 0, 0, 1));
+}
+/* while an edge or a slider is being dragged the part follows the pointer instead; a part that
+   is told to land at once (data-size-now) does the same on its own */
+.m3-size-now .m3-size-ease,
+.m3-size-now .m3-size-ease .msr,
+[data-size-now] .m3-size-ease,
+[data-size-now] .m3-size-ease .msr,
+/* the hidden copy the editor measures reports the size that was asked for, at once:
+   the layout around the part is built from it, and only the drawn part eases */
+.m3-measure .m3-size-ease,
+.m3-measure .m3-size-ease .msr {
+  transition: none;
+}
+
 /* range input, themed per palette via CSS vars */
 input[type="range"].m3-range {
   -webkit-appearance: none;
@@ -169,8 +197,14 @@ input.m3-number {
 
 @media (prefers-reduced-motion: reduce) {
   .m3-press,
-  .m3-tile {
+  .m3-tile,
+  .m3-size-ease,
+  .m3-size-ease .msr,
+  .m3e-boot {
     transition: none;
+  }
+  .m3e-bone {
+    animation: none;
   }
   .m3-spin,
   .m3e-reveal [data-screen] > * {
@@ -235,30 +269,143 @@ input.m3-number {
   border-bottom-right-radius: 22px !important;
 }
 
-/* the static page while the editor loads: the mark as a loading indicator over the
-   default surface colour, fading out once the editor has read the document */
+/* The static page while the editor loads: the editor's own shell with nothing in it yet,
+   painted from the first HTML, fading away once the editor has read the document and stands
+   under it. The measures are the editor's, so what appears lands where its ghost was. */
 .m3e-boot {
   position: fixed;
   inset: 0;
   z-index: 1000;
-  display: grid;
-  place-items: center;
-  background: #fffbfe;
-  transition: opacity 360ms cubic-bezier(0.2, 0, 0, 1);
-}
-.m3e-boot svg {
-  transition: transform 360ms cubic-bezier(0.2, 0, 0, 1);
+  /* the editor's own floor colour: the panels and the canvas stand on it */
+  background: var(--skel-container);
+  transition: opacity 420ms cubic-bezier(0.2, 0, 0, 1);
 }
 .m3e-boot[data-done] {
   opacity: 0;
   pointer-events: none;
 }
-.m3e-boot[data-done] svg {
-  transform: scale(0.85);
+:root {
+  /* a closed or resized panel, and the theme's colours, from the last visit: the head script
+     writes over these before the first paint */
+  --skel-left: 320px;
+  --skel-right: 320px;
+  --skel-surface: #fef7ff;
+  --skel-container: #f3edf7;
+  --skel-low: #f7f2fa;
+  --skel-high: #ece6f0;
+  --skel-primary: #6750a4;
+  --skel-canvas: #f7f2fa;
 }
-@media (prefers-reduced-motion: reduce) {
-  .m3e-boot,
-  .m3e-boot svg {
-    transition: none;
+/* nothing saved yet and the system is dark: the dark scheme's surfaces, so the first paint is not a flash */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --skel-surface: #141218;
+    --skel-container: #211f26;
+    --skel-low: #1d1b20;
+    --skel-high: #2b2930;
+    --skel-primary: #d0bcff;
+    --skel-canvas: #1d1b20;
   }
 }
+.m3e-skel {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: row;
+}
+.m3e-skel-left,
+.m3e-skel-right {
+  flex: 0 0 auto;
+  background: var(--skel-surface);
+  overflow: hidden;
+  display: flex;
+}
+.m3e-skel-left {
+  width: var(--skel-left);
+  flex-direction: row;
+}
+.m3e-skel-right {
+  width: var(--skel-right);
+}
+.m3e-skel-rail {
+  width: 52px;
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 10px 0;
+  background: var(--skel-low);
+  box-sizing: border-box;
+}
+.m3e-skel-panel {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+.m3e-skel-main {
+  flex: 1;
+  position: relative;
+  min-width: 0;
+  padding: 8px;
+}
+.m3e-skel-canvas {
+  position: absolute;
+  inset: 8px;
+  border-radius: 24px;
+  background: var(--skel-canvas);
+  overflow: hidden;
+}
+.m3e-skel-tools {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 14px;
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  padding: 0 8px;
+}
+.m3e-skel-pill {
+  display: inline-flex;
+  gap: 4px;
+  padding: 6px;
+  border-radius: 28px;
+  background: var(--skel-surface);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.1);
+}
+.m3e-skel-mobile {
+  display: none;
+}
+.m3e-bone {
+  display: block;
+  background: var(--skel-high);
+  animation: m3e-breathe 1.6s ease-in-out infinite;
+}
+@keyframes m3e-breathe {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+/* the same breakpoint the editor turns into its phone shape at: one screen, one pill */
+@media (max-width: 840px), (pointer: coarse) and (max-width: 1024px) {
+  .m3e-skel-left,
+  .m3e-skel-right,
+  .m3e-skel-desk {
+    display: none;
+  }
+  .m3e-skel-mobile {
+    display: contents;
+  }
+  .m3e-skel-main {
+    padding: 6px;
+  }
+  .m3e-skel-canvas {
+    inset: 6px;
+  }
+  .m3e-skel-tools {
+    top: 10px;
+  }
+  .m3e-skel-pill {
+    gap: 2px;
+  }
+}
+
