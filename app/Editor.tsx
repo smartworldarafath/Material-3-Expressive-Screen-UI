@@ -404,24 +404,9 @@ const seed = (lang: Lang = getLang()): Group[] => {
   ];
 };
 
-/** The phone version starts with buttons only: that is all it edits. */
-const mobileSeed = (lang: Lang = getLang()): Group[] => {
-  const text = SEED_TEXT[lang];
-  const mk = (k: Kind) => makeItem(k);
-  const a = mk("button");
-  const b = mk("button");
-  const c = mk("button");
-  a.label = text.favorite;
-  a.icon = "star";
-  b.label = text.share;
-  b.icon = "share";
-  b.variant = "tonal";
-  c.label = text.start;
-  c.icon = "arrow_forward";
-  return [
-    { id: uid(), x: PHONE_MARGIN, y: 120, axis: "x", items: [a, b] },
-    { id: uid(), x: PHONE_MARGIN, y: 200, axis: "x", items: [c] },
-  ];
+/** The phone version uses the default m3e-canvas.json layout. */
+const mobileSeed = (): Group[] => {
+  return JSON.parse(JSON.stringify(DEFAULT_CANVAS_DOC.groups)) as Group[];
 };
 
 /** While the model works on a screen, the scheme's colors drift through its bezel. */
@@ -752,7 +737,7 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
       if (d) {
         try {
           const parsed = JSON.parse(d) as Partial<Doc>;
-          if (parsed.frames && parsed.frames.some((f) => f.id === "seedF2")) {
+          if (isLegacySeed(d) || (parsed.frames && parsed.frames.some((f) => f.id === "seedF2"))) {
             localStorage.removeItem(DOC_KEY);
             localStorage.removeItem(UI_KEY);
             d = null;
@@ -860,8 +845,8 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
         setSheet(null);
         if (!hadDocRef.current) {
           hadDocRef.current = true;
-          setGroups(mobileSeed(initialLangRef.current));
-          setFrames([{ id: uid(), name: t("home", initialLangRef.current), x: 0, y: 0 }]);
+          setGroups(DEFAULT_CANVAS_DOC.groups as Group[]);
+          setFrames(DEFAULT_CANVAS_DOC.frames as Frame[]);
         }
       }
       hadDocRef.current = true;
