@@ -45,7 +45,7 @@ There are no backend databases, zero telemetry, and no accounts required. Everyt
 <tr><td><b>Platform</b></td><td>Modern Web Browsers (Responsive Desktop & Mobile PWA)</td></tr>
 <tr><td><b>Architecture</b></td><td>Next.js 16 (App Router) · React 19 · TypeScript 5.7</td></tr>
 <tr><td><b>Design System</b></td><td>Google Material 3 Expressive (Shapes, springs, tonal palettes & morphing loaders)</td></tr>
-<tr><td><b>Form Factors</b></td><td>📱 Phone (412×892) · 📖 Xiaomi 18 Fold (3D Dual Screen) · ⌚ Wear OS Watch · 📱 Tablet · 💻 Desktop</td></tr>
+<tr><td><b>Form Factors</b></td><td>Phone (412×892) · Xiaomi 18 Fold (3D Dual Screen) · Wear OS Watch · Tablet · Desktop</td></tr>
 <tr><td><b>Physics Engine</b></td><td>Framer Motion 12 physics-based spring simulations, gesture drag, and 3D folding transforms</td></tr>
 <tr><td><b>AI Prompting</b></td><td>Structured deterministic prompt generation for Jetpack Compose, Flutter, and React/Tailwind</td></tr>
 <tr><td><b>Privacy</b></td><td>100% Client-Side · Zero telemetry · Local storage persistence and LZ-String stateless sharing</td></tr>
@@ -56,12 +56,12 @@ There are no backend databases, zero telemetry, and no accounts required. Everyt
 
 | Action | Link |
 |:---|:---|
-| **🚀 Open Live Studio** | [smartworldarafath.github.io/Material-3-Expressive-Screen-UI](https://smartworldarafath.github.io/Material-3-Expressive-Screen-UI/) |
-| **⭐ GitHub Repository** | [smartworldarafath/Material-3-Expressive-Screen-UI](https://github.com/smartworldarafath/Material-3-Expressive-Screen-UI) |
-| **💬 Report an Issue** | [GitHub Issues Tracker](https://github.com/smartworldarafath/Material-3-Expressive-Screen-UI/issues) |
-| **🤝 Contribute** | [GitHub Pull Requests](https://github.com/smartworldarafath/Material-3-Expressive-Screen-UI/pulls) |
-| **💖 Support / Donate** | [SupportKori](https://www.supportkori.com/arafathrahman) · [GitHub Sponsors](https://github.com/sponsors/smartworldarafath) · [nsave / RedotPay](#support) |
-| **⚖️ License** | [MIT License](LICENSE) |
+| **Open Live Studio** | [smartworldarafath.github.io/Material-3-Expressive-Screen-UI](https://smartworldarafath.github.io/Material-3-Expressive-Screen-UI/) |
+| **GitHub Repository** | [smartworldarafath/Material-3-Expressive-Screen-UI](https://github.com/smartworldarafath/Material-3-Expressive-Screen-UI) |
+| **Report an Issue** | [GitHub Issues Tracker](https://github.com/smartworldarafath/Material-3-Expressive-Screen-UI/issues) |
+| **Contribute** | [GitHub Pull Requests](https://github.com/smartworldarafath/Material-3-Expressive-Screen-UI/pulls) |
+| **Support / Donate** | [SupportKori](https://www.supportkori.com/arafathrahman) · [GitHub Sponsors](https://github.com/sponsors/smartworldarafath) · [nsave / RedotPay](#support) |
+| **License** | [MIT License](LICENSE) |
 
 </div>
 
@@ -78,11 +78,11 @@ There are no backend databases, zero telemetry, and no accounts required. Everyt
 Material 3 Expressive Screen UI supports multi-device design natively across five distinct form factors:
 
 <table width="100%"><thead><tr><th align="left" width="24%">Form Factor</th><th align="left" width="22%">Resolution</th><th align="left">Capabilities & Design Behavior</th></tr></thead><tbody>
-<tr><td><b>📱 Phone</b></td><td>412 × 892 dp (9:19.5)</td><td>Default Android portrait viewport with system status bar, bottom pill bar, expandable FABs, and modal sheets.</td></tr>
-<tr><td><b>📖 Xiaomi 18 Fold</b></td><td>780 × 892 dp (Unfolded)<br>412 × 892 dp (Cover)</td><td><b>True 3D Book-Folding Perspective</b> (0°–180°), Falcon hinge, 8.03" 2K 120Hz dual-screen, 6.56" HyperOS cover display, and Flex mode (105°).</td></tr>
-<tr><td><b>⌚ Wear OS Watch</b></td><td>384 × 384 dp (1:1)</td><td>Circular AMOLED layout, curved bezel edges, radial progress rings, and quick tactile wrist glance tiles.</td></tr>
-<tr><td><b>📱 Tablet</b></td><td>800 × 1280 dp (16:10)</td><td>Adaptive two-pane split views, vertical navigation rail, expanded action toolbars, and rich dialog layouts.</td></tr>
-<tr><td><b>💻 Desktop Workstation</b></td><td>1280 × 800 dp (16:10)</td><td>Pan-and-zoom panoramic canvas with vertical navigation rail, multi-column bento grids, and layer inspectors.</td></tr>
+<tr><td><b>Phone</b></td><td>412 × 892 dp (9:19.5)</td><td>Default Android portrait viewport with system status bar, bottom pill bar, expandable FABs, and modal sheets.</td></tr>
+<tr><td><b>Xiaomi 18 Fold</b></td><td>780 × 892 dp (Unfolded)<br>412 × 892 dp (Cover)</td><td><b>True 3D Book-Folding Perspective</b> (0°–180°), Falcon hinge, 8.03" 2K 120Hz dual-screen, 6.56" HyperOS cover display, and Flex mode (105°).</td></tr>
+<tr><td><b>Wear OS Watch</b></td><td>384 × 384 dp (1:1)</td><td>Circular AMOLED layout, curved bezel edges, radial progress rings, and quick tactile wrist glance tiles.</td></tr>
+<tr><td><b>Tablet</b></td><td>800 × 1280 dp (16:10)</td><td>Adaptive two-pane split views, vertical navigation rail, expanded action toolbars, and rich dialog layouts.</td></tr>
+<tr><td><b>Desktop Workstation</b></td><td>1280 × 800 dp (16:10)</td><td>Pan-and-zoom panoramic canvas with vertical navigation rail, multi-column bento grids, and layer inspectors.</td></tr>
 </tbody></table>
 
 #### 🌟 Xiaomi 18 Fold 3D Simulation
@@ -116,7 +116,7 @@ Material 3 Expressive Screen UI supports multi-device design natively across fiv
     </td>
     <td width="50%" align="center" valign="top">
       <img src="docs/mobile.png" alt="Mobile Companion Editor" width="100%" style="border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);" /><br><br>
-      <b>📱 Mobile Companion Experience</b><br>
+      <b>Mobile Companion Experience</b><br>
       <sub>Responsive mobile-friendly editor mode for tweaking colors, tokens, and components directly on smartphones.</sub>
     </td>
   </tr>
@@ -300,7 +300,7 @@ Material 3 Expressive Screen UI is 100% free, ad-free, and open source under the
 | Method | Details & Direct Links |
 | :--- | :--- |
 | **<img src="assets/icons/supportkori.png" alt="SupportKori" height="16" /> SupportKori** | [supportkori.com/arafathrahman](https://www.supportkori.com/arafathrahman) (bKash, Nagad, Visa, Mastercard) |
-| **💖 GitHub Sponsors** | [github.com/sponsors/smartworldarafath](https://github.com/sponsors/smartworldarafath) |
+| **GitHub Sponsors** | [github.com/sponsors/smartworldarafath](https://github.com/sponsors/smartworldarafath) |
 | **<img src="assets/icons/nsave.png" alt="nsave" height="16" /> nsave** | Ntag: `@arafath_rahman9` · Account: `Md Arafath Rahman` |
 | **<img src="assets/icons/redotpay.png" alt="RedotPay" height="16" /> RedotPay** | Account ID: `1965421414` |
 | **<img src="assets/icons/payoneer.png" alt="Payoneer" height="16" /> Payoneer** | Email: `arafathrahman710@gmail.com` · Customer ID: `70366820` |
