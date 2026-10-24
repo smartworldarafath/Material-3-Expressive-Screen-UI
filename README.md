@@ -12,15 +12,15 @@
 </p>
 
 <p align="center">
-<picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/dark/badge-clientonly.svg"><img src="assets/readme/light/badge-clientonly.svg" alt="100% Client-Side" height="28"></picture>
-<picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/dark/badge-nextjs.svg"><img src="assets/readme/light/badge-nextjs.svg" alt="Next.js 16" height="28"></picture>
-<picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/dark/badge-react.svg"><img src="assets/readme/light/badge-react.svg" alt="React 19" height="28"></picture>
-<picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/dark/badge-m3e.svg"><img src="assets/readme/light/badge-m3e.svg" alt="Material 3 Expressive" height="28"></picture>
-<picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/dark/badge-fold.svg"><img src="assets/readme/light/badge-fold.svg" alt="Xiaomi 18 Fold 3D" height="28"></picture>
-<picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/dark/badge-devices.svg"><img src="assets/readme/light/badge-devices.svg" alt="Phone · Watch · PC" height="28"></picture>
-<picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/dark/badge-zerobackend.svg"><img src="assets/readme/light/badge-zerobackend.svg" alt="Zero backend" height="28"></picture>
-<picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/dark/badge-mit.svg"><img src="assets/readme/light/badge-mit.svg" alt="MIT License" height="28"></picture>
-<picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/dark/badge-prs.svg"><img src="assets/readme/light/badge-prs.svg" alt="PRs welcome" height="28"></picture>
+<a href="#faq" title="100% Client-Side Privacy"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/dark/badge-clientonly.svg"><img src="assets/readme/light/badge-clientonly.svg" alt="100% Client-Side" height="28"></picture></a>
+<a href="https://nextjs.org" target="_blank" rel="noopener noreferrer" title="Next.js 16 App Router"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/dark/badge-nextjs.svg"><img src="assets/readme/light/badge-nextjs.svg" alt="Next.js 16" height="28"></picture></a>
+<a href="https://react.dev" target="_blank" rel="noopener noreferrer" title="React 19 Declarative UI"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/dark/badge-react.svg"><img src="assets/readme/light/badge-react.svg" alt="React 19" height="28"></picture></a>
+<a href="https://m3.material.io" target="_blank" rel="noopener noreferrer" title="Google Material 3 Expressive"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/dark/badge-m3e.svg"><img src="assets/readme/light/badge-m3e.svg" alt="Material 3 Expressive" height="28"></picture></a>
+<a href="#devices" title="Xiaomi 18 Fold 3D Simulation"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/dark/badge-fold.svg"><img src="assets/readme/light/badge-fold.svg" alt="Xiaomi 18 Fold 3D" height="28"></picture></a>
+<a href="#devices" title="Phone, Watch, Tablet, Fold & Desktop Ecosystem"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/dark/badge-devices.svg"><img src="assets/readme/light/badge-devices.svg" alt="Phone · Watch · PC" height="28"></picture></a>
+<a href="#overview" title="Zero Backend · 100% Client-Side Sandbox"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/dark/badge-zerobackend.svg"><img src="assets/readme/light/badge-zerobackend.svg" alt="Zero backend" height="28"></picture></a>
+<a href="LICENSE" title="MIT License (100% Free & Open Source)"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/dark/badge-mit.svg"><img src="assets/readme/light/badge-mit.svg" alt="MIT License" height="28"></picture></a>
+<a href="https://github.com/smartworldarafath/Material-3-Expressive-Screen-UI/pulls" title="Pull Requests Welcome!"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/dark/badge-prs.svg"><img src="assets/readme/light/badge-prs.svg" alt="PRs welcome" height="28"></picture></a>
 </p>
 
 </div>
@@ -139,10 +139,10 @@ Material 3 Expressive expands upon standard Material Design with tactile delight
 
 | | |
 |:---:|:---:|
-| <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/dark/card-fold.svg"><img src="assets/readme/light/card-fold.svg" alt="Xiaomi 18 Fold 3D" width="430"></picture> | <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/dark/card-ai.svg"><img src="assets/readme/light/card-ai.svg" alt="AI Prompt Synthesis" width="430"></picture> |
-| <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/dark/card-theming.svg"><img src="assets/readme/light/card-theming.svg" alt="Dynamic Color Engine" width="430"></picture> | <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/dark/card-docking.svg"><img src="assets/readme/light/card-docking.svg" alt="Magnetic Docking & Tidy" width="430"></picture> |
-| <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/dark/card-loaders.svg"><img src="assets/readme/light/card-loaders.svg" alt="Morphing Loaders" width="430"></picture> | <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/dark/card-prototype.svg"><img src="assets/readme/light/card-prototype.svg" alt="Interactive Wireframes" width="430"></picture> |
-| <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/dark/card-privacy.svg"><img src="assets/readme/light/card-privacy.svg" alt="100% Client-Side Privacy" width="430"></picture> | <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/dark/card-multidevice.svg"><img src="assets/readme/light/card-multidevice.svg" alt="Multi-Device Ecosystem" width="430"></picture> |
+| <a href="#devices" title="Xiaomi 18 Fold 3D Simulation"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/dark/card-fold.svg"><img src="assets/readme/light/card-fold.svg" alt="Xiaomi 18 Fold 3D" width="430"></picture></a> | <a href="#prompt" title="AI Prompt Synthesis"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/dark/card-ai.svg"><img src="assets/readme/light/card-ai.svg" alt="AI Prompt Synthesis" width="430"></picture></a> |
+| <a href="#design" title="Dynamic Color Engine"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/dark/card-theming.svg"><img src="assets/readme/light/card-theming.svg" alt="Dynamic Color Engine" width="430"></picture></a> | <a href="#features" title="Magnetic Docking & Tidy"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/dark/card-docking.svg"><img src="assets/readme/light/card-docking.svg" alt="Magnetic Docking & Tidy" width="430"></picture></a> |
+| <a href="#design" title="Morphing Loaders"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/dark/card-loaders.svg"><img src="assets/readme/light/card-loaders.svg" alt="Morphing Loaders" width="430"></picture></a> | <a href="#screenshots" title="Interactive Wireframes"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/dark/card-prototype.svg"><img src="assets/readme/light/card-prototype.svg" alt="Interactive Wireframes" width="430"></picture></a> |
+| <a href="#faq" title="100% Client-Side Privacy"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/dark/card-privacy.svg"><img src="assets/readme/light/card-privacy.svg" alt="100% Client-Side Privacy" width="430"></picture></a> | <a href="#devices" title="Multi-Device Ecosystem"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/dark/card-multidevice.svg"><img src="assets/readme/light/card-multidevice.svg" alt="Multi-Device Ecosystem" width="430"></picture></a> |
 
 </div>
 
@@ -172,16 +172,16 @@ COMPONENTS HIERARCHY:
 
 <div align="center">
 
-<picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/dark/pill-nextjs.svg"><img src="assets/readme/light/pill-nextjs.svg" alt="Next.js 16" height="34"></picture>
-<picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/dark/pill-react.svg"><img src="assets/readme/light/pill-react.svg" alt="React 19" height="34"></picture>
-<picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/dark/pill-ts.svg"><img src="assets/readme/light/pill-ts.svg" alt="TypeScript" height="34"></picture>
-<picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/dark/pill-m3e.svg"><img src="assets/readme/light/pill-m3e.svg" alt="Material 3 Expressive" height="34"></picture>
+<a href="https://nextjs.org" target="_blank" rel="noopener noreferrer" title="Next.js 16 App Router"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/dark/pill-nextjs.svg"><img src="assets/readme/light/pill-nextjs.svg" alt="Next.js 16" height="34"></picture></a>
+<a href="https://react.dev" target="_blank" rel="noopener noreferrer" title="React 19 Declarative UI"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/dark/pill-react.svg"><img src="assets/readme/light/pill-react.svg" alt="React 19" height="34"></picture></a>
+<a href="https://www.typescriptlang.org" target="_blank" rel="noopener noreferrer" title="TypeScript 5.7 Static Typing"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/dark/pill-ts.svg"><img src="assets/readme/light/pill-ts.svg" alt="TypeScript" height="34"></picture></a>
+<a href="https://m3.material.io" target="_blank" rel="noopener noreferrer" title="Google Material 3 Expressive"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/dark/pill-m3e.svg"><img src="assets/readme/light/pill-m3e.svg" alt="Material 3 Expressive" height="34"></picture></a>
 <br><br>
-<picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/dark/pill-motion.svg"><img src="assets/readme/light/pill-motion.svg" alt="Framer Motion 12" height="34"></picture>
-<picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/dark/pill-tailwind.svg"><img src="assets/readme/light/pill-tailwind.svg" alt="Tailwind CSS 3.4" height="34"></picture>
-<picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/dark/pill-symbols.svg"><img src="assets/readme/light/pill-symbols.svg" alt="Material Symbols" height="34"></picture>
-<picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/dark/pill-vitest.svg"><img src="assets/readme/light/pill-vitest.svg" alt="Vitest 3" height="34"></picture>
-<picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/dark/pill-storage.svg"><img src="assets/readme/light/pill-storage.svg" alt="LocalStorage" height="34"></picture>
+<a href="https://motion.dev" target="_blank" rel="noopener noreferrer" title="Framer Motion 12 Spring Physics"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/dark/pill-motion.svg"><img src="assets/readme/light/pill-motion.svg" alt="Framer Motion 12" height="34"></picture></a>
+<a href="https://tailwindcss.com" target="_blank" rel="noopener noreferrer" title="Tailwind CSS 3.4 Utility Framework"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/dark/pill-tailwind.svg"><img src="assets/readme/light/pill-tailwind.svg" alt="Tailwind CSS 3.4" height="34"></picture></a>
+<a href="https://fonts.google.com/icons" target="_blank" rel="noopener noreferrer" title="Google Material Symbols"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/dark/pill-symbols.svg"><img src="assets/readme/light/pill-symbols.svg" alt="Material Symbols" height="34"></picture></a>
+<a href="https://vitest.dev" target="_blank" rel="noopener noreferrer" title="Vitest 3 Unit Testing"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/dark/pill-vitest.svg"><img src="assets/readme/light/pill-vitest.svg" alt="Vitest 3" height="34"></picture></a>
+<a href="#faq" title="HTML5 LocalStorage Client Persistence"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/dark/pill-storage.svg"><img src="assets/readme/light/pill-storage.svg" alt="LocalStorage" height="34"></picture></a>
 
 </div>
 
