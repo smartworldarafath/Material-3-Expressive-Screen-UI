@@ -44,11 +44,13 @@ const ICONS = {
   lock: `<path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z" fill="currentColor"/>`,
   check: `<path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" fill="currentColor"/>`,
   sync: `<path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46A7.93 7.93 0 0 0 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74A7.93 7.93 0 0 0 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z" fill="currentColor"/>`,
-  react: `<path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 15a5 5 0 1 1 0-10 5 5 0 0 1 0 10z" fill="currentColor"/>`
+  react: `<path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 15a5 5 0 1 1 0-10 5 5 0 0 1 0 10z" fill="currentColor"/>`,
+  magnet: `<path d="M3 7v6c0 4.97 4.03 9 9 9s9-4.03 9-9V7h-4v6c0 2.76-2.24 5-5 5s-5-2.24-5-5V7H3zm0-5h4v3H3V2zm14 0h4v3h-4V2z" fill="currentColor"/>`
 };
 
 function renderIcon(name, size, color) {
-  const iconSvg = ICONS[name] || ICONS.sparkles;
+  let iconSvg = ICONS[name] || ICONS.sparkles;
+  iconSvg = iconSvg.replace(/fill="currentColor"/g, `fill="${color}"`);
   const scale = size / 24;
   const offset = -size / 2;
   return `<g transform="translate(${offset}, ${offset}) scale(${scale})" color="${color}">${iconSvg}</g>`;
@@ -397,7 +399,8 @@ generateHeader({ name: 'license', title: 'License & Credits', subtitle: 'Open so
 generateCard({ name: 'fold', title: 'Xiaomi 18 Fold 3D', lines: ['Pure 3D book-fold animation with Falcon hinge,', '8.03" 2K 120Hz inner dual-screen, 6.56" HyperOS', 'cover display, and 0°/105°/180° posture modes.'], icon: 'fold', flowerDark: '#8A5128', flowerLight: '#FFDCC1', iconDark: '#FFFFFF', iconLight: '#351500' });
 generateCard({ name: 'ai', title: 'AI Prompt Synthesis', lines: ['Automated deterministic specifications tailored for', 'autonomous coding agents: Claude Code, Cursor,', 'Codex, and Gemini. Compose and React ready.'], icon: 'robot', flowerDark: '#2A5D75', flowerLight: '#C3E8FF', iconDark: '#FFFFFF', iconLight: '#001E2E' });
 generateCard({ name: 'theming', title: 'Dynamic Color Engine', lines: ['7 curated M3 expressive palettes, seed extraction,', 'light/dark/AMOLED modes, contrast tiers, and full', 'customizable corner rounding scales.'], icon: 'palette', flowerDark: '#6750A4', flowerLight: '#EADDFF', iconDark: '#FFFFFF', iconLight: '#21005D' });
-generateCard({ name: 'docking', title: 'Magnetic Docking & Tidy', lines: ['Adjacent components fuse into unified visual clusters', 'with organic softened corner transitions. Snap to 16dp', 'gutters and 8dp rhythm boundaries in one click.'], icon: 'shapes', flowerDark: '#3A5E53', flowerLight: '#CCE8DE', iconDark: '#FFFFFF', iconLight: '#042018' });
+generateCard({ name: 'docking', title: 'Magnetic Docking & Tidy', lines: ['Adjacent components fuse into unified visual clusters', 'with organic softened corner transitions. Snap to 16dp', 'gutters and 8dp rhythm boundaries in one click.'], icon: 'magnet', flowerDark: '#3A5E53', flowerLight: '#CCE8DE', iconDark: '#FFFFFF', iconLight: '#042018' });
+generateCard({ name: 'tidy', title: 'Magnetic Docking & Tidy', lines: ['Adjacent components fuse into unified visual clusters', 'with organic softened corner transitions. Snap to 16dp', 'gutters and 8dp rhythm boundaries in one click.'], icon: 'magnet', flowerDark: '#3A5E53', flowerLight: '#CCE8DE', iconDark: '#FFFFFF', iconLight: '#042018' });
 generateCard({ name: 'loaders', title: 'Morphing Loaders', lines: ['Authentic Android shape-shifting loading indicators', 'and undulating circular/linear progress bars with', 'speed-dependent curvature mechanics.'], icon: 'sync', flowerDark: '#754877', flowerLight: '#FBD7FC', iconDark: '#FFFFFF', iconLight: '#2C132E' });
 generateCard({ name: 'prototype', title: 'Interactive Wireframes', lines: ['Link buttons to target screens with directional slides,', 'subtle fades, and zoom animations. Bidirectional', 'swipe gestures and live prototype back-stack.'], icon: 'gallery', flowerDark: '#776228', flowerLight: '#FFE193', iconDark: '#FFFFFF', iconLight: '#251A00' });
 generateCard({ name: 'privacy', title: '100% Client-Side Privacy', lines: ['Runs completely within browser memory and localStorage.', 'Zero telemetry, no server dependencies. Share layouts', 'statelessly via LZ-compressed URL hashes.'], icon: 'lock', flowerDark: '#2E6A45', flowerLight: '#C3EED0', iconDark: '#FFFFFF', iconLight: '#00210E' });
