@@ -62,6 +62,11 @@ import {
   framePresetPatch,
   frameRadius,
   isWatchFrame,
+  isFoldFrame,
+  FOLD_UNFOLDED_W,
+  FOLD_COVER_W,
+  FOLD_UNFOLDED_H,
+  FOLD_COVER_H,
   isTabFrame,
   frameIconOf,
   frameRect,
@@ -2861,12 +2866,36 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
     const next = { ...current, ...framePresetPatch(preset) };
     const before = frameSizeOf(current);
     const after = frameSizeOf(next);
-    if (before.w === after.w && before.h === after.h) return;
+    if (before.w === after.w && before.h === after.h && current.preset === next.preset) return;
     const frames = framesRef.current;
     /* the screens to the right move over, parts take the sizes the new screen calls for,
      * and the screen is laid out again by the tidy rules */
     const laid = carryFrame(groupsRef.current, current, next, frames, widthsRef.current);
     /* a target the author never picked follows the screens */
+    if (platform === defaultPlatformOf(frames, frameRef.current)) setPlatform(null);
+    snapshot();
+    tidyRef.current = null;
+    setEasing(true);
+    window.setTimeout(() => setEasing(false), SETTLE_MS + 40);
+    setFrames(laid.frames);
+    setGroups(laid.groups);
+  };
+
+  const toggleFrameFold = (id: string, forceFolded?: boolean) => {
+    const current = framesRef.current.find((f) => f.id === id);
+    if (!current) return;
+    const isCurrentlyFolded = current.folded === true || (current.w === FOLD_COVER_W && current.h === FOLD_COVER_H);
+    const nextFolded = typeof forceFolded === "boolean" ? forceFolded : !isCurrentlyFolded;
+    if (current.folded === nextFolded && ((nextFolded && current.w === FOLD_COVER_W) || (!nextFolded && current.w === FOLD_UNFOLDED_W))) return;
+    const next: Frame = {
+      ...current,
+      preset: "fold",
+      folded: nextFolded,
+      w: nextFolded ? FOLD_COVER_W : FOLD_UNFOLDED_W,
+      h: FOLD_UNFOLDED_H,
+    };
+    const frames = framesRef.current;
+    const laid = carryFrame(groupsRef.current, current, next, frames, widthsRef.current);
     if (platform === defaultPlatformOf(frames, frameRef.current)) setPlatform(null);
     snapshot();
     tidyRef.current = null;
@@ -4214,6 +4243,67 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
                         <div onPointerDown={(e) => e.stopPropagation()}>
                           <FrameSizePicker frame={f} onChange={(preset) => setFramePreset(f.id, preset)} palette={p} compact />
                         </div>
+                        {isFoldFrame(f) && (
+                          <div style={{ display: "inline-flex", alignItems: "center", gap: 6 }} onPointerDown={(e) => e.stopPropagation()}>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                toggleFrameFold(f.id);
+                              }}
+                              className="m3-press"
+                              title={f.folded ? t("unfoldAction", lang) : t("foldAction", lang)}
+                              style={{
+                                height: 32,
+                                padding: "0 12px 0 10px",
+                                borderRadius: 16,
+                                border: `1px solid ${f.folded ? p.outlineVariant : p.primary}`,
+                                background: f.folded ? p.surfaceContainerHigh : p.primaryContainer,
+                                color: f.folded ? p.onSurface : p.onPrimaryContainer,
+                                fontSize: 12,
+                                fontWeight: 700,
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: 6,
+                                cursor: "pointer",
+                                boxShadow: "0 2px 8px rgba(0,0,0,0.12)",
+                                transition: "all 180ms ease",
+                              }}
+                            >
+                              <Icon name={f.folded ? "unfold_more" : "unfold_less"} size={16} />
+                              <span>{f.folded ? t("foldedCover", lang) : t("unfoldedInner", lang)}</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setPreviewId(f.id);
+                              }}
+                              className="m3-press"
+                              title="3D Fold Simulation (0° Folded, 105° Flex, 180° Unfolded)"
+                              style={{
+                                height: 32,
+                                padding: "0 11px 0 9px",
+                                borderRadius: 16,
+                                border: `1px solid ${p.outlineVariant}`,
+                                background: p.surfaceContainerHighest,
+                                color: p.primary,
+                                fontSize: 12,
+                                fontWeight: 700,
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: 5,
+                                cursor: "pointer",
+                                boxShadow: "0 2px 8px rgba(0,0,0,0.12)",
+                                transition: "all 180ms ease",
+                              }}
+                            >
+                              <Icon name="devices_fold" size={16} />
+                              <span>3D Fold</span>
+                            </button>
+                          </div>
+                        )}
                         {f.name || t("screen", lang)}
                       </div>
                       <div
@@ -4317,8 +4407,78 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
                               <LoadingIndicator size={96} color="url(#m3e-drafting)" />
                             </div>
                           )}
+                          {isFoldFrame(f) && !f.folded && (
+                            <>
+                              {/* Crease line down the center of the inner foldable screen */}
+                              <div
+                                aria-hidden
+                                style={{
+                                  position: "absolute",
+                                  left: w / 2 - 4,
+                                  top: 0,
+                                  width: 8,
+                                  height: h,
+                                  background: "linear-gradient(to right, transparent, rgba(0,0,0,0.06) 35%, rgba(255,255,255,0.07) 50%, rgba(0,0,0,0.06) 65%, transparent)",
+                                  pointerEvents: "none",
+                                  zIndex: 4,
+                                }}
+                              />
+                              {/* Inner subtle selfie punch hole */}
+                              <div
+                                aria-hidden
+                                style={{
+                                  position: "absolute",
+                                  left: w / 2 - 4,
+                                  top: 9,
+                                  width: 8,
+                                  height: 8,
+                                  borderRadius: "50%",
+                                  background: "#0a0a0a",
+                                  border: "1px solid rgba(255,255,255,0.18)",
+                                  pointerEvents: "none",
+                                  zIndex: 5,
+                                }}
+                              />
+                            </>
+                          )}
+                          {isFoldFrame(f) && f.folded && (
+                            /* Outer cover screen selfie punch hole */
+                            <div
+                              aria-hidden
+                              style={{
+                                position: "absolute",
+                                left: w / 2 - 4.5,
+                                top: 10,
+                                width: 9,
+                                height: 9,
+                                borderRadius: "50%",
+                                background: "#0a0a0a",
+                                border: "1px solid rgba(255,255,255,0.2)",
+                                boxShadow: "0 1px 2px rgba(0,0,0,0.6)",
+                                pointerEvents: "none",
+                                zIndex: 5,
+                              }}
+                            />
+                          )}
                         </div>
                       </div>
+                      {isFoldFrame(f) && f.folded && (
+                        /* Left metallic hinge spine accent on the outer bezel */
+                        <div
+                          style={{
+                            position: "absolute",
+                            left: -BEZEL,
+                            top: 40,
+                            bottom: 40,
+                            width: 4,
+                            borderRadius: "3px 0 0 3px",
+                            background: "linear-gradient(to right, #333, #777, #222)",
+                            boxShadow: "0 0 4px rgba(0,0,0,0.4)",
+                            pointerEvents: "none",
+                            zIndex: 1,
+                          }}
+                        />
+                      )}
                       {isWatchFrame(f) && (
                         <div
                           style={{
@@ -4803,6 +4963,7 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
                   frame={selectedFrame}
                   palette={p}
                   onSize={(preset) => setFramePreset(selectedFrame.id, preset)}
+                  onToggleFold={(folded) => toggleFrameFold(selectedFrame.id, folded)}
                   onChange={(patch) => patchFrame(selectedFrame.id, patch)}
                   onDelete={() => deleteFrame(selectedFrame.id)}
                   onDuplicate={() => duplicateFrame(selectedFrame.id)}
@@ -4927,6 +5088,7 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
             palette={p}
             startId={previewId}
             onClose={closePreview}
+            onToggleFold={(id) => toggleFrameFold(id)}
           />
         )}
       </AnimatePresence>

@@ -43,6 +43,12 @@ import {
   isExpanded,
   frameSizeOf,
   isPhoneFrame,
+  isFoldFrame,
+  FOLD_UNFOLDED_W,
+  FOLD_COVER_W,
+  FOLD_UNFOLDED_H,
+  FOLD_COVER_H,
+  FOLD_R,
   isWatchFrame,
   isTabFrame,
   isDesktopFrame,
@@ -172,6 +178,8 @@ describe("frame helpers", () => {
   const desktop: Frame = { id: "d", name: "D", x: 100, y: 100, w: DESKTOP_W, h: DESKTOP_H };
   const watch: Frame = { id: "w", name: "W", x: 50, y: 50, w: WATCH_W, h: WATCH_H };
   const tab: Frame = { id: "t", name: "T", x: 150, y: 150, w: TAB_W, h: TAB_H };
+  const foldUnfolded: Frame = { id: "fu", name: "FU", x: 200, y: 200, w: FOLD_UNFOLDED_W, h: FOLD_UNFOLDED_H };
+  const foldCover: Frame = { id: "fc", name: "FC", x: 200, y: 200, w: FOLD_COVER_W, h: FOLD_COVER_H, folded: true };
 
   it("frameSizeOf fills in phone defaults when w/h are missing", () => {
     expect(frameSizeOf(phone)).toEqual({ w: PHONE_W, h: PHONE_H });
@@ -181,6 +189,8 @@ describe("frame helpers", () => {
     expect(frameSizeOf(desktop)).toEqual({ w: DESKTOP_W, h: DESKTOP_H });
     expect(frameSizeOf(watch)).toEqual({ w: WATCH_W, h: WATCH_H });
     expect(frameSizeOf(tab)).toEqual({ w: TAB_W, h: TAB_H });
+    expect(frameSizeOf(foldUnfolded)).toEqual({ w: FOLD_UNFOLDED_W, h: FOLD_UNFOLDED_H });
+    expect(frameSizeOf(foldCover)).toEqual({ w: FOLD_COVER_W, h: FOLD_COVER_H });
   });
 
   it("isPhoneFrame detects phone vs desktop vs watch vs tab dimensions", () => {
@@ -188,6 +198,16 @@ describe("frame helpers", () => {
     expect(isPhoneFrame(desktop)).toBe(false);
     expect(isPhoneFrame(watch)).toBe(false);
     expect(isPhoneFrame(tab)).toBe(false);
+    expect(isPhoneFrame(foldUnfolded)).toBe(false);
+    expect(isPhoneFrame(foldCover)).toBe(false);
+  });
+
+  it("isFoldFrame detects Xiaomi 18 Fold dimensions and preset", () => {
+    expect(isFoldFrame(foldUnfolded)).toBe(true);
+    expect(isFoldFrame(foldCover)).toBe(true);
+    expect(isFoldFrame({ id: "fx", name: "FX", x: 0, y: 0, preset: "fold" })).toBe(true);
+    expect(isFoldFrame(phone)).toBe(false);
+    expect(isFoldFrame(watch)).toBe(false);
   });
 
   it("isWatchFrame detects watch dimensions", () => {
@@ -211,18 +231,59 @@ describe("frame helpers", () => {
     expect(isDesktopFrame(tab)).toBe(false);
   });
 
-  it("framePresetOf maps to phone/desktop/watch/tab string", () => {
+  it("framePresetOf maps to phone/desktop/watch/tab/fold string", () => {
     expect(framePresetOf(phone)).toBe("phone");
     expect(framePresetOf(desktop)).toBe("desktop");
     expect(framePresetOf(watch)).toBe("watch");
     expect(framePresetOf(tab)).toBe("tab");
+    expect(framePresetOf(foldUnfolded)).toBe("fold");
+    expect(framePresetOf(foldCover)).toBe("fold");
   });
 
-  it("framePresetPatch returns the right w/h pair", () => {
-    expect(framePresetPatch("phone")).toEqual({ w: undefined, h: undefined });
-    expect(framePresetPatch("desktop")).toEqual({ w: DESKTOP_W, h: DESKTOP_H });
-    expect(framePresetPatch("watch")).toEqual({ w: WATCH_W, h: WATCH_H });
-    expect(framePresetPatch("tab")).toEqual({ w: TAB_W, h: TAB_H });
+  it("framePresetPatch returns the right w/h pair and preset", () => {
+    expect(framePresetPatch("phone")).toEqual({ w: undefined, h: undefined, preset: "phone", folded: false });
+    expect(framePresetPatch("desktop")).toEqual({ w: DESKTOP_W, h: DESKTOP_H, preset: "desktop", folded: false });
+    expect(framePresetPatch("watch")).toEqual({ w: WATCH_W, h: WATCH_H, preset: "watch", folded: false });
+    expect(framePresetPatch("tab")).toEqual({ w: TAB_W, h: TAB_H, preset: "tab", folded: false });
+    expect(framePresetPatch("fold")).toEqual({ w: FOLD_UNFOLDED_W, h: FOLD_UNFOLDED_H, preset: "fold", folded: false });
+    expect(framePresetPatch("fold", true)).toEqual({ w: FOLD_COVER_W, h: FOLD_COVER_H, preset: "fold", folded: true });
+  });
+
+  it("transitions cleanly from fold to phone, desktop, watch, and tab without retaining fold state", () => {
+    const foldedFrame: Frame = { id: "f1", name: "Screen", x: 0, y: 0, preset: "fold", folded: true, w: FOLD_COVER_W, h: FOLD_COVER_H };
+
+    // Switch to phone
+    const toPhone: Frame = { ...foldedFrame, ...framePresetPatch("phone") };
+    expect(toPhone.preset).toBe("phone");
+    expect(toPhone.folded).toBe(false);
+    expect(isFoldFrame(toPhone)).toBe(false);
+    expect(isPhoneFrame(toPhone)).toBe(true);
+    expect(framePresetOf(toPhone)).toBe("phone");
+    expect(frameSizeOf(toPhone)).toEqual({ w: PHONE_W, h: PHONE_H });
+
+    // Switch to desktop
+    const toDesktop: Frame = { ...foldedFrame, ...framePresetPatch("desktop") };
+    expect(toDesktop.preset).toBe("desktop");
+    expect(toDesktop.folded).toBe(false);
+    expect(isFoldFrame(toDesktop)).toBe(false);
+    expect(isDesktopFrame(toDesktop)).toBe(true);
+    expect(framePresetOf(toDesktop)).toBe("desktop");
+
+    // Switch to watch
+    const toWatch: Frame = { ...foldedFrame, ...framePresetPatch("watch") };
+    expect(toWatch.preset).toBe("watch");
+    expect(toWatch.folded).toBe(false);
+    expect(isFoldFrame(toWatch)).toBe(false);
+    expect(isWatchFrame(toWatch)).toBe(true);
+    expect(framePresetOf(toWatch)).toBe("watch");
+
+    // Switch to tab
+    const toTab: Frame = { ...foldedFrame, ...framePresetPatch("tab") };
+    expect(toTab.preset).toBe("tab");
+    expect(toTab.folded).toBe(false);
+    expect(isFoldFrame(toTab)).toBe(false);
+    expect(isTabFrame(toTab)).toBe(true);
+    expect(framePresetOf(toTab)).toBe("tab");
   });
 
   it("frameRect maps x/y to l/t and adds w/h to r/b", () => {
@@ -230,18 +291,22 @@ describe("frame helpers", () => {
     expect(frameRect(desktop)).toEqual({ l: 100, t: 100, r: 100 + DESKTOP_W, b: 100 + DESKTOP_H });
     expect(frameRect(watch)).toEqual({ l: 50, t: 50, r: 50 + WATCH_W, b: 50 + WATCH_H });
     expect(frameRect(tab)).toEqual({ l: 150, t: 150, r: 150 + TAB_W, b: 150 + TAB_H });
+    expect(frameRect(foldUnfolded)).toEqual({ l: 200, t: 200, r: 200 + FOLD_UNFOLDED_W, b: 200 + FOLD_UNFOLDED_H });
   });
 
-  it("frameRadius returns PHONE_R for phones, WATCH_R for watch, TAB_R for tab, and DESKTOP_R otherwise", () => {
+  it("frameRadius returns PHONE_R for phones, WATCH_R for watch, TAB_R for tab, FOLD_R for fold, and DESKTOP_R otherwise", () => {
     expect(frameRadius(phone)).toBe(PHONE_R);
     expect(frameRadius(desktop)).toBe(DESKTOP_R);
     expect(frameRadius(watch)).toBe(WATCH_R);
     expect(frameRadius(tab)).toBe(TAB_R);
+    expect(frameRadius(foldUnfolded)).toBe(FOLD_R);
+    expect(frameRadius(foldCover)).toBe(FOLD_R);
   });
 
-  it("frameIconOf returns watch, tablet_android, smartphone, or desktop_windows", () => {
+  it("frameIconOf returns watch, tablet_android, devices_fold, smartphone, or desktop_windows", () => {
     expect(frameIconOf(watch)).toBe("watch");
     expect(frameIconOf(tab)).toBe("tablet_android");
+    expect(frameIconOf(foldUnfolded)).toBe("devices_fold");
     expect(frameIconOf(phone)).toBe("smartphone");
     expect(frameIconOf(desktop)).toBe("desktop_windows");
   });

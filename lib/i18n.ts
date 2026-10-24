@@ -344,9 +344,15 @@ export const UI = {
   copySuffix: { ja: " コピー", en: " copy", zh: " 副本" },
   frameSize: { ja: "画面サイズ", en: "Screen size", zh: "屏幕尺寸" },
   phoneFrame: { ja: "スマホ", en: "Phone", zh: "手机" },
+  foldFrame: { ja: "Xiaomi 18 Fold", en: "Xiaomi 18 Fold", zh: "小米 18 Fold" },
   watchFrame: { ja: "Pixel Watch", en: "Watch", zh: "手表" },
   tabFrame: { ja: "タブレット", en: "Tablet", zh: "平板" },
   desktopFrame: { ja: "デスクトップ", en: "Desktop", zh: "桌面" },
+  foldState: { ja: "折りたたみ状態", en: "Fold State", zh: "折叠状态" },
+  foldedCover: { ja: "カバー画面 (400×860)", en: "Cover Screen (400×860)", zh: "外屏 (400×860)" },
+  unfoldedInner: { ja: "メイン画面 (760×860)", en: "Inner Screen (760×860)", zh: "内屏 (760×860)" },
+  foldAction: { ja: "折りたたむ", en: "Fold", zh: "折叠" },
+  unfoldAction: { ja: "開く", en: "Unfold", zh: "展开" },
   // mobile
   mobileNote: { ja: "フル機能は PC のブラウザで使えます", en: "Full features on a desktop browser", zh: "完整功能请在电脑浏览器中使用" },
   addButton: { ja: "ボタンを追加", en: "Add button", zh: "添加按钮" },
@@ -491,7 +497,8 @@ export type UIKey = keyof typeof UI;
 
 /** exported for the parity tests only; read strings through t() */
 export const KO: Record<UIKey, string> = {
-  frameSize: "화면 크기", phoneFrame: "휴대전화", watchFrame: "워치", tabFrame: "태블릿", desktopFrame: "데스크톱", columnWidth: "휴대전화 한 화면 너비", cornerLeft: "왼쪽 모서리", cornerRight: "오른쪽 모서리", cornersEach: "모서리별로 지정", cornerTl: "왼쪽 위", cornerTr: "오른쪽 위", cornerBl: "왼쪽 아래", cornerBr: "오른쪽 아래",
+  frameSize: "화면 크기", phoneFrame: "휴대전화", foldFrame: "샤오미 18 폴드", watchFrame: "워치", tabFrame: "태블릿", desktopFrame: "데스크톱",
+  foldState: "폴드 상태", foldedCover: "커버 화면 (400×860)", unfoldedInner: "메인 화면 (760×860)", foldAction: "접기", unfoldAction: "펼치기", columnWidth: "휴대전화 한 화면 너비", cornerLeft: "왼쪽 모서리", cornerRight: "오른쪽 모서리", cornersEach: "모서리별로 지정", cornerTl: "왼쪽 위", cornerTr: "오른쪽 위", cornerBl: "왼쪽 아래", cornerBr: "오른쪽 아래",
   filled: "채움", tonal: "색조", elevated: "그림자", outlined: "윤곽선", standard: "표준", vibrant: "선명함",
   styleSurface: "표준", stylePrimary: "기본색", styleSecondary: "보조색",
   fullscreen: "전체 화면으로 편집", exitFullscreen: "전체 화면 닫기", outline: "구성", screenLook: "화면 색상",

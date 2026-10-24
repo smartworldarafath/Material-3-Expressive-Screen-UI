@@ -51,6 +51,11 @@ import {
   groupsInFrame,
   isPhoneFrame,
   isWatchFrame,
+  isFoldFrame,
+  FOLD_UNFOLDED_W,
+  FOLD_COVER_W,
+  FOLD_UNFOLDED_H,
+  FOLD_R,
   isTabFrame,
   frameIconOf,
   normalizeTheme,
@@ -76,6 +81,7 @@ import { IconBtn } from "./ui";
 import { t, useLang } from "@/lib/i18n";
 import { constrainModalRails, modalRailOf, updateRail } from "@/lib/rail";
 import { railMotionTargets } from "@/lib/railView";
+import { XiaomiFoldStage } from "./XiaomiFoldStage";
 
 const EASE = [0.2, 0, 0, 1] as const;
 const SLIDE_MS = 0.42;
@@ -1027,12 +1033,14 @@ export function Preview({
   palette: p,
   startId,
   onClose,
+  onToggleFold,
 }: {
   doc: Doc;
   widths: Record<string, number>;
   palette: Palette;
   startId: string | null;
   onClose: () => void;
+  onToggleFold?: (frameId: string, forceFolded?: boolean) => void;
 }) {
   const lang = useLang();
   const frames = doc.frames;
@@ -1044,11 +1052,21 @@ export function Preview({
   const [flipped, setFlipped] = useState<Set<string>>(() => new Set());
   const [values, setValues] = useState<Record<string, number>>({});
   const [peek, setPeek] = useState<Peek | null>(null);
+  const [previewFolds, setPreviewFolds] = useState<Record<string, boolean>>({});
   const stackRef = useRef(stack);
   stackRef.current = stack;
   const peekRef = useRef(peek);
   peekRef.current = peek;
   const swiped = useRef(false);
+
+  const toggleFold = (id: string, forceFolded?: boolean) => {
+    setPreviewFolds((prev) => {
+      const cur = prev[id] ?? frames.find((f) => f.id === id)?.folded ?? false;
+      const next = typeof forceFolded === "boolean" ? forceFolded : !cur;
+      return { ...prev, [id]: next };
+    });
+    onToggleFold?.(id, forceFolded);
+  };
 
   const flip = (id: string) =>
     setFlipped((s) => {
@@ -1059,7 +1077,18 @@ export function Preview({
     });
 
   const top = stack[stack.length - 1];
-  const current = frames.find((f) => f.id === top?.id) ?? frames[0];
+  const baseCurrent = frames.find((f) => f.id === top?.id) ?? frames[0];
+  const current = useMemo(() => {
+    if (!baseCurrent) return baseCurrent;
+    if (!isFoldFrame(baseCurrent)) return baseCurrent;
+    const isFolded = previewFolds[baseCurrent.id] ?? baseCurrent.folded ?? false;
+    return {
+      ...baseCurrent,
+      folded: isFolded,
+      w: isFolded ? FOLD_COVER_W : FOLD_UNFOLDED_W,
+      h: FOLD_UNFOLDED_H,
+    };
+  }, [baseCurrent, previewFolds]);
   const peekFrame = peek ? frames.find((f) => f.id === peek.frameId) : undefined;
   const { w: frameW, h: frameH } = current ? frameSizeOf(current) : { w: PHONE_W, h: PHONE_H };
   const phone = current ? isPhoneFrame(current) : true;
@@ -1369,23 +1398,62 @@ export function Preview({
           marginBottom: wide ? 0 : 56,
         }}
       >
-        <motion.div
-          onPointerDown={onScreenPointerDown}
-          style={{
-            position: "absolute",
-            left: shellLeft,
-            top: shellTop,
-            width: shellW,
-            height: shellH,
-            transform: `scale(${scale})`,
-            touchAction: "none",
-            transformOrigin: "0 0",
-            borderRadius: shellRadius,
-            background: p.inverseSurface,
-            boxShadow: "0 30px 80px rgba(0,0,0,0.22)",
-          }}
-        >
-          {isWatchFrame(current) && (
+        {isFoldFrame(current) ? (
+          <div
+            style={{
+              position: "absolute",
+              left: "50%",
+              top: "50%",
+              transform: `translate(-50%, -50%) scale(${scale})`,
+              transformOrigin: "center center",
+            }}
+          >
+            <XiaomiFoldStage
+              folded={!!current.folded}
+              onToggleFold={(nextFolded) => toggleFold(current.id, nextFolded)}
+              palette={p}
+              lang={lang}
+              width={FOLD_UNFOLDED_W}
+              height={FOLD_UNFOLDED_H}
+              coverWidth={FOLD_COVER_W}
+              radius={FOLD_R}
+              bezel={BEZEL}
+              showControls={true}
+              interactive={true}
+              innerChildren={
+                <Screen
+                  frame={{ ...current, folded: false, w: FOLD_UNFOLDED_W, h: FOLD_UNFOLDED_H }}
+                  groups={groups}
+                  {...screenProps}
+                />
+              }
+              coverChildren={
+                <Screen
+                  frame={{ ...current, folded: true, w: FOLD_COVER_W, h: FOLD_UNFOLDED_H }}
+                  groups={groups}
+                  {...screenProps}
+                />
+              }
+            />
+          </div>
+        ) : (
+          <motion.div
+            onPointerDown={onScreenPointerDown}
+            style={{
+              position: "absolute",
+              left: shellLeft,
+              top: shellTop,
+              width: shellW,
+              height: shellH,
+              transform: `scale(${scale})`,
+              touchAction: "none",
+              transformOrigin: "0 0",
+              borderRadius: shellRadius,
+              background: p.inverseSurface,
+              boxShadow: "0 30px 80px rgba(0,0,0,0.22)",
+            }}
+          >
+            {isWatchFrame(current) && (
             <div
               style={{
                 position: "absolute",
@@ -1397,6 +1465,21 @@ export function Preview({
                 borderRadius: "2px 4px 4px 2px",
                 background: "linear-gradient(to right, #2a2a2a, #555, #111)",
                 boxShadow: "0 2px 4px rgba(0,0,0,0.4)",
+                pointerEvents: "none",
+              }}
+            />
+          )}
+          {isFoldFrame(current) && current.folded && (
+            <div
+              style={{
+                position: "absolute",
+                left: -2,
+                top: 40,
+                bottom: 40,
+                width: 4,
+                borderRadius: "3px 0 0 3px",
+                background: "linear-gradient(to right, #333, #777, #222)",
+                boxShadow: "0 0 4px rgba(0,0,0,0.4)",
                 pointerEvents: "none",
               }}
             />
@@ -1463,6 +1546,59 @@ export function Preview({
                 </motion.div>
               </AnimatePresence>
             </motion.div>
+            {isFoldFrame(current) && !current.folded && (
+              <>
+                <div
+                  aria-hidden
+                  style={{
+                    position: "absolute",
+                    left: "50%",
+                    top: 0,
+                    bottom: 0,
+                    width: 8,
+                    transform: "translateX(-50%)",
+                    background: "linear-gradient(to right, transparent, rgba(0,0,0,0.06) 35%, rgba(255,255,255,0.07) 50%, rgba(0,0,0,0.06) 65%, transparent)",
+                    pointerEvents: "none",
+                    zIndex: 50,
+                  }}
+                />
+                <div
+                  aria-hidden
+                  style={{
+                    position: "absolute",
+                    left: "50%",
+                    top: 9,
+                    transform: "translateX(-50%)",
+                    width: 8,
+                    height: 8,
+                    borderRadius: "50%",
+                    background: "#0a0a0a",
+                    border: "1px solid rgba(255,255,255,0.18)",
+                    pointerEvents: "none",
+                    zIndex: 51,
+                  }}
+                />
+              </>
+            )}
+            {isFoldFrame(current) && current.folded && (
+              <div
+                aria-hidden
+                style={{
+                  position: "absolute",
+                  left: "50%",
+                  top: 10,
+                  transform: "translateX(-50%)",
+                  width: 9,
+                  height: 9,
+                  borderRadius: "50%",
+                  background: "#0a0a0a",
+                  border: "1px solid rgba(255,255,255,0.2)",
+                  boxShadow: "0 1px 2px rgba(0,0,0,0.6)",
+                  pointerEvents: "none",
+                  zIndex: 51,
+                }}
+              />
+            )}
             {peek && peekFrame && (
               <motion.div
                 style={{
@@ -1479,7 +1615,8 @@ export function Preview({
             )}
           </motion.div>
         </motion.div>
-      </div>
+      )}
+    </div>
 
       <div
         style={
@@ -1503,6 +1640,21 @@ export function Preview({
             maxWidth: "calc(100vw - 24px)",
           }}
         >
+          {isFoldFrame(current) && (
+            <button
+              onClick={() => toggleFold(current.id)}
+              title={current.folded ? t("unfoldAction", lang) : t("foldAction", lang)}
+              className="m3-press"
+              style={{
+                ...barBtn,
+                background: current.folded ? p.surfaceContainerHigh : p.primaryContainer,
+                color: current.folded ? p.onSurface : p.onPrimaryContainer,
+              }}
+            >
+              <Icon name={current.folded ? "unfold_more" : "unfold_less"} size={20} />
+              <span style={label}>{current.folded ? t("foldedCover", lang) : t("unfoldedInner", lang)}</span>
+            </button>
+          )}
           <button
             onClick={back}
             disabled={stack.length < 2}

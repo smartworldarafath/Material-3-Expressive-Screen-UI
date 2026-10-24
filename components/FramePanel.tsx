@@ -8,6 +8,7 @@ import {
   Palette,
   Place,
   isPhoneFrame,
+  isFoldFrame,
   onToken,
 } from "@/lib/tokens";
 import { popHistory } from "@/lib/ai";
@@ -163,6 +164,7 @@ export function FrameInspector({
   onPlace,
   ai,
   onSize,
+  onToggleFold,
 }: {
   frame: Frame;
   palette: Palette;
@@ -180,6 +182,7 @@ export function FrameInspector({
   onPlace: (place: Place) => void;
   ai: AiHooks;
   onSize: (preset: FramePreset) => void;
+  onToggleFold?: (folded: boolean) => void;
 }) {
   const lang = useLang();
   const [copied, setCopied] = useState(false);
@@ -260,6 +263,22 @@ export function FrameInspector({
             </div>
           </div>
         </Section>
+        {isFoldFrame(frame) && (
+          <Section id="frame-fold-state" icon="devices_fold" title={t("foldState", lang)} p={p}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              <Segmented<"folded" | "unfolded">
+                options={[
+                  { key: "folded", icon: "smartphone", label: t("foldedCover", lang), title: t("foldedCover", lang) },
+                  { key: "unfolded", icon: "devices_fold", label: t("unfoldedInner", lang), title: t("unfoldedInner", lang) },
+                ]}
+                value={frame.folded ? "folded" : "unfolded"}
+                onChange={(val) => onToggleFold?.(val === "folded")}
+                p={p}
+                height={38}
+              />
+            </div>
+          </Section>
+        )}
         <Section id="frame-style" icon="palette" title={t("style", lang)} p={p}>
           <ScreenFillRun
             value={frame.bg ?? "surface"}

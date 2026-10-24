@@ -151,6 +151,7 @@ export function FrameSizePicker({
     <Segmented<FramePreset>
       options={[
         { key: "phone", icon: "smartphone", label: compact ? undefined : t("phoneFrame", lang), title: t("phoneFrame", lang) },
+        { key: "fold", icon: "devices_fold", label: compact ? undefined : t("foldFrame", lang), title: t("foldFrame", lang) },
         { key: "watch", icon: "watch", label: compact ? undefined : t("watchFrame", lang), title: t("watchFrame", lang) },
         { key: "tab", icon: "tablet_android", label: compact ? undefined : t("tabFrame", lang), title: t("tabFrame", lang) },
         { key: "desktop", icon: "desktop_windows", label: compact ? undefined : t("desktopFrame", lang), title: t("desktopFrame", lang) },

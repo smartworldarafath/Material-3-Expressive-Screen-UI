@@ -146,6 +146,12 @@ export const TAB_R = 28;
 export const WATCH_W = 384;
 export const WATCH_H = 384;
 export const WATCH_R = 192;
+/* Xiaomi 18 Fold (Unfolded inner display: 760x860 dp, Folded cover display: 400x860 dp, 32 dp corner radius) */
+export const FOLD_UNFOLDED_W = 760;
+export const FOLD_UNFOLDED_H = 860;
+export const FOLD_COVER_W = 400;
+export const FOLD_COVER_H = 860;
+export const FOLD_R = 32;
 /** M3 window size classes: a screen this wide is "expanded", where the navigation bar becomes a rail */
 export const EXPANDED_W = 840;
 export const isExpanded = (w: number) => w >= EXPANDED_W;
@@ -2139,6 +2145,10 @@ export type Frame = {
   swipe?: Partial<Record<SwipeDir, string>>;
   /** where Tidy puts the body rows between the bars: from the top unless the author says otherwise */
   place?: Place;
+  /** explicit preset key */
+  preset?: FramePreset;
+  /** fold state for foldable devices like Xiaomi 18 Fold: true when folded to cover screen, false/undefined when unfolded */
+  folded?: boolean;
 };
 
 /** how Tidy stacks the body of a screen: from the top, centered, against the bottom bar, or spread out */
@@ -2154,43 +2164,66 @@ export const isPlace = (v: unknown): v is Place => v === "top" || v === "center"
 /** how a selection of parts is lined up: an edge or centre to share, or equal gaps along an axis */
 export type AlignKind = "left" | "centerH" | "right" | "distributeH" | "top" | "centerV" | "bottom" | "distributeV";
 
-export type FramePreset = "phone" | "desktop" | "watch" | "tab";
-export const frameSizeOf = (f: Frame) => ({ w: f.w ?? PHONE_W, h: f.h ?? PHONE_H });
+export type FramePreset = "phone" | "fold" | "desktop" | "watch" | "tab";
+export const frameSizeOf = (f: Frame) => {
+  if (isFoldFrame(f)) {
+    return {
+      w: f.w ?? (f.folded ? FOLD_COVER_W : FOLD_UNFOLDED_W),
+      h: f.h ?? FOLD_UNFOLDED_H,
+    };
+  }
+  return { w: f.w ?? PHONE_W, h: f.h ?? PHONE_H };
+};
 export const isPhoneFrame = (f: Frame) => {
-  const { w, h } = frameSizeOf(f);
+  if (f.preset) return f.preset === "phone";
+  if (isFoldFrame(f) || isWatchFrame(f) || isTabFrame(f) || isDesktopFrame(f)) return false;
+  const { w, h } = { w: f.w ?? PHONE_W, h: f.h ?? PHONE_H };
   return w === PHONE_W && h === PHONE_H;
 };
+export const isFoldFrame = (f: Frame) => {
+  if (f.preset) return f.preset === "fold";
+  const w = f.w ?? PHONE_W;
+  const h = f.h ?? PHONE_H;
+  return (w === FOLD_UNFOLDED_W && h === FOLD_UNFOLDED_H) || (w === FOLD_COVER_W && h === FOLD_COVER_H);
+};
 export const isWatchFrame = (f: Frame) => {
-  const { w, h } = frameSizeOf(f);
+  if (f.preset) return f.preset === "watch";
+  const { w, h } = { w: f.w ?? PHONE_W, h: f.h ?? PHONE_H };
   return w === WATCH_W && h === WATCH_H;
 };
 export const isTabFrame = (f: Frame) => {
-  const { w, h } = frameSizeOf(f);
+  if (f.preset) return f.preset === "tab";
+  const { w, h } = { w: f.w ?? PHONE_W, h: f.h ?? PHONE_H };
   return w === TAB_W && h === TAB_H;
 };
 export const isDesktopFrame = (f: Frame) => {
-  const { w, h } = frameSizeOf(f);
+  if (f.preset) return f.preset === "desktop";
+  const { w, h } = { w: f.w ?? PHONE_W, h: f.h ?? PHONE_H };
   return w === DESKTOP_W && h === DESKTOP_H;
 };
 export const framePresetOf = (f: Frame): FramePreset => {
+  if (f.preset) return f.preset;
+  if (isFoldFrame(f)) return "fold";
   if (isWatchFrame(f)) return "watch";
   if (isTabFrame(f)) return "tab";
+  if (isDesktopFrame(f)) return "desktop";
   return isPhoneFrame(f) ? "phone" : "desktop";
 };
-export const framePresetPatch = (preset: FramePreset): Pick<Frame, "w" | "h"> => {
-  if (preset === "watch") return { w: WATCH_W, h: WATCH_H };
-  if (preset === "tab") return { w: TAB_W, h: TAB_H };
-  if (preset === "desktop") return { w: DESKTOP_W, h: DESKTOP_H };
-  return { w: undefined, h: undefined };
+export const framePresetPatch = (preset: FramePreset, folded?: boolean): Pick<Frame, "w" | "h" | "preset" | "folded"> => {
+  if (preset === "fold") return { w: folded ? FOLD_COVER_W : FOLD_UNFOLDED_W, h: FOLD_UNFOLDED_H, preset: "fold", folded: !!folded };
+  if (preset === "watch") return { w: WATCH_W, h: WATCH_H, preset: "watch", folded: false };
+  if (preset === "tab") return { w: TAB_W, h: TAB_H, preset: "tab", folded: false };
+  if (preset === "desktop") return { w: DESKTOP_W, h: DESKTOP_H, preset: "desktop", folded: false };
+  return { w: undefined, h: undefined, preset: "phone", folded: false };
 };
 export const frameRect = (f: Frame) => {
   const { w, h } = frameSizeOf(f);
   return { l: f.x, t: f.y, r: f.x + w, b: f.y + h };
 };
-/** the corner radius of a screen: a phone's rounded glass, a flatter window for the desktop, tablet curves, full circular for watch */
-export const frameRadius = (f: Frame) => (isWatchFrame(f) ? WATCH_R : isTabFrame(f) ? TAB_R : isPhoneFrame(f) ? PHONE_R : DESKTOP_R);
+/** the corner radius of a screen: a phone's rounded glass, a flatter window for the desktop, tablet curves, full circular for watch, Xiaomi fold radius */
+export const frameRadius = (f: Frame) => (isWatchFrame(f) ? WATCH_R : isFoldFrame(f) ? FOLD_R : isTabFrame(f) ? TAB_R : isPhoneFrame(f) ? PHONE_R : DESKTOP_R);
 /** the icon representing the frame form factor */
-export const frameIconOf = (f: Frame) => (isWatchFrame(f) ? "watch" : isTabFrame(f) ? "tablet_android" : isPhoneFrame(f) ? "smartphone" : "desktop_windows");
+export const frameIconOf = (f: Frame) => (isWatchFrame(f) ? "watch" : isFoldFrame(f) ? "devices_fold" : isTabFrame(f) ? "tablet_android" : isPhoneFrame(f) ? "smartphone" : "desktop_windows");
 
 /** parts that span the screen edge to edge and follow its width when it changes */
 /** parts that span the screen they are on: the bars, and a carousel, whose row is the screen */

@@ -30,7 +30,7 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
         {/* before the first paint: the panel widths and the theme colours the last visit left, so
             the shell drawn while the editor loads is the one that appears. The editor reads the
@@ -57,7 +57,7 @@ export default function RootLayout({
           href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400..700,0..1,0&display=block"
         />
       </head>
-      <body style={{ fontFamily: "Roboto, system-ui, sans-serif" }}>{children}</body>
+      <body style={{ fontFamily: "Roboto, system-ui, sans-serif" }} suppressHydrationWarning>{children}</body>
     </html>
   );
 }

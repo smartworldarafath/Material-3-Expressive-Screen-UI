@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>README Preview - Material 3 Expressive Screen UI</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --text: #c9d1d9;
+      --border: #30363d;
+      --card-bg: #161b22;
+      --link: #58a6ff;
+    }
+    html[data-theme="light"] {
+      --bg: #ffffff;
+      --text: #24292f;
+      --border: #d0d7de;
+      --card-bg: #f6f8fa;
+      --link: #0969da;
+    }
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      transition: background-color 0.2s, color 0.2s;
+    }
+    .toolbar {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      width: 100%;
+      background: var(--card-bg);
+      border-bottom: 1px solid var(--border);
+      padding: 12px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-sizing: border-box;
+    }
+    .toolbar-title {
+      font-weight: 700;
+      font-size: 15px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .theme-btn {
+      background: #6750A4;
+      color: white;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 20px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .theme-btn:hover {
+      background: #7965b2;
+    }
+    .readme-container {
+      max-width: 980px;
+      width: 100%;
+      padding: 32px 24px;
+      box-sizing: border-box;
+      line-height: 1.6;
+    }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 16px 0;
+    }
+    th, td {
+      border: 1px solid var(--border);
+      padding: 10px 14px;
+    }
+    th {
+      background: var(--card-bg);
+    }
+    pre {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 16px;
+      overflow: auto;
+    }
+    code {
+      font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+      font-size: 85%;
+    }
+    a {
+      color: var(--link);
+      text-decoration: none;
+    }
+    a:hover {
+      text-decoration: underline;
+    }
+    picture img {
+      max-width: 100%;
+      height: auto;
+    }
+    hr {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 28px 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="toolbar">
+    <div class="toolbar-title">
+      <span>📄 README.md Preview (Pixel / M3E Style)</span>
+    </div>
+    <div style="display: flex; gap: 12px; align-items: center;">
+      <button class="theme-btn" onclick="toggleTheme()" id="themeBtn">🌓 Switch to Light Mode</button>
+      <a href="/" style="font-size: 13px; font-weight: 600;">Back to Canvas App ➔</a>
+    </div>
+  </div>
+
+  <div class="readme-container">
+    <div align="center">
+
+<img src="public/og.png" alt="Material 3 Expressive Screen UI is an open source browser studio built with Material 3 Expressive. Design screens, test Xiaomi 18 Fold 3D simulations, and synthesize deterministic AI prompts for Claude Code, Cursor and Codex, 100% client side." width="100%">
+
+<br><br>
+
+<p align="center">
+<a href="https://smartworldarafath.github.io/Material-3-Expressive-Screen-UI/"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/dark/btn-launch.svg"><img src="assets/readme/light/btn-launch.svg" alt="Launch M3E Studio" height="50"></picture></a>
+<a href="https://github.com/smartworldarafath/Material-3-Expressive-Screen-UI"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/dark/btn-github.svg"><img src="assets/readme/light/btn-github.svg" alt="M3E source code" height="50"></picture></a>
+<a href="#support"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/dark/btn-sponsor.svg"><img src="assets/readme/light/btn-sponsor.svg" alt="Support M3E Studio" height="50"></picture></a>
+<a href="#devices"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/dark/btn-fold.svg"><img src="assets/readme/light/btn-fold.svg" alt="Xiaomi 18 Fold 3D" height="50"></picture></a>
+</p>
+
+<p align="center">
+<picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/dark/badge-clientonly.svg"><img src="assets/readme/light/badge-clientonly.svg" alt="100% Client-Side" height="28"></picture>
+<picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/dark/badge-nextjs.svg"><img src="assets/readme/light/badge-nextjs.svg" alt="Next.js 16" height="28"></picture>
+<picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/dark/badge-react.svg"><img src="assets/readme/light/badge-react.svg" alt="React 19" height="28"></picture>
+<picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/dark/badge-m3e.svg"><img src="assets/readme/light/badge-m3e.svg" alt="Material 3 Expressive" height="28"></picture>
+<picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/dark/badge-fold.svg"><img src="assets/readme/light/badge-fold.svg" alt="Xiaomi 18 Fold 3D" height="28"></picture>
+<picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/dark/badge-devices.svg"><img src="assets/readme/light/badge-devices.svg" alt="Phone · Watch · PC" height="28"></picture>
+<picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/dark/badge-zerobackend.svg"><img src="assets/readme/light/badge-zerobackend.svg" alt="Zero backend" height="28"></picture>
+<picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/dark/badge-mit.svg"><img src="assets/readme/light/badge-mit.svg" alt="MIT License" height="28"></picture>
+<picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/dark/badge-prs.svg"><img src="assets/readme/light/badge-prs.svg" alt="PRs welcome" height="28"></picture>
+</p>
+
+</div>
+
+<h3 id="overview"><picture><source media="(prefers-color-scheme: dark) and (max-width: 640px)" srcset="assets/readme/dark/hm-overview.svg"><source media="(prefers-color-scheme: dark)" srcset="assets/readme/dark/h-overview.svg"><source media="(max-width: 640px)" srcset="assets/readme/light/hm-overview.svg"><img src="assets/readme/light/h-overview.svg" alt="Overview: Visual studio and AI prompt synthesizer for Material 3 Expressive" width="100%"></picture></h3>
+
+<strong>Material 3 Expressive Screen UI</strong> is an open-source, browser-resident visual design canvas and AI prompt synthesizer engineered specifically for Google's <strong>Material 3 Expressive (M3E)</strong> design system.
+
+You can construct rich user interfaces with drag-and-drop components, calibrate harmonious tonal schemes, simulate dual-screen foldable hardware like the <strong>Xiaomi 18 Fold in true 3D</strong>, and transform visual prototypes directly into deterministic, high-fidelity prompts ready for autonomous AI coding agents (<strong>Claude Code</strong>, <strong>Cursor</strong>, <strong>Codex</strong>, and <strong>Gemini</strong>).
+
+There are no backend databases, zero telemetry, and no accounts required. Everything executes entirely inside your browser's local sandbox.
+
+<p align="center">
+  <img src="docs/story.gif" alt="Material 3 Expressive Screen UI Walkthrough Demonstration" width="100%" style="border-radius: 12px; box-shadow: 0 8px 30px rgba(0,0,0,0.12);" />
+</p>
+
+<p align="center"><sub>Construct an interface, calibrate dynamic color hues, simulate realistic 3D book folding, synthesize an AI prompt, and execute on Android or the Web. (<a href="docs/story.mp4">Watch HD Walkthrough Video</a>)</sub></p>
+
+<table width="100%"><thead><tr><th align="left" width="28%">Quick facts</th><th align="left">Details</th></tr></thead><tbody>
+<tr><td><b>App name</b></td><td>Material 3 Expressive Screen UI (M3E Canvas)</td></tr>
+<tr><td><b>Live URL</b></td><td><a href="https://smartworldarafath.github.io/Material-3-Expressive-Screen-UI/">smartworldarafath.github.io/Material-3-Expressive-Screen-UI</a></td></tr>
+<tr><td><b>Platform</b></td><td>Modern Web Browsers (Responsive Desktop & Mobile PWA)</td></tr>
+<tr><td><b>Architecture</b></td><td>Next.js 16 (App Router) · React 19 · TypeScript 5.7</td></tr>
+<tr><td><b>Design System</b></td><td>Google Material 3 Expressive (Shapes, springs, tonal palettes & morphing loaders)</td></tr>
+<tr><td><b>Form Factors</b></td><td>📱 Phone (412×892) · 📖 Xiaomi 18 Fold (3D Dual Screen) · ⌚ Wear OS Watch · 📱 Tablet · 💻 Desktop</td></tr>
+<tr><td><b>Physics Engine</b></td><td>Framer Motion 12 physics-based spring simulations, gesture drag, and 3D folding transforms</td></tr>
+<tr><td><b>AI Prompting</b></td><td>Structured deterministic prompt generation for Jetpack Compose, Flutter, and React/Tailwind</td></tr>
+<tr><td><b>Privacy</b></td><td>100% Client-Side · Zero telemetry · Local storage persistence and LZ-String stateless sharing</td></tr>
+<tr><td><b>License</b></td><td>MIT License (100% Free & Open Source)</td></tr>
+</tbody></table>
+
+<div align="center">
+
+<table width="100%"><thead><tr><th align="left">Action</th><th align="left">Link</th></tr></thead><tbody><tr><td><strong>🚀 Open Live Studio</strong></td><td><a href="https://smartworldarafath.github.io/Material-3-Expressive-Screen-UI/">smartworldarafath.github.io/Material-3-Expressive-Screen-UI</a></td></tr><tr><td><strong>⭐ GitHub Repository</strong></td><td><a href="https://github.com/smartworldarafath/Material-3-Expressive-Screen-UI">smartworldarafath/Material-3-Expressive-Screen-UI</a></td></tr><tr><td><strong>💬 Report an Issue</strong></td><td><a href="https://github.com/smartworldarafath/Material-3-Expressive-Screen-UI/issues">GitHub Issues Tracker</a></td></tr><tr><td><strong>🤝 Contribute</strong></td><td><a href="https://github.com/smartworldarafath/Material-3-Expressive-Screen-UI/pulls">GitHub Pull Requests</a></td></tr><tr><td><strong>💖 Support / Donate</strong></td><td><a href="https://www.supportkori.com/arafathrahman">SupportKori</a> · <a href="https://github.com/sponsors/smartworldarafath">GitHub Sponsors</a> · <a href="#support">nsave / RedotPay</a></td></tr><tr><td><strong>⚖️ License</strong></td><td><a href="LICENSE">MIT License</a></td></tr></tbody></table>
+
+</div>
+
+<div align="center">
+
+<a href="https://github.com/smartworldarafath/Material-3-Expressive-Screen-UI/issues"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/dark/btn-issues.svg"><img src="assets/readme/light/btn-issues.svg" alt="Report an issue" height="50"></picture></a>
+<a href="https://github.com/smartworldarafath/Material-3-Expressive-Screen-UI/pulls"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/dark/btn-contribute.svg"><img src="assets/readme/light/btn-contribute.svg" alt="Contribute" height="50"></picture></a>
+<a href="LICENSE"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/dark/btn-license.svg"><img src="assets/readme/light/btn-license.svg" alt="MIT License" height="50"></picture></a>
+
+</div>
+
+<h3 id="devices"><picture><source media="(prefers-color-scheme: dark) and (max-width: 640px)" srcset="assets/readme/dark/hm-devices.svg"><source media="(prefers-color-scheme: dark)" srcset="assets/readme/dark/h-devices.svg"><source media="(max-width: 640px)" srcset="assets/readme/light/hm-devices.svg"><img src="assets/readme/light/h-devices.svg" alt="Form Factors: Xiaomi 18 Fold 3D, Phone, Wear OS, Tablet & Desktop" width="100%"></picture></h3>
+
+Material 3 Expressive Screen UI supports multi-device design natively across five distinct form factors:
+
+<table width="100%"><thead><tr><th align="left" width="24%">Form Factor</th><th align="left" width="22%">Resolution</th><th align="left">Capabilities & Design Behavior</th></tr></thead><tbody>
+<tr><td><b>📱 Phone</b></td><td>412 × 892 dp (9:19.5)</td><td>Default Android portrait viewport with system status bar, bottom pill bar, expandable FABs, and modal sheets.</td></tr>
+<tr><td><b>📖 Xiaomi 18 Fold</b></td><td>780 × 892 dp (Unfolded)<br>412 × 892 dp (Cover)</td><td><b>True 3D Book-Folding Perspective</b> (0°–180°), Falcon hinge, 8.03" 2K 120Hz dual-screen, 6.56" HyperOS cover display, and Flex mode (105°).</td></tr>
+<tr><td><b>⌚ Wear OS Watch</b></td><td>384 × 384 dp (1:1)</td><td>Circular AMOLED layout, curved bezel edges, radial progress rings, and quick tactile wrist glance tiles.</td></tr>
+<tr><td><b>📱 Tablet</b></td><td>800 × 1280 dp (16:10)</td><td>Adaptive two-pane split views, vertical navigation rail, expanded action toolbars, and rich dialog layouts.</td></tr>
+<tr><td><b>💻 Desktop Workstation</b></td><td>1280 × 800 dp (16:10)</td><td>Pan-and-zoom panoramic canvas with vertical navigation rail, multi-column bento grids, and layer inspectors.</td></tr>
+</tbody></table>
+
+<h4>🌟 Xiaomi 18 Fold 3D Simulation</h4>
+- <strong>Pure 3D Book Folding</strong>: Authentic <code>rotateY: 0° ➔ -180°</code> CSS perspective animation with real-time dynamic hinge shadows.
+- <strong>Falcon Hinge & Dual Displays</strong>: Toggle seamlessly between the expansive <strong>8.03" Inner Dual-Screen</strong> (780×892) and the <strong>6.56" HyperOS Outer Cover Display</strong> (412×892).
+- <strong>Three Realistic Postures</strong>: <strong>Flat (180°)</strong> for maximum screen real estate, <strong>Flex Mode (105°)</strong> for hands-free video and camera split views, and <strong>Folded (0°)</strong> for one-handed operation.
+- <strong>Zero Blackout Transition</strong>: Smoothly folds and unfolds with zero flicker or black screen artifacting.
+
+<h3 id="screenshots"><picture><source media="(prefers-color-scheme: dark) and (max-width: 640px)" srcset="assets/readme/dark/hm-screenshots.svg"><source media="(prefers-color-scheme: dark)" srcset="assets/readme/dark/h-screenshots.svg"><source media="(max-width: 640px)" srcset="assets/readme/light/hm-screenshots.svg"><img src="assets/readme/light/h-screenshots.svg" alt="Screenshots: Tactile canvas, prototype preview, prompt synthesizer & mobile view" width="100%"></picture></h3>
+
+<div align="center">
+
+<table width="100%">
+  <tr>
+    <td width="50%" align="center" valign="top">
+      <img src="docs/editor.png" alt="Drag-and-Drop Canvas Editor" width="100%" style="border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);" /><br><br>
+      <b>🎨 Drag-and-Drop Canvas Editor</b><br>
+      <sub>Multi-screen positioning, magnetic snapping, corner blending, and comprehensive component palette.</sub>
+    </td>
+    <td width="50%" align="center" valign="top">
+      <img src="docs/preview.png" alt="Interactive Prototype Preview" width="100%" style="border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);" /><br><br>
+      <b>⚡ Interactive Prototype Preview</b><br>
+      <sub>Test real button clicks, state toggles, animated transitions, back-stack navigation, and gesture physics.</sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" align="center" valign="top">
+      <img src="docs/prompt.png" alt="AI Prompt Synthesizer" width="100%" style="border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);" /><br><br>
+      <b>🤖 AI Prompt Synthesis Engine</b><br>
+      <sub>Export complete, production-ready specifications formatted for Claude Code, Cursor, Codex, and Gemini.</sub>
+    </td>
+    <td width="50%" align="center" valign="top">
+      <img src="docs/mobile.png" alt="Mobile Companion Editor" width="100%" style="border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);" /><br><br>
+      <b>📱 Mobile Companion Experience</b><br>
+      <sub>Responsive mobile-friendly editor mode for tweaking colors, tokens, and components directly on smartphones.</sub>
+    </td>
+  </tr>
+</table>
+
+</div>
+
+<h3 id="design"><picture><source media="(prefers-color-scheme: dark) and (max-width: 640px)" srcset="assets/readme/dark/hm-design.svg"><source media="(prefers-color-scheme: dark)" srcset="assets/readme/dark/h-design.svg"><source media="(max-width: 640px)" srcset="assets/readme/light/hm-design.svg"><img src="assets/readme/light/h-design.svg" alt="Design Pillars: Shapes, springs, tonal palettes, and expressive morphing loaders" width="100%"></picture></h3>
+
+Material 3 Expressive expands upon standard Material Design with tactile delight, fluid motion, and spatial intelligence:
+
+* <strong>Fluid Spring Physics</strong>: Interfaces move with physics rather than fixed durations—bouncy tap feedback, elastic overshoots, and fluid drag-to-dismiss sheets.
+* <strong>Dynamic Tonal Harmonization</strong>: Extract complete Primary, Secondary, Tertiary, Container, Surface, and Outline tonal roles algorithmically from single base colors or system wallpapers.
+* <strong>Organic Corner Blending</strong>: Adjacent buttons and card tiles fuse seamlessly into unified visual clusters with soft corner radiuses.
+* <strong>Morphing Loaders</strong>: Shape-shifting loading spinners and undulating progress bars ported directly from Android open-source components.
+
+<h3 id="features"><picture><source media="(prefers-color-scheme: dark) and (max-width: 640px)" srcset="assets/readme/dark/hm-features.svg"><source media="(prefers-color-scheme: dark)" srcset="assets/readme/dark/h-features.svg"><source media="(max-width: 640px)" srcset="assets/readme/light/hm-features.svg"><img src="assets/readme/light/h-features.svg" alt="Features: Everything inside Material 3 Expressive Screen UI" width="100%"></picture></h3>
+
+<div align="center">
+
+<table width="100%"><thead><tr><th align="left"></th><th align="left"></th></tr></thead><tbody><tr><td><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/dark/card-fold.svg"><img src="assets/readme/light/card-fold.svg" alt="Xiaomi 18 Fold 3D" width="430"></picture></td><td><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/dark/card-ai.svg"><img src="assets/readme/light/card-ai.svg" alt="AI Prompt Synthesis" width="430"></picture></td></tr><tr><td><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/dark/card-theming.svg"><img src="assets/readme/light/card-theming.svg" alt="Dynamic Color Engine" width="430"></picture></td><td><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/dark/card-docking.svg"><img src="assets/readme/light/card-docking.svg" alt="Magnetic Docking & Tidy" width="430"></picture></td></tr><tr><td><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/dark/card-loaders.svg"><img src="assets/readme/light/card-loaders.svg" alt="Morphing Loaders" width="430"></picture></td><td><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/dark/card-prototype.svg"><img src="assets/readme/light/card-prototype.svg" alt="Interactive Wireframes" width="430"></picture></td></tr><tr><td><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/dark/card-privacy.svg"><img src="assets/readme/light/card-privacy.svg" alt="100% Client-Side Privacy" width="430"></picture></td><td><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/dark/card-multidevice.svg"><img src="assets/readme/light/card-multidevice.svg" alt="Multi-Device Ecosystem" width="430"></picture></td></tr></tbody></table>
+
+</div>
+
+<h3 id="prompt"><picture><source media="(prefers-color-scheme: dark) and (max-width: 640px)" srcset="assets/readme/dark/hm-prompt.svg"><source media="(prefers-color-scheme: dark)" srcset="assets/readme/dark/h-prompt.svg"><source media="(max-width: 640px)" srcset="assets/readme/light/hm-prompt.svg"><img src="assets/readme/light/h-prompt.svg" alt="AI Prompt Engine: Deterministic UI specs for Claude Code, Cursor, Codex & Gemini" width="100%"></picture></h3>
+
+The built-in prompt synthesizer transforms visual designs into structured specifications ready for autonomous AI coding agents:
+
+<pre><code class="language-">[M3E CANVAS SPECIFICATION]
+Viewport: Xiaomi 18 Fold (780 x 892 dp, Unfolded dual screen)
+Posture: Flat (180deg)
+Theme: Violet Expressive (Seed: #6750A4, Mode: Dark)
+Layout Rhythm: 16dp outer gutters, 8dp intra-component spacing
+
+COMPONENTS HIERARCHY:
+1. TopAppBar (CenterAligned, title: "Explore Kitchen", actions: [Search, FilterChips])
+2. HeroFoldableContainer (Dual pane split: left=RecipeImage, right=IngredientList)
+3. BottomAppBar (Floating pill, items: [Home, Cook, Profile], fab: SplitActionButton)
+</code></pre>
+
+1. <strong>Claude Code / Anthropic</strong>: Paste directly into terminal sessions to generate complete Jetpack Compose or Next.js code.
+2. <strong>Cursor & Windsurf</strong>: Feed into composer mode to create clean, responsive components without hallucinating layout coordinates.
+3. <strong>OpenAI ChatGPT & Codex</strong>: Transform screens into modern Tailwind CSS + React 19 JSX trees.
+4. <strong>Google Gemini CLI</strong>: Execute component updates and theme tests with Gemini 2.5 Flash / Pro models.
+
+<h3 id="stack"><picture><source media="(prefers-color-scheme: dark) and (max-width: 640px)" srcset="assets/readme/dark/hm-stack.svg"><source media="(prefers-color-scheme: dark)" srcset="assets/readme/dark/h-stack.svg"><source media="(max-width: 640px)" srcset="assets/readme/light/hm-stack.svg"><img src="assets/readme/light/h-stack.svg" alt="Tech stack: Built with Next.js 16, React 19, Framer Motion & Tailwind CSS" width="100%"></picture></h3>
+
+<div align="center">
+
+<picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/dark/pill-nextjs.svg"><img src="assets/readme/light/pill-nextjs.svg" alt="Next.js 16" height="34"></picture>
+<picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/dark/pill-react.svg"><img src="assets/readme/light/pill-react.svg" alt="React 19" height="34"></picture>
+<picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/dark/pill-ts.svg"><img src="assets/readme/light/pill-ts.svg" alt="TypeScript" height="34"></picture>
+<picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/dark/pill-m3e.svg"><img src="assets/readme/light/pill-m3e.svg" alt="Material 3 Expressive" height="34"></picture>
+<br><br>
+<picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/dark/pill-motion.svg"><img src="assets/readme/light/pill-motion.svg" alt="Framer Motion 12" height="34"></picture>
+<picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/dark/pill-tailwind.svg"><img src="assets/readme/light/pill-tailwind.svg" alt="Tailwind CSS 3.4" height="34"></picture>
+<picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/dark/pill-symbols.svg"><img src="assets/readme/light/pill-symbols.svg" alt="Material Symbols" height="34"></picture>
+<picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/dark/pill-vitest.svg"><img src="assets/readme/light/pill-vitest.svg" alt="Vitest 3" height="34"></picture>
+<picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/dark/pill-storage.svg"><img src="assets/readme/light/pill-storage.svg" alt="LocalStorage" height="34"></picture>
+
+</div>
+
+<br>
+
+<table width="100%"><thead><tr><th align="left" width="22%">Layer</th><th align="left" width="38%">Technology</th><th align="left">Purpose & Role</th></tr></thead><tbody>
+<tr><td><b>Framework</b></td><td>Next.js 16 (App Router)</td><td>Modern server/client architecture with static HTML compilation for GitHub Pages.</td></tr>
+<tr><td><b>UI Library</b></td><td>React 19</td><td>Declarative visual components, optimistic actions, and high-performance render cycles.</td></tr>
+<tr><td><b>Language</b></td><td>TypeScript 5.7</td><td>Strict static typing across canvas primitives, theme tokens, and component definitions.</td></tr>
+<tr><td><b>Motion Engine</b></td><td>Framer Motion 12</td><td>Physics-based spring simulations, gesture drag, layout animations, and 3D folding transforms.</td></tr>
+<tr><td><b>Styling</b></td><td>Tailwind CSS 3.4</td><td>Utility-first responsive styles coupled with M3 dynamic CSS custom variables.</td></tr>
+<tr><td><b>Icons</b></td><td>Google Material Symbols & Lucide React</td><td>Complete M3 icon catalog with round, sharp, and outlined stylistic variations.</td></tr>
+<tr><td><b>Storage</b></td><td>HTML5 LocalStorage + LZ-String</td><td>100% offline client persistence and stateless compressed URL hash sharing.</td></tr>
+<tr><td><b>Test Runner</b></td><td>Vitest 3 + Testing Library</td><td>Fast reactive unit testing with 750+ passing automated tests.</td></tr>
+</tbody></table>
+
+<h3 id="start"><picture><source media="(prefers-color-scheme: dark) and (max-width: 640px)" srcset="assets/readme/dark/hm-start.svg"><source media="(prefers-color-scheme: dark)" srcset="assets/readme/dark/h-start.svg"><source media="(max-width: 640px)" srcset="assets/readme/light/hm-start.svg"><img src="assets/readme/light/h-start.svg" alt="Getting started: Clone, run and test Material 3 Expressive Screen UI locally" width="100%"></picture></h3>
+
+<strong>Requirements</strong>
+
+<table width="100%"><thead><tr><th align="left">Requirement</th><th align="left">Supported Version</th></tr></thead><tbody><tr><td><strong>Node.js</strong></td><td>v20.x or newer</td></tr><tr><td><strong>Package Manager</strong></td><td><code>npm</code> (v10+), <code>pnpm</code>, or <code>bun</code></td></tr><tr><td><strong>Browser</strong></td><td>Chrome, Edge, Safari, or Firefox (latest)</td></tr></tbody></table>
+
+<strong>Build & Run</strong>
+
+<pre><code class="language-bash">&lt;h1&gt;1. Clone the repository&lt;/h1&gt;
+git clone https://github.com/smartworldarafath/Material-3-Expressive-Screen-UI.git
+cd Material-3-Expressive-Screen-UI
+
+&lt;h1&gt;2. Install dependencies&lt;/h1&gt;
+npm install
+
+&lt;h1&gt;3. Start local development server&lt;/h1&gt;
+npm run dev        &lt;h1&gt;Visit http://localhost:3000&lt;/h1&gt;
+
+&lt;h1&gt;4. Run TypeScript check and unit tests&lt;/h1&gt;
+npm run typecheck
+npm test
+
+&lt;h1&gt;5. Compile static production export&lt;/h1&gt;
+npm run build      &lt;h1&gt;Static export written to ./out&lt;/h1&gt;
+</code></pre>
+
+<table width="100%"><thead><tr><th align="left" width="28%">Shortcut</th><th align="left">Functionality</th></tr></thead><tbody>
+<tr><td><code>V</code> / <code>H</code></td><td>Toggle Pointer select mode / Hand pan mode (or hold <code>Space</code> to pan canvas)</td></tr>
+<tr><td><code>Mouse Wheel</code> / <code>Ctrl + Wheel</code></td><td>Pan canvas vertically / Smoothly zoom in and out</td></tr>
+<tr><td><code>+</code> / <code>-</code> / <code>0</code></td><td>Zoom in, Zoom out, or Fit entire canvas to viewport</td></tr>
+<tr><td><code>Ctrl + Z</code> / <code>Ctrl + Shift + Z</code></td><td>Undo last canvas edit / Redo previously reverted change</td></tr>
+<tr><td><code>Ctrl + D</code></td><td>Duplicate selected component or entire screen</td></tr>
+<tr><td><code>Arrow Keys</code> (<code>Shift</code> = 10px)</td><td>Nudge selected component precisely along 1px or 10px increments</td></tr>
+<tr><td><code>Delete</code> / <code>Backspace</code></td><td>Remove active selection or delete screen</td></tr>
+<tr><td><code>P</code></td><td>Launch interactive prototype preview simulation</td></tr>
+</tbody></table>
+
+<h3 id="faq"><picture><source media="(prefers-color-scheme: dark) and (max-width: 640px)" srcset="assets/readme/dark/hm-faq.svg"><source media="(prefers-color-scheme: dark)" srcset="assets/readme/dark/h-faq.svg"><source media="(max-width: 640px)" srcset="assets/readme/light/hm-faq.svg"><img src="assets/readme/light/h-faq.svg" alt="FAQ: Frequently asked questions about M3E Canvas and AI synthesis" width="100%"></picture></h3>
+
+<strong>Is my design data private?</strong>  
+Yes, 100%. The application is completely browser-resident. All canvas documents and custom schemes live solely inside your browser's local storage. No data is ever sent to an external server.
+
+<strong>How does the Xiaomi 18 Fold 3D simulation work?</strong>  
+It renders a physically proportioned foldable device with pure 3D CSS perspective. Clicking <strong>3D Fold</strong> or choosing <strong>Flat (180°)</strong> or <strong>Flex (105°)</strong> posture folds the Falcon hinge realistically while keeping all canvas components fully responsive.
+
+<strong>How do I pass prompts to AI programming agents?</strong>  
+Click the <strong>Prompt</strong> button in the top toolbar, select your target framework (Android Jetpack Compose, Web React/Tailwind, or Flutter), copy the synthesized prompt, and paste it into Claude Code, Cursor, Codex, or Gemini CLI.
+
+<strong>Can I use it offline?</strong>  
+Yes. Since there are zero backend server dependencies, you can install it as a PWA or run <code>npm run dev</code> / <code>npm run build</code> locally completely offline.
+
+<h3 id="support"><picture><source media="(prefers-color-scheme: dark) and (max-width: 640px)" srcset="assets/readme/dark/hm-support.svg"><source media="(prefers-color-scheme: dark)" srcset="assets/readme/dark/h-support.svg"><source media="(max-width: 640px)" srcset="assets/readme/light/hm-support.svg"><img src="assets/readme/light/h-support.svg" alt="Support & Sponsor: SupportKori, nsave, RedotPay, Payoneer & GitHub Sponsors" width="100%"></picture></h3>
+
+Material 3 Expressive Screen UI is 100% free, ad-free, and open source under the MIT License. If it elevates your design workflow or saves you hours of UI engineering, please consider supporting ongoing maintenance and new features:
+
+<div align="center">
+
+<table>
+  <tr>
+    <td align="center" width="25%" valign="top">
+      <h4>☕ SupportKori</h4>
+      <a href="https://www.supportkori.com/arafathrahman" target="_blank">
+        <img src="assets/supportkori-qr.jpg" alt="SupportKori QR" width="180" style="border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.15);" />
+      </a><br/><br/>
+      <a href="https://www.supportkori.com/arafathrahman" target="_blank">
+        <img src="https://img.shields.io/badge/Support-SupportKori-FF5E5B?style=for-the-badge&logo=buy-me-a-coffee&logoColor=white" alt="SupportKori Badge" />
+      </a><br/>
+      <sub>Cards · bKash · Nagad · Global</sub>
+    </td>
+    <td align="center" width="25%" valign="top">
+      <h4>⚡ nsave</h4>
+      <img src="assets/nsave-qr.jpg" alt="nsave QR" width="180" style="border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.15);" /><br/><br/>
+      <img src="https://img.shields.io/badge/nsave-@arafath__rahman9-000000?style=for-the-badge&logoColor=white" alt="nsave Badge" /><br/>
+      <sub>Ntag: <code>@arafath_rahman9</code></sub>
+    </td>
+    <td align="center" width="25%" valign="top">
+      <h4>🔴 RedotPay</h4>
+      <img src="assets/redotpay-qr.jpg" alt="RedotPay QR" width="180" style="border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.15);" /><br/><br/>
+      <img src="https://img.shields.io/badge/RedotPay-1965421414-E51E2B?style=for-the-badge&logoColor=white" alt="RedotPay Badge" /><br/>
+      <sub>ID: <code>1965421414</code></sub>
+    </td>
+    <td align="center" width="25%" valign="top">
+      <h4>🅿️ Payoneer</h4>
+      <img src="assets/payoneer-info.jpg" alt="Payoneer Info" width="180" style="border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.15);" /><br/><br/>
+      <a href="mailto:arafathrahman710@gmail.com?subject=Support%20via%20Payoneer">
+        <img src="https://img.shields.io/badge/Payoneer-70366820-FF4800?style=for-the-badge&logo=payoneer&logoColor=white" alt="Payoneer Badge" />
+      </a><br/>
+      <sub>Email: <code>arafathrahman710@gmail.com</code></sub>
+    </td>
+  </tr>
+</table>
+
+<br>
+
+<table width="100%"><thead><tr><th align="left">Method</th><th align="left">Details & Direct Links</th></tr></thead><tbody><tr><td><strong>☕ SupportKori</strong></td><td><a href="https://www.supportkori.com/arafathrahman">supportkori.com/arafathrahman</a> (bKash, Nagad, Visa, Mastercard)</td></tr><tr><td><strong>💖 GitHub Sponsors</strong></td><td><a href="https://github.com/sponsors/smartworldarafath">github.com/sponsors/smartworldarafath</a></td></tr><tr><td><strong>⚡ nsave</strong></td><td>Ntag: <code>@arafath_rahman9</code> · Account: <code>Md Arafath Rahman</code></td></tr><tr><td><strong>🔴 RedotPay</strong></td><td>Account ID: <code>1965421414</code></td></tr><tr><td><strong>🅿️ Payoneer</strong></td><td>Email: <code>arafathrahman710@gmail.com</code> · Customer ID: <code>70366820</code></td></tr></tbody></table>
+
+</div>
+
+<div align="center">
+
+<a href="https://github.com/smartworldarafath">
+  <img src="https://github.com/smartworldarafath.png?size=140" width="90" height="90" style="border-radius: 50%; box-shadow: 0 4px 16px rgba(0,0,0,0.15);" alt="Arafath Rahman" />
+</a>
+
+<h4><strong>Arafath Rahman</strong> (<a href="https://github.com/smartworldarafath">@smartworldarafath</a>)</h4>
+<em>Maintainer & Lead Developer · Open Source Creator</em>
+
+</div>
+
+<div align="center">
+
+<table>
+  <tr>
+    <td align="center" width="16%">
+      <a href="https://github.com/smartworldarafath">
+        <img src="https://github.com/smartworldarafath.png?size=90" width="60" height="60" style="border-radius:50%;" alt="smartworldarafath" /><br />
+        <sub><b>Arafath Rahman</b></sub>
+      </a><br />
+      <sub>Maintainer & Lead</sub>
+    </td>
+    <td align="center" width="16%">
+      <a href="https://github.com/lnkiai">
+        <img src="https://github.com/lnkiai.png?size=90" width="60" height="60" style="border-radius:50%;" alt="lnkiai" /><br />
+        <sub><b>lnkiai</b></sub>
+      </a><br />
+      <sub>Contributor</sub>
+    </td>
+    <td align="center" width="16%">
+      <a href="https://github.com/rishabhiskawai">
+        <img src="https://github.com/rishabhiskawai.png?size=90" width="60" height="60" style="border-radius:50%;" alt="rishabhiskawai" /><br />
+        <sub><b>rishabhiskawai</b></sub>
+      </a><br />
+      <sub>Contributor</sub>
+    </td>
+    <td align="center" width="16%">
+      <a href="https://github.com/jungminjo">
+        <img src="https://github.com/jungminjo.png?size=90" width="60" height="60" style="border-radius:50%;" alt="jungminjo" /><br />
+        <sub><b>jungminjo</b></sub>
+      </a><br />
+      <sub>Contributor</sub>
+    </td>
+    <td align="center" width="16%">
+      <a href="https://github.com/CQMHV">
+        <img src="https://github.com/CQMHV.png?size=90" width="60" height="60" style="border-radius:50%;" alt="CQMHV" /><br />
+        <sub><b>CQMHV</b></sub>
+      </a><br />
+      <sub>Contributor</sub>
+    </td>
+    <td align="center" width="16%">
+      <a href="https://github.com/Cokedog320">
+        <img src="https://github.com/Cokedog320.png?size=90" width="60" height="60" style="border-radius:50%;" alt="Cokedog320" /><br />
+        <sub><b>Cokedog320</b></sub>
+      </a><br />
+      <sub>Contributor</sub>
+    </td>
+  </tr>
+</table>
+
+</div>
+
+<h3 id="license"><picture><source media="(prefers-color-scheme: dark) and (max-width: 640px)" srcset="assets/readme/dark/hm-license.svg"><source media="(prefers-color-scheme: dark)" srcset="assets/readme/dark/h-license.svg"><source media="(max-width: 640px)" srcset="assets/readme/light/hm-license.svg"><img src="assets/readme/light/h-license.svg" alt="License: MIT License" width="100%"></picture></h3>
+
+Material 3 Expressive Screen UI is licensed under the <strong><a href="LICENSE">MIT License</a></strong> © 2026 Arafath Rahman and Contributors.
+
+* <strong>Expressive Loading Indicators</strong>: Ported from <a href="https://github.com/material-components/material-components-android">material-components-android</a> based on <a href="https://github.com/Aler1x/m3-loading-indicator">Aler1x/m3-loading-indicator</a> (Apache-2.0).
+* <strong>System Icons</strong>: <a href="https://fonts.google.com/icons">Material Symbols</a> and <a href="https://lucide.dev/">Lucide Icons</a>.
+* <strong>Related Inspirations</strong>: <a href="https://github.com/matraic/m3e">matraic/m3e</a> and <a href="https://www.beercss.com/">Beer CSS</a>.
+
+<div align="center">
+<sub>Search terms: Material 3 Expressive, M3E, Android UI builder, Jetpack Compose UI generator, AI prompt generator for UI, Xiaomi 18 Fold simulation, 3D foldable screen, Wear OS canvas, design system canvas, Claude Code prompt builder, Cursor UI designer, Pixel style design.</sub>
+</div>
+
+  </div>
+
+  <script>
+    function toggleTheme() {
+      const html = document.documentElement;
+      const current = html.getAttribute('data-theme');
+      const next = current === 'dark' ? 'light' : 'dark';
+      html.setAttribute('data-theme', next);
+      document.getElementById('themeBtn').innerText = next === 'dark' ? '🌓 Switch to Light Mode' : '🌓 Switch to Dark Mode';
+    }
+  </script>
+</body>
+</html>
