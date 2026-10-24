@@ -16,6 +16,7 @@ const CENTERED_FLOWER_PATH = "M24.6,5.0C24.2,5.5 23.8,5.9 23.4,6.4C23.1,6.9 22.7
 
 // Helper to write file to both assets/readme and public/assets/readme
 function saveSvg(subPath, content) {
+  content = content.replace(/&(?!(amp|lt|gt|quot|apos|#\d+|#x[0-9a-fA-F]+);)/g, '&amp;');
   fs.writeFileSync(path.join(__dirname, '..', 'assets', 'readme', subPath), content);
   fs.writeFileSync(path.join(__dirname, '..', 'public', 'assets', 'readme', subPath), content);
 }

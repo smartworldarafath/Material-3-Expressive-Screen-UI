@@ -1,5 +1,17 @@
 <div align="center">
 
+<p align="center">
+  <img src="app/icon.svg" width="80" alt="Material 3 Expressive Logo" />
+</p>
+
+# Material 3 Expressive Screen UI
+
+<p align="center">
+  <strong>Design, assemble, and test interactive Material 3 Expressive user interfaces directly in your browser, and instantly transform your visual layouts into rich prompts for AI coding assistants.</strong>
+</p>
+
+<br>
+
 <img src="public/og.png" alt="Material 3 Expressive Screen UI is an open source browser studio built with Material 3 Expressive. Design screens, test Xiaomi 18 Fold 3D simulations, and synthesize deterministic AI prompts for Claude Code, Cursor and Codex, 100% client side." width="100%">
 
 <br><br>

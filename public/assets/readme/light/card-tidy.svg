@@ -17,7 +17,7 @@
       </g>
       <g transform="translate(-15, -15) scale(1.25)" color="#042018"><path d="M3 7v6c0 4.97 4.03 9 9 9s9-4.03 9-9V7h-4v6c0 2.76-2.24 5-5 5s-5-2.24-5-5V7H3zm0-5h4v3H3V2zm14 0h4v3h-4V2z" fill="#042018"/></g>
     </g>
-    <text x="36" y="125" font-family="system-ui, -apple-system, 'Google Sans', Roboto, sans-serif" font-size="21" font-weight="700" fill="#211824">Magnetic Docking & Tidy</text>
+    <text x="36" y="125" font-family="system-ui, -apple-system, 'Google Sans', Roboto, sans-serif" font-size="21" font-weight="700" fill="#211824">Magnetic Docking &amp; Tidy</text>
     <text x="36" y="152" font-family="system-ui, -apple-system, Roboto, sans-serif" font-size="13.5" font-weight="400" fill="#5f4e60">
       <tspan x="36" dy="0">Adjacent components fuse into unified visual clusters</tspan><tspan x="36" dy="20">with organic softened corner transitions. Snap to 16dp</tspan><tspan x="36" dy="20">gutters and 8dp rhythm boundaries in one click.</tspan>
     </text>

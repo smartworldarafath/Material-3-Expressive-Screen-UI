@@ -14,5 +14,5 @@
       <g transform="translate(-15, -15) scale(1.25)" color="#351500"><path d="M6 3h5v18H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zm7 0h5a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-5V3zm-2 2H9v14h2V5z" fill="#351500"/></g>
     </g>
     <text x="96" y="42" font-family="system-ui, -apple-system, 'Google Sans', Roboto, sans-serif" font-size="25" font-weight="700" fill="#211824">Form Factors</text>
-    <text x="96" y="66" font-family="system-ui, -apple-system, Roboto, sans-serif" font-size="13" font-weight="400" fill="#675466">Xiaomi 18 Fold 3D, Phone, Wear OS, Tablet & Desktop Workstation</text>
+    <text x="96" y="66" font-family="system-ui, -apple-system, Roboto, sans-serif" font-size="13" font-weight="400" fill="#675466">Xiaomi 18 Fold 3D, Phone, Wear OS, Tablet &amp; Desktop Workstation</text>
   </svg>
