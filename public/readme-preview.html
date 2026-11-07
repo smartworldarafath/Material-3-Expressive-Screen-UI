@@ -128,6 +128,18 @@
   <div class="readme-container">
     <div align="center">
 
+<p align="center">
+  <img src="app/icon.svg" width="80" alt="Material 3 Expressive Logo" />
+</p>
+
+<h1>Material 3 Expressive Screen UI</h1>
+
+<p align="center">
+  <strong>Design, assemble, and test interactive Material 3 Expressive user interfaces directly in your browser, and instantly transform your visual layouts into rich prompts for AI coding assistants.</strong>
+</p>
+
+<br>
+
 <img src="public/og.png" alt="Material 3 Expressive Screen UI is an open source browser studio built with Material 3 Expressive. Design screens, test Xiaomi 18 Fold 3D simulations, and synthesize deterministic AI prompts for Claude Code, Cursor and Codex, 100% client side." width="100%">
 
 <br><br>
@@ -162,10 +174,10 @@ You can construct rich user interfaces with drag-and-drop components, calibrate 
 There are no backend databases, zero telemetry, and no accounts required. Everything executes entirely inside your browser's local sandbox.
 
 <p align="center">
-  <img src="docs/story.gif" alt="Material 3 Expressive Screen UI Walkthrough Demonstration" width="100%" style="border-radius: 12px; box-shadow: 0 8px 30px rgba(0,0,0,0.12);" />
+  <img src="docs/demo.gif" alt="Material 3 Expressive Screen UI Walkthrough Demonstration" width="100%" style="border-radius: 12px; box-shadow: 0 8px 30px rgba(0,0,0,0.12);" />
 </p>
 
-<p align="center"><sub>Construct an interface, calibrate dynamic color hues, simulate realistic 3D book folding, synthesize an AI prompt, and execute on Android or the Web. (<a href="docs/story.mp4">Watch HD Walkthrough Video</a>)</sub></p>
+<p align="center"><sub>Construct an interface, calibrate dynamic color hues, simulate realistic 3D book folding, synthesize an AI prompt, and execute on Android or the Web. (<a href="docs/demo.mp4">Watch HD Walkthrough Video</a>)</sub></p>
 
 <table width="100%"><thead><tr><th align="left" width="28%">Quick facts</th><th align="left">Details</th></tr></thead><tbody>
 <tr><td><b>App name</b></td><td>Material 3 Expressive Screen UI (M3E Canvas)</td></tr>
@@ -206,7 +218,7 @@ Material 3 Expressive Screen UI supports multi-device design natively across fiv
 <tr><td><b>Desktop Workstation</b></td><td>1280 × 800 dp (16:10)</td><td>Pan-and-zoom panoramic canvas with vertical navigation rail, multi-column bento grids, and layer inspectors.</td></tr>
 </tbody></table>
 
-<h4>🌟 Xiaomi 18 Fold 3D Simulation</h4>
+<h4>Xiaomi 18 Fold 3D Simulation</h4>
 - <strong>Pure 3D Book Folding</strong>: Authentic <code>rotateY: 0° ➔ -180°</code> CSS perspective animation with real-time dynamic hinge shadows.
 - <strong>Falcon Hinge & Dual Displays</strong>: Toggle seamlessly between the expansive <strong>8.03" Inner Dual-Screen</strong> (780×892) and the <strong>6.56" HyperOS Outer Cover Display</strong> (412×892).
 - <strong>Three Realistic Postures</strong>: <strong>Flat (180°)</strong> for maximum screen real estate, <strong>Flex Mode (105°)</strong> for hands-free video and camera split views, and <strong>Folded (0°)</strong> for one-handed operation.
@@ -216,23 +228,36 @@ Material 3 Expressive Screen UI supports multi-device design natively across fiv
 
 <div align="center">
 
+<picture>
+  <source media="(max-width: 767px)" srcset="docs/cards/how-narrow.png" />
+  <img src="docs/cards/how-wide.png" alt="The three steps: building a screen from the parts panel, tapping through it in the preview, and copying the prompt" width="100%" style="border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.08);" />
+</picture>
+
+</div>
+
+1. <strong>Sketch</strong> — Drag parts onto phone, foldable, or desktop screens. They snap together and line up on a 4dp grid.
+2. <strong>Tap through</strong> — Link parts to screens and press Preview to try the interactive flow, transitions and gestures included.
+3. <strong>Copy the prompt</strong> — The whole design becomes a structured brief in your language. Paste it into your AI coding tool.
+
+<div align="center">
+
 <table width="100%">
   <tr>
     <td width="50%" align="center" valign="top">
       <img src="docs/editor.png" alt="Drag-and-Drop Canvas Editor" width="100%" style="border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);" /><br><br>
-      <b>🎨 Drag-and-Drop Canvas Editor</b><br>
+      <b>Drag-and-Drop Canvas Editor</b><br>
       <sub>Multi-screen positioning, magnetic snapping, corner blending, and comprehensive component palette.</sub>
     </td>
     <td width="50%" align="center" valign="top">
       <img src="docs/preview.png" alt="Interactive Prototype Preview" width="100%" style="border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);" /><br><br>
-      <b>⚡ Interactive Prototype Preview</b><br>
+      <b>Interactive Prototype Preview</b><br>
       <sub>Test real button clicks, state toggles, animated transitions, back-stack navigation, and gesture physics.</sub>
     </td>
   </tr>
   <tr>
     <td width="50%" align="center" valign="top">
       <img src="docs/prompt.png" alt="AI Prompt Synthesizer" width="100%" style="border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);" /><br><br>
-      <b>🤖 AI Prompt Synthesis Engine</b><br>
+      <b>AI Prompt Synthesis Engine</b><br>
       <sub>Export complete, production-ready specifications formatted for Claude Code, Cursor, Codex, and Gemini.</sub>
     </td>
     <td width="50%" align="center" valign="top">
@@ -255,6 +280,20 @@ Material 3 Expressive expands upon standard Material Design with tactile delight
 * <strong>Morphing Loaders</strong>: Shape-shifting loading spinners and undulating progress bars ported directly from Android open-source components.
 
 <h3 id="features"><picture><source media="(prefers-color-scheme: dark) and (max-width: 640px)" srcset="assets/readme/dark/hm-features.svg"><source media="(prefers-color-scheme: dark)" srcset="assets/readme/dark/h-features.svg"><source media="(max-width: 640px)" srcset="assets/readme/light/hm-features.svg"><img src="assets/readme/light/h-features.svg" alt="Features: Everything inside Material 3 Expressive Screen UI" width="100%"></picture></h3>
+
+<div align="center">
+
+<picture>
+  <source media="(max-width: 767px)" srcset="docs/cards/features-narrow.png" />
+  <img src="docs/cards/features-wide.png" alt="Four features: a part's own panel, linked screens, the colors panel and the Ask an AI dialog" width="100%" style="border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.08);" />
+</picture>
+
+</div>
+
+* <img src="docs/ui/feature-parts.png" width="20" height="20" align="absmiddle" alt="" /> <strong>Real M3 Expressive parts</strong> — Buttons, FABs, bars, tabs, cards, lists, sheets, pickers, carousels, loading indicators and more, each with its own panel for text, style, size and what a tap does.
+* <img src="docs/ui/feature-flow.png" width="20" height="20" align="absmiddle" alt="" /> <strong>Screens and flow</strong> — Phone, foldable, and desktop screens, screens that scroll, taps and swipes that open other screens with transitions, and arrows that trace the flow.
+* <img src="docs/ui/feature-theme.png" width="20" height="20" align="absmiddle" alt="" /> <strong>Theme in one place</strong> — Color, shape, type and motion: seven curated palettes or custom seed hues, light/dark/AMOLED modes, contrast tiers, and expressive spring curves.
+* <img src="docs/ui/feature-ai.png" width="20" height="20" align="absmiddle" alt="" /> <strong>Optional AI help</strong> — Bring your own key to draft designs or generate prompt briefs for Claude Code, Cursor, Codex, or Gemini. Keys never leave your browser.
 
 <div align="center">
 
